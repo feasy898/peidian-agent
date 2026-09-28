@@ -317,3 +317,83 @@
 - **复核门禁实测**：`python run_evals.py --module m3` 23/23 exit 0（重复运行
   结果稳定）；`--module all` 123/123 exit 0（m0 49 + m2 22 + m3 23 + m4 13 +
   m5 16）；隔离断言零命中。
+
+---
+
+## 2026-09-28 · M5 复核修订 II（M1 交付联动：persona LLM 接线激活）
+
+- **模块**：M5（`src/m5_simulation/eval_plugin.py` 的 EVAL-M5-04-P 执行器；
+  spec 未变更、`tests/test_m5.yaml` 未变更——spec_hash/eval_hash 登记对不变）
+- **修订内容**：M1 交付 model_client（mock provider 全离线可用）后，SPEC-M5-04
+  "LLM 生成模式（接口预留）……M1 交付后此路径自动生效，无需改本模块" 的预留
+  路径被激活：persona_step(mode="llm") 经 mock provider 正常产出（mode=llm、
+  零降级），占位期断言"LLM 必走降级路径"随之失效。执行器更新为交付后口径：
+  mock 正常产出 + 失败 provider（openai_like 缺端点）仍走降级回退（degraded
+  标记）。由 M1 交付触发，登记于 M1 首条登记（见下节）联动说明。
+- **复核门禁实测**：`--module m5` 16/16 exit 0；`--module all` 143/143 exit 0。
+
+---
+
+## 2026-09-28 · M1 执行内核首条登记（Loop/状态机/完成验证）
+
+- **模块**：M1（`src/m1_core/` 全部源码 + `tests/test_m1.yaml` +
+  `src/m1_core/eval_plugin.py`）
+- **spec_ref**（按序拼接取 hash）：
+  - `specs/M1-agent-core.md`
+  - `specs/00-ontology.md`
+  - `specs/01-contracts.md`
+  - `specs/ADDENDUM.md`
+- **spec_hash → eval_hash**：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m1.yaml | `c8a2cd2b51a8462b74d1f8877515cd3a2e2583d2b8c636de7481badea44589ec` | `b0f28d6ae30493471d7017ea83f6087edd0d20cd2961e4fe9e4d6b58cb122dd3` |
+
+- **覆盖范围**：M1 §4 Eval 表 14 条机械生成（SPEC-M1-01/02/03/04/05/06/07/09/10
+  各条款正例+负例），另含 6 条表外补强——EVAL-M1-TABLE-P（DoD：迁移表硬编码 vs
+  frozen_state_machines.yaml 双写 diff 空 + 10 态全矩阵守卫）、EVAL-M1-05-P2
+  （SPEC-M1-05 四口径矩阵：token/action/deadline/时段窗口）、EVAL-M1-GATE-P2
+  （SPEC-M1-04 §2 门禁三条件的阻断告警口径与清除恢复）、EVAL-M1-MW-P
+  （SPEC-M1-08/DoD：全移除/单移除中间件后 01/02/06 场景语义不变 + 注册序执行）、
+  EVAL-M1-MODEL-P/P2（model_client mock 离线确定性/脚本化成本/耗尽 +
+  openai_like 传输注入重试/超时分类/密钥透传；M5 persona LLM 模式离线接线回补）。
+  合计 20 条，全部通过（20/20）。
+- **登记的偏差与落盘口径**（均为机械落盘时的必要消歧，未改任何冻结语义）：
+  1. **五阶段回放数据源**：01 §4 事件目录为冻结封闭集（无 loop 阶段主题），
+     Loop 五阶段序的回放校验数据源为 M1 运行期审计件
+     `runtime/<root>/m1_core/loop/task-<id>.jsonl`（LoopTrace 追加写；权威状态
+     仍在 M2，此为 M3 幂等 journal 同类的审计件）。校验规则：每轮阶段序必须是
+     PREPARE→MODEL→ACT→OBSERVE→VERIFY 的前缀（仅 PREPARE=预算中断轮合法）。
+  2. **成本上报事件主题**：事件目录无 model.*/cost 主题——SPEC-M1-10 的每轮
+     cost 字段以 `budget.warning {kind: token, remaining, cost{…}}` 兼作上报
+     通道（保留 kind/remaining 语义字段并扩展 cost；沿用 M2"无独立审计主题时
+     就近落主题"先例）。
+  3. **完成门禁的位置**：无 Claim 的 COMPLETED 拒绝在 M1 守卫层
+     （TaskStateMachine 的 is_completable 门禁 + CompletionRequiredError，
+     为 IllegalTransitionError 子类）；拒绝事件 payload 同时带
+     `rejected: true`（SPEC-M1-02 口径）与 `accepted: false`（M2 事件重建
+     协议跳过口径）。
+  4. **产物过门匹配口径**：plan.artifacts_expected 条目按 artifact_id 精确
+     匹配或 schema_id 匹配（计划先于产物存在，ULID 无法预知；两口径同时支持，
+     不针对特定实例硬编码）。
+  5. **产物自动落位**：write.report SUCCEEDED 后由 loop 产物策略（数据驱动
+     DEFAULT_ARTIFACT_POLICY，构造可覆盖）落 M2 ArtifactRecord：
+     DRAFT→VALIDATING→（校验过）READY 两步迁移（M2 ArtifactManager 语义），
+     同 action_id 重复入账幂等跳过（Checkpoint 恢复重放不产生重复产物）。
+  6. **预算耗尽判定口径**：used ≥ max 即视为租约耗尽（无余量进入下一轮模型
+     调用）；deadline 判 now > deadline；时段窗口判 now ∉ [from, to]。比较基准
+     一律为注入的 now（EVAL 固定时钟；生产缺省 clocking.now_iso——m1_core 内
+     唯一真实时间源读取位，budget.py/loop.py 零墙钟）。
+  7. **M5 persona LLM 接线激活**（联动上文"M5 复核修订 II"）：M1 model_client
+     mock provider 落地后 persona_step(mode="llm") 零降级可用；失败 provider
+     降级路径保持（EVAL-M1-MODEL-P2 + 更新后的 EVAL-M5-04-P 双侧覆盖）。
+  8. **PAUSED 恢复语义**：PAUSED 接受任意 ResumeEvent 种类，但恢复前重查预算
+     ——仍超限则拒绝恢复（LoopNotResumableError，任务保持 PAUSED）；WAITING_*
+     各态只接受 01 §3.1 对应种类，错配即拒。
+  9. **trace 轮次台账**：轮号取自 LoopTrace 日志最大轮号 +1（TaskState 无轮次
+     字段且冻结不可加）；Checkpoint 恢复后轮号继续递增（审计连续），任务语义
+     续跑点由 plan 当前阶段 + todos 决定（SPEC-M1-09）。
+- **复核门禁实测**：`python run_evals.py --module m1` 20/20 exit 0（含突变
+  验证：改迁移表/拆完成门禁/废预算检查点/Observe 采信自述 四类故意破坏均被
+  对应用例捕获）；`--module all` 143/143 exit 0（m0 49 + m1 20 + m2 22 +
+  m3 23 + m4 13 + m5 16；连续 8 次全绿）；隔离断言零命中。

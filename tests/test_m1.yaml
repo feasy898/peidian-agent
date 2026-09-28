@@ -1,0 +1,776 @@
+# tests/test_m1.yaml
+# M1（执行内核：Loop/状态机/完成验证）数据驱动 EVAL 套件。
+# 用例从 specs/M1-agent-core.md §4 Eval 表逐行机械生成（14 条：01/02/03/04/05/06/07/09/10
+# 各条款正例+负例），另含 6 条补强/DoD 用例：EVAL-M1-TABLE-P（DoD：迁移表与
+# 01§5.1 双写一致 + 10 态全矩阵守卫）、EVAL-M1-05-P2（SPEC-M1-05 四口径矩阵：
+# token/action/deadline/时段窗口）、EVAL-M1-GATE-P2（SPEC-M1-04 §2 门禁三条件中
+# 的阻断告警口径）、EVAL-M1-MW-P（SPEC-M1-08/DoD：移除全部中间件后 01/02/06
+# 场景语义不变 + 注册序执行）、EVAL-M1-MODEL-P/P2（model_client mock 离线/成本/
+# 脚本耗尽 + openai_like 传输注入重试分类 + M5 persona LLM 模式离线接线回补）。
+# 合计 20 条。schema 见 tests/EVAL-SCHEMA.md；执行器注册于
+# src/m1_core/eval_plugin.py（全部断言数据取自本文件 params/expect）。
+# spec_hash 口径（01§6）：spec_ref 列表按序拼接文件字节的 sha256。
+suite: m1
+title: M1 执行内核（Loop/状态机/完成验证）EVAL
+spec_ref:
+  - specs/M1-agent-core.md
+  - specs/00-ontology.md
+  - specs/01-contracts.md
+  - specs/ADDENDUM.md
+spec_hash: c8a2cd2b51a8462b74d1f8877515cd3a2e2583d2b8c636de7481badea44589ec
+executors:
+  - module: m1_core.eval_plugin
+
+# 共享场景定义（YAML 锚点；不被 runner 读取）
+defs:
+  report3_env: &report3_env
+    park_instance: seed
+    clock_start: "2026-09-28T08:00:00Z"
+  report3_task: &report3_task
+    task_id: task-m1
+    user_input: 今日日巡检
+    max_turns: 6
+    current_stage: INTAKE
+    plan:
+      - {stage: INTAKE, gate: g0, artifacts_expected: []}
+      - {stage: SURVEY, gate: g1, artifacts_expected: []}
+      - {stage: REPORT, gate: g2, artifacts_expected: [report.daily@v1]}
+      - {stage: DELIVER, gate: g3, artifacts_expected: [report.daily@v1]}
+    todos:
+      - {id: t1, text: 量测巡检, status: PENDING}
+      - {id: t2, text: 规程核对, status: PENDING}
+      - {id: t3, text: 出具报告, status: PENDING}
+    budget: {token_max: 100000, token_used: 0, action_max: 50, action_used: 0}
+  report3_script: &report3_script
+    - text: 开始日巡检，先读 1 号变压器量测。
+      usage: {prompt_tokens: 200, completion_tokens: 60}
+      tool_calls:
+        - {capability: query.measurement@v1, todo_id: t1, purpose: 巡检量测,
+           arguments: {device: TX-01}}
+      todo_updates: [{id: t1, status: DONE}]
+    - text: 规程核对完成。
+      usage: {prompt_tokens: 150, completion_tokens: 90}
+      tool_calls:
+        - {capability: query.regulation@v1, todo_id: t2, purpose: 规程核对,
+           arguments: {rule_id: PHYS-TX-LOAD}}
+      todo_updates: [{id: t2, status: DONE}]
+    - text: 日巡检报告已出具，申请完成。
+      usage: {prompt_tokens: 300, completion_tokens: 200}
+      tool_calls:
+        - capability: write.report@v1
+          todo_id: t3
+          purpose: 出具日巡检报告
+          arguments:
+            title: 园区日巡检报告
+            date: "2026-09-28"
+            devices: [TX-01, TX-02, TX-03]
+            measurements:
+              - device: TX-01
+                quantity: load_rate
+                points:
+                  - {ts: "2026-09-28T08:00:00Z", value: 0.62}
+                  - {ts: "2026-09-28T09:00:00Z", value: 0.65}
+            conclusion: 两配电房运行正常，负载率在合格区间
+            regulation_refs: [PHYS-TX-LOAD]
+      todo_updates: [{id: t3, status: DONE}]
+      completion_claim:
+        expected_artifacts: [report.daily@v1]
+        evidence_refs: []
+        summary: 日巡检完成：量测/规程/报告三步齐备
+
+cases:
+  # ================= SPEC-M1-01 Loop 顺序 =================
+  - id: EVAL-M1-01-P
+    spec: SPEC-M1-01
+    title: 正常 3 轮任务（巡检报告）→ 每轮事件序均为 5 阶段，无跨阶段跳跃
+    form: event_sequence
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task: *report3_task
+      script: *report3_script
+      steps:
+        - {op: run_task, id: run}
+    expect:
+      status: COMPLETED
+      current_stage: DELIVER
+      evidence_count: 3
+      verdicts: [ACCEPTED]
+      executions: 3
+      artifacts: [{schema_id: report.daily@v1, status: READY}]
+      trace:
+        valid: true
+        complete_turns: 3
+        aborted_prepare_turns: 0
+        turns:
+          "1": [PREPARE, MODEL, ACT, OBSERVE, VERIFY]
+          "2": [PREPARE, MODEL, ACT, OBSERVE, VERIFY]
+          "3": [PREPARE, MODEL, ACT, OBSERVE, VERIFY]
+        no_model_without_prepare: true
+        prepare_state_versions: true
+      accepted_transitions:
+        - {from: RUNNING, to: VERIFYING}
+        - {from: VERIFYING, to: COMPLETED}
+      event_seqs:
+        task-m1: [task.created, budget.warning, action.requested, action.completed,
+                  task.stage_gate, task.status_changed]
+
+  - id: EVAL-M1-01-N
+    spec: SPEC-M1-01
+    title: 构造 Model 先于 Prepare 的事件序 → 回放校验必拒；真实运行零此类序
+    form: negative_rejection
+    executor: m1.replay
+    params:
+      bad_sequences:
+        - [MODEL, PREPARE]
+        - [PREPARE, ACT]
+        - [PREPARE, MODEL, VERIFY]
+        - [PREPARE, PREPARE]
+        - [ACT, OBSERVE, VERIFY]
+      violation_contains: 前缀
+      scenario:
+        env: *report3_env
+        now: "2026-09-28T08:00:00Z"
+        task: *report3_task
+        script: *report3_script
+        user_input: 今日日巡检
+    expect:
+      real_complete_turns: 3
+
+  # ================= SPEC-M1-02 状态迁移守卫 =================
+  - id: EVAL-M1-02-P
+    spec: SPEC-M1-02
+    title: RUNNING→WAITING_APPROVAL（ASK 动作电容投切）→ 迁移成功，事件 from/to 正确
+    form: state_transition
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 把 A 房电容投上
+        max_turns: 4
+        current_stage: INTAKE
+        plan: [{stage: INTAKE, gate: g0, artifacts_expected: []}]
+        todos: []
+        budget: {token_max: 100000, token_used: 0, action_max: 50, action_used: 0}
+      script:
+        - text: 需要投切电容，发起申请。
+          usage: {prompt_tokens: 100, completion_tokens: 30}
+          tool_calls:
+            - {capability: execute.capacitor_switch@v1, purpose: 电容投切（ASK 审批）,
+               arguments: {device: CB-A, state: "ON"}}
+      steps:
+        - {op: run_task, id: run}
+    expect:
+      status: WAITING_APPROVAL
+      evidence_count: 0
+      executions: 0
+      trace: {valid: true, complete_turns: 1}
+      accepted_transitions: [{from: RUNNING, to: WAITING_APPROVAL}]
+      event_seqs:
+        task-m1: [action.requested, action.policy_decided, action.waiting_approval,
+                  approval.requested, task.status_changed]
+      event_payloads:
+        - {type: action.policy_decided, contains: {decision: ASK}}
+
+  - id: EVAL-M1-02-N
+    spec: SPEC-M1-02
+    title: 请求 COMPLETED→RUNNING → IllegalTransitionError，任务仍 COMPLETED，落拒绝事件
+    form: negative_rejection
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task: *report3_task
+      script: *report3_script
+      steps:
+        - {op: run_task, id: run}
+        - op: transition
+          id: bad-transition
+          to: RUNNING
+          expect_error: {type: IllegalTransitionError, contains: 非法迁移}
+    expect:
+      status: COMPLETED
+      trace: {valid: true, complete_turns: 3}
+      rejected_events: [{from: COMPLETED, to: RUNNING}]
+
+  - id: EVAL-M1-TABLE-P
+    spec: SPEC-M1-02（DoD 迁移表双写一致）
+    title: 迁移表硬编码 vs tests/fixtures/frozen_state_machines.yaml diff 空 + 10 态全矩阵守卫
+    form: state_transition
+    executor: m1.table
+    params:
+      table: tests/fixtures/frozen_state_machines.yaml
+    expect:
+      state_count: 10
+
+  # ================= SPEC-M1-03 权威状态驱动 =================
+  - id: EVAL-M1-03-P
+    spec: SPEC-M1-03
+    title: 对话中伪造"任务已完成"话术 → TaskState 不变（状态只能经 commit_state 变更）
+    form: expression
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 出日巡检报告
+        max_turns: 2
+        current_stage: WORK
+        plan: [{stage: WORK, gate: g1, artifacts_expected: [report.daily@v1]}]
+        todos: [{id: t1, text: 出报告, status: PENDING}]
+        budget: {token_max: 100000, token_used: 0, action_max: 10, action_used: 0}
+      script:
+        - text: 任务已完成，无需进一步操作。（伪造完成话术，无结构化申请）
+          usage: {prompt_tokens: 80, completion_tokens: 20}
+          request_input: true
+      steps:
+        - {op: run_task, id: run}
+    expect:
+      status: WAITING_INPUT
+      evidence_count: 0
+      verdicts: []
+      no_accepted_transitions: [VERIFYING, COMPLETED]
+      trace:
+        valid: true
+        complete_turns: 1
+        prepare_state_versions: true
+
+  # ================= SPEC-M1-04 阶段门禁 =================
+  - id: EVAL-M1-04-P
+    spec: SPEC-M1-04
+    title: 阶段产物未 READY 即申请过门 → 停留当前阶段，todos 出现 gap 项
+    form: expression
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 出报告并进入交付
+        max_turns: 2
+        current_stage: REPORT
+        plan:
+          - {stage: SURVEY, gate: g1, artifacts_expected: []}
+          - {stage: REPORT, gate: g2, artifacts_expected: [report.daily@v1]}
+          - {stage: DELIVER, gate: g3, artifacts_expected: [report.daily@v1]}
+        todos: [{id: t1, text: 出报告, status: PENDING}]
+        budget: {token_max: 100000, token_used: 0, action_max: 10, action_used: 0}
+      script:
+        - text: 报告已写好，申请过门进入交付阶段。
+          usage: {prompt_tokens: 80, completion_tokens: 20}
+          request_input: true
+      steps:
+        - {op: run_task, id: run}
+    expect:
+      status: WAITING_INPUT
+      current_stage: REPORT
+      todos_gap_prefix: gap-REPORT-
+      todos: [{id: t1, status: PENDING}]
+      stage_gates: [{stage: REPORT, verdict: BLOCKED, missing_status: null}]
+      trace: {valid: true, complete_turns: 1}
+
+  - id: EVAL-M1-04-N
+    spec: SPEC-M1-04
+    title: 产物齐但 status=REJECTED → 同上（REJECTED 不算过门）
+    form: negative_rejection
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 报告校验失败场景
+        max_turns: 2
+        current_stage: REPORT
+        plan:
+          - {stage: SURVEY, gate: g1, artifacts_expected: []}
+          - {stage: REPORT, gate: g2, artifacts_expected: [report.daily@v1]}
+          - {stage: DELIVER, gate: g3, artifacts_expected: [report.daily@v1]}
+        todos: []
+        budget: {token_max: 100000, token_used: 0, action_max: 10, action_used: 0}
+      script:
+        - text: 产物已在，申请过门。
+          usage: {prompt_tokens: 80, completion_tokens: 20}
+          request_input: true
+      steps:
+        - op: seed_artifact
+          id: seed-rejected-artifact
+          type: REPORT
+          schema_id: report.daily@v1
+          # 缺 measurements 时序段 → schema 校验失败 → REJECTED
+          content:
+            devices: [TX-01]
+            conclusion: 缺量测段的报告
+            regulation_refs: [PHYS-TX-LOAD]
+          expect_status: REJECTED
+        - {op: run_task, id: run}
+    expect:
+      status: WAITING_INPUT
+      current_stage: REPORT
+      todos_gap_prefix: gap-REPORT-
+      stage_gates: [{stage: REPORT, verdict: BLOCKED, missing_status: REJECTED}]
+      trace: {valid: true, complete_turns: 1}
+
+  - id: EVAL-M1-GATE-P2
+    spec: SPEC-M1-04（§2 门禁三条件之阻断告警）
+    title: P0 告警未清除 → 门禁 BLOCKED 且注入 gap；清除后同阶段重评 PASSED 过门
+    form: expression
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 告警阻断场景
+        max_turns: 4
+        current_stage: S1
+        plan:
+          - {stage: S1, gate: g1, artifacts_expected: []}
+          - {stage: S2, gate: g2, artifacts_expected: []}
+          - {stage: S3, gate: g3, artifacts_expected: []}
+        todos: []
+        budget: {token_max: 100000, token_used: 0, action_max: 10, action_used: 0}
+      script:
+        - text: 待告警处置。
+          usage: {prompt_tokens: 60, completion_tokens: 10}
+          request_input: true
+        - text: 告警已清除，继续。
+          usage: {prompt_tokens: 60, completion_tokens: 10}
+          request_input: true
+      steps:
+        - op: seed_event
+          id: alarm
+          type: alarm.raised
+          subject: AL-GATE-01
+          payload: {level: P0, code: TX_OVERLOAD, text: 变压器重过载}
+        - {op: run_task, id: run}
+        - op: seed_event
+          id: clear
+          type: alarm.cleared
+          subject: AL-GATE-01
+          payload: {cleared_by: OP-001}
+        - {op: resume, id: resume-after-clear, event: {kind: USER_INPUT, text: 告警已清除}}
+    expect:
+      status: WAITING_INPUT
+      current_stage: S2
+      stage_gates:
+        - {stage: S1, verdict: BLOCKED, blocking_alarms: true}
+        - {stage: S1, verdict: PASSED}
+      todos: [{id: gap-S1-1, status: DONE}]
+      trace: {valid: true, complete_turns: 2}
+
+  # ================= SPEC-M1-05 预算检查点 =================
+  - id: EVAL-M1-05-P
+    spec: SPEC-M1-05
+    title: token_max=500，第 3 轮超限 → PAUSED + budget.exhausted，本轮不进 Model
+    form: expression
+    executor: m1.scenario
+    params: &budget500_params
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 预算耗尽测试
+        max_turns: 5
+        current_stage: INTAKE
+        plan: [{stage: INTAKE, gate: g0, artifacts_expected: []}]
+        todos: []
+        budget: {token_max: 500, token_used: 0, action_max: 10, action_used: 0}
+      script:
+        - text: 第一轮。
+          usage: {prompt_tokens: 200, completion_tokens: 50}
+        - text: 第二轮。
+          usage: {prompt_tokens: 180, completion_tokens: 70}
+        - text: 第三轮（不应被调用）。
+          usage: {prompt_tokens: 10, completion_tokens: 5}
+      steps:
+        - {op: run_task, id: run}
+    expect:
+      status: PAUSED
+      budget: {token_used: 500}
+      event_payloads:
+        - {type: budget.exhausted, contains: {kind: token}}
+      trace:
+        valid: true
+        complete_turns: 2
+        aborted_prepare_turns: 1
+        turns:
+          "1": [PREPARE, MODEL, ACT, OBSERVE, VERIFY]
+          "2": [PREPARE, MODEL, ACT, OBSERVE, VERIFY]
+          "3": [PREPARE]
+
+  - id: EVAL-M1-05-N
+    spec: SPEC-M1-05
+    title: 超限后无 ResumeEvent 继续驱动 → Loop 拒绝进入下一轮（trace 无新轮）
+    form: negative_rejection
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 预算耗尽测试
+        max_turns: 5
+        current_stage: INTAKE
+        plan: [{stage: INTAKE, gate: g0, artifacts_expected: []}]
+        todos: []
+        budget: {token_max: 500, token_used: 0, action_max: 10, action_used: 0}
+      script:
+        - text: 第一轮。
+          usage: {prompt_tokens: 200, completion_tokens: 50}
+        - text: 第二轮。
+          usage: {prompt_tokens: 180, completion_tokens: 70}
+        - text: 第三轮（不应被调用）。
+          usage: {prompt_tokens: 10, completion_tokens: 5}
+      steps:
+        - {op: run_task, id: run}
+        - op: drive
+          id: drive-paused
+          expect_error: {type: LoopNotResumableError, contains: 拒绝驱动等待/暂停态}
+        - op: resume
+          id: resume-without-budget
+          event: {kind: USER_INPUT, text: 继续执行}
+          expect_error: {type: LoopNotResumableError, contains: 预算仍超限}
+    expect:
+      status: PAUSED
+      event_counts: {budget.exhausted: 1}
+      trace:
+        valid: true
+        complete_turns: 2
+        aborted_prepare_turns: 1
+
+  - id: EVAL-M1-05-P2
+    spec: SPEC-M1-05（四口径矩阵）
+    title: 预算检查点矩阵：token/action/deadline/时段窗口逐口径断言
+    form: expression
+    executor: m1.budget
+    params:
+      checks:
+        - budget: {token_max: 500, token_used: 500, action_max: 10, action_used: 0}
+          now: "2026-09-28T08:00:00Z"
+          expect: {exceeded: true, kind: token}
+        - budget: {token_max: 500, token_used: 100, action_max: 3, action_used: 3}
+          now: "2026-09-28T08:00:00Z"
+          expect: {exceeded: true, kind: action}
+        - budget: {token_max: 500, token_used: 100, action_max: 10, action_used: 0,
+                   deadline: "2026-09-28T07:00:00Z"}
+          now: "2026-09-28T08:00:00Z"
+          expect: {exceeded: true, kind: deadline}
+        - budget: {token_max: 500, token_used: 100, action_max: 10, action_used: 0,
+                   price_window: {from: "2026-09-28T10:00:00Z", to: "2026-09-28T12:00:00Z"}}
+          now: "2026-09-28T08:00:00Z"
+          expect: {exceeded: true, kind: price_window}
+        - budget: {token_max: 500, token_used: 100, action_max: 10, action_used: 0,
+                   price_window: {from: "2026-09-28T10:00:00Z", to: "2026-09-28T12:00:00Z"}}
+          now: "2026-09-28T11:00:00Z"
+          expect: {exceeded: false, ok: true}
+        - budget: {token_max: 500, token_used: 100, action_max: 10, action_used: 2}
+          now: "2026-09-28T08:00:00Z"
+          expect: {exceeded: false, ok: true}
+    expect: {}
+
+  # ================= SPEC-M1-06 完成申请与判定分离 =================
+  - id: EVAL-M1-06-P
+    spec: SPEC-M1-06
+    title: 模型申请完成但 evidence 缺 observed → NEED_MORE_EVIDENCE，回 RUNNING 注入缺口
+    form: expression
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 完成判定测试
+        max_turns: 1
+        current_stage: WORK
+        plan:
+          - {stage: WORK, gate: g1, artifacts_expected: []}
+          - {stage: DONE, gate: g2, artifacts_expected: []}
+        todos: [{id: t1, text: 执行动作, status: DONE}]
+        budget: {token_max: 100000, token_used: 0, action_max: 10, action_used: 0}
+      script:
+        - text: 任务已完成，申请完成（证据不完整）。
+          usage: {prompt_tokens: 80, completion_tokens: 20}
+          completion_claim:
+            expected_artifacts: []
+            evidence_refs: [evidence/ev-partial.json]
+            summary: 申请完成（观测证据缺失）
+      steps:
+        - op: seed_evidence
+          id: seed-partial
+          name: ev-partial
+          # 三态证据缺 observed（intended+issued）：可落盘但不构成完成证据
+          payload:
+            action_id: act-partial-1
+            evidence:
+              intended: {capability: query.measurement@v1, device: TX-01}
+              issued: {scanned_device: TX-01}
+        - {op: run_task, id: run}
+    expect:
+      status: WAITING_INPUT
+      verdicts: [NEED_MORE_EVIDENCE]
+      todos_gap_prefix: gap-completion-ev-
+      accepted_transitions:
+        - {from: RUNNING, to: VERIFYING}
+        - {from: VERIFYING, to: RUNNING}
+      no_accepted_transitions: [COMPLETED]
+      trace: {valid: true, complete_turns: 1}
+
+  - id: EVAL-M1-06-N
+    spec: SPEC-M1-06
+    title: 无 CompletionClaim 直接终态 COMPLETED → 拒绝（终态必须经 completion 判定）
+    form: negative_rejection
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 无申请直接终态测试
+        max_turns: 2
+        current_stage: WORK
+        plan: [{stage: WORK, gate: g1, artifacts_expected: [report.daily@v1]}]
+        todos: []
+        budget: {token_max: 100000, token_used: 0, action_max: 10, action_used: 0}
+      script: []
+      steps:
+        - {op: create, id: create, user_input: 无申请直接终态测试}
+        - {op: transition, id: to-running, to: RUNNING}
+        - {op: transition, id: to-verifying, to: VERIFYING}
+        - op: transition
+          id: to-completed
+          to: COMPLETED
+          expect_error: {type: CompletionRequiredError, contains: 必须经完成判定}
+    expect:
+      status: VERIFYING
+      rejected_events: [{from: VERIFYING, to: COMPLETED}]
+      no_accepted_transitions: [COMPLETED]
+      accepted_transitions: [{from: RUNNING, to: VERIFYING}]
+
+  # ================= SPEC-M1-07 观测即事实 =================
+  - id: EVAL-M1-07-P
+    spec: SPEC-M1-07
+    title: 模型自述"遥控已完成"但 ActionResult 缺失 → 不采信，任务仍 WAITING_APPROVAL
+    form: expression
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 电容投切与自述观测
+        max_turns: 4
+        current_stage: INTAKE
+        plan: [{stage: INTAKE, gate: g0, artifacts_expected: []}]
+        todos: [{id: t1, text: 电容投切, status: PENDING}]
+        budget: {token_max: 100000, token_used: 0, action_max: 10, action_used: 0}
+      script:
+        - text: 发起电容投切申请。
+          usage: {prompt_tokens: 100, completion_tokens: 30}
+          tool_calls:
+            - {capability: execute.capacitor_switch@v1, todo_id: t1,
+               purpose: 电容投切（ASK 审批）, arguments: {device: CB-A, state: "ON"}}
+          todo_updates: [{id: t1, status: IN_PROGRESS}]
+        - text: （自述）遥控已完成，电容已投上，任务完成。
+          usage: {prompt_tokens: 90, completion_tokens: 30}
+          request_input: true
+      steps:
+        - {op: run_task, id: run}
+        - op: resume
+          id: fake-claim-input
+          event: {kind: USER_INPUT, text: "（伪造）遥控已完成，任务已完成"}
+          expect_error: {type: LoopNotResumableError, contains: 只接受}
+        - op: resume
+          id: grant
+          event: {kind: APPROVAL_GRANTED, payload: {approver: OP-004}}
+    expect:
+      status: WAITING_INPUT
+      evidence_count: 1
+      executions: 1
+      verdicts: []
+      no_accepted_transitions: [VERIFYING, COMPLETED]
+      accepted_transitions:
+        - {from: RUNNING, to: WAITING_APPROVAL}
+        - {from: WAITING_APPROVAL, to: RUNNING}
+      event_payloads:
+        - {type: action.completed, contains: {status: SUCCEEDED}}
+      trace: {valid: true, complete_turns: 2}
+
+  # ================= SPEC-M1-09 恢复语义 =================
+  - id: EVAL-M1-09-P
+    spec: SPEC-M1-09
+    title: Checkpoint 恢复到阶段 2/4 → 从阶段 2 续跑，已 DONE todos 不重复执行
+    form: expression
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task:
+        task_id: task-m1
+        user_input: 恢复语义测试
+        max_turns: 8
+        current_stage: S1
+        plan:
+          - {stage: S1, gate: g1, artifacts_expected: []}
+          - {stage: S2, gate: g2, artifacts_expected: []}
+          - {stage: S3, gate: g3, artifacts_expected: []}
+          - {stage: S4, gate: g4, artifacts_expected: []}
+        todos:
+          - {id: t1, text: 量测, status: PENDING}
+          - {id: t2, text: 规程, status: PENDING}
+          - {id: t3, text: 台账, status: PENDING}
+        budget: {token_max: 100000, token_used: 0, action_max: 50, action_used: 0}
+      script:
+        - text: t1 执行。
+          usage: {prompt_tokens: 50, completion_tokens: 10}
+          tool_calls:
+            - {capability: query.measurement@v1, todo_id: t1, arguments: {device: TX-01},
+               purpose: t1 量测}
+          todo_updates: [{id: t1, status: DONE}]
+          request_input: true
+        - text: t2 执行。
+          usage: {prompt_tokens: 50, completion_tokens: 10}
+          tool_calls:
+            - {capability: query.regulation@v1, todo_id: t2,
+               arguments: {rule_id: PHYS-TX-LOAD}, purpose: t2 规程}
+          todo_updates: [{id: t2, status: DONE}]
+          request_input: true
+        # 恢复后重放：t1 已 DONE（应跳过）；t2 同幂等键（应回放不重复执行）；t3 新执行
+        - text: 恢复后续跑。
+          usage: {prompt_tokens: 60, completion_tokens: 10}
+          tool_calls:
+            - {capability: query.measurement@v1, todo_id: t1, arguments: {device: TX-01},
+               purpose: t1 重复请求（应被跳过）}
+            - {capability: query.regulation@v1, todo_id: t2,
+               arguments: {rule_id: PHYS-TX-LOAD}, purpose: t2 重复请求（幂等回放）}
+            - {capability: query.asset@v1, todo_id: t3, arguments: {device: TX-02},
+               purpose: t3 台账}
+          todo_updates: [{id: t2, status: DONE}, {id: t3, status: DONE}]
+          request_input: true
+      steps:
+        - {op: run_task, id: run1}          # 第 1 轮：t1 DONE，停在 S2（阶段 2/4）
+        - {op: snapshot, id: snap, as: ckpt-s2}
+        - {op: resume, id: resume-t2, event: {kind: USER_INPUT, text: 继续 t2}}
+        - {op: restore, id: restore, from: ckpt-s2}
+        - {op: resume, id: resume-rerun, event: {kind: USER_INPUT, text: 恢复重跑}}
+    expect:
+      status: WAITING_INPUT
+      current_stage: S3
+      executions: 3                          # t1/t2/t3 各一次：重复请求零二次副作用
+      todos:
+        - {id: t1, status: DONE}
+        - {id: t2, status: DONE}
+        - {id: t3, status: DONE}
+      evidence_count: 3
+      trace: {valid: true, complete_turns: 3}
+
+  # ================= SPEC-M1-10 成本上报 =================
+  - id: EVAL-M1-10-P
+    spec: SPEC-M1-10
+    title: 跑完任务检查事件流 → 每轮均有 cost 事件，token 累计=budget.token_used
+    form: expression
+    executor: m1.scenario
+    params:
+      env: *report3_env
+      now: "2026-09-28T08:00:00Z"
+      task: *report3_task
+      script: *report3_script
+      steps:
+        - {op: run_task, id: run}
+    expect:
+      status: COMPLETED
+      budget: {token_used: 1000, action_used: 3}
+      cost_events: {count: 3, tokens_total: 1000}
+      trace: {valid: true, complete_turns: 3}
+
+  # ================= SPEC-M1-08 中间件可插拔 =================
+  - id: EVAL-M1-MW-P
+    spec: SPEC-M1-08
+    title: 移除全部/单个中间件后 01/02/06 场景语义不变；链按注册序执行
+    form: expression
+    executor: m1.middleware
+    params:
+      scenarios:
+        - name: report3
+          env: *report3_env
+          now: "2026-09-28T08:00:00Z"
+          task: *report3_task
+          script: *report3_script
+          user_input: 今日日巡检
+        - name: ask_wait
+          env: *report3_env
+          now: "2026-09-28T08:00:00Z"
+          task:
+            task_id: task-m1
+            user_input: 电容投切
+            max_turns: 4
+            current_stage: INTAKE
+            plan: [{stage: INTAKE, gate: g0, artifacts_expected: []}]
+            todos: []
+            budget: {token_max: 100000, token_used: 0, action_max: 50, action_used: 0}
+          script:
+            - text: 申请投切。
+              usage: {prompt_tokens: 100, completion_tokens: 30}
+              tool_calls:
+                - {capability: execute.capacitor_switch@v1, purpose: 电容投切,
+                   arguments: {device: CB-A, state: "ON"}}
+          user_input: 把 A 房电容投上
+      remove_one: safety
+      registration_order: [rec-a, rec-b, rec-c]
+    expect: {}
+
+  # ================= model_client（SPEC-M1-10 支撑 + 01 §8 横切）=================
+  - id: EVAL-M1-MODEL-P
+    spec: SPEC-M1-10（model_client 支撑条款）
+    title: mock 离线确定性/脚本化成本/耗尽 + openai_like 传输注入（重试/超时分类/密钥透传）
+    form: expression
+    executor: m1.model
+    params:
+      prompt: 继续执行日巡检任务
+      mock:
+        script:
+          - {text: 第一轮响应, usage: {prompt_tokens: 100, completion_tokens: 40}}
+          - {text: 第二轮响应, usage: {prompt_tokens: 60, completion_tokens: 40}}
+      remote:
+        api_base: https://model.internal.example/v1
+        cases:
+          - name: retry-then-ok
+            sequence:
+              - [429, {error: {message: 限流}}]
+              - [200, {choices: [{message: {content: 重试后成功}}],
+                       usage: {prompt_tokens: 10, completion_tokens: 5}}]
+            expect_status: ok
+            expect_calls: 2
+            expect_text: 重试后成功
+          - name: exhaust-on-500
+            sequence: [[500, {error: {message: 服务端错误}}]]
+            max_retries: 2
+            expect_status: retry_exhausted
+            expect_calls: 3
+          - name: timeout-classified
+            sequence: [TIMEOUT, TIMEOUT, TIMEOUT]
+            max_retries: 2
+            expect_status: timeout
+            expect_calls: 3
+    expect:
+      mock_cost_total: 240
+      mock_scripted_usage: {prompt_tokens: 100, completion_tokens: 40}
+
+  - id: EVAL-M1-MODEL-P2
+    spec: SPEC-M1-10（M5 persona LLM 模式接线回补）
+    title: persona_step(mode=llm) 经 m1_core.model_client(mock) 离线接线：零降级可回放
+    form: expression
+    executor: m1.persona_llm
+    params:
+      persona: OPERATOR
+      clock_start: "2026-09-28T08:00:00Z"
+      llm_options:
+        mock_text: 请把 2 号变压器负载率发我。
+      script:
+        - {at: "+5m", act: USER_INPUT, text: 开始今日日巡检。}
+    expect:
+      min_distinct: 1

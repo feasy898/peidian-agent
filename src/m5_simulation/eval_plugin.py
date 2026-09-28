@@ -379,22 +379,30 @@ def exec_persona_script(case: dict, ctx: Any) -> dict:
         if output["text"] != step.get("text") or output["act"] != str(step.get("act")):
             problems.append(f"第 {index + 1} 条非逐字回放: {output['text']!r}")
 
-    # LLM 模式降级路径（M1 未交付：ModelClient 占位抛 NotImplementedError → 回退脚本）
+    # LLM 模式（M1 已交付 mock 接线，SPEC-M5-04"M1 交付后此路径自动生效"）：
+    # - mock provider 正常产出：mode=llm、零降级；
+    # - 失败 provider（openai_like 缺端点）走降级路径回退脚本（degraded 标记）
     from m5_simulation.persona import persona_step
 
-    session = PersonaSession.from_spec(user_model, clock_start)
-    hub = ClockHub(clock_start)
-    hub.advance_sim(3600.0)
-    degraded = persona_step(session, [], mode="llm")
-    if degraded is not None and not degraded.degraded and degraded.mode == "llm":
-        problems.append("LLM 占位阶段应走降级路径（degraded 标记）")
+    session_llm = PersonaSession.from_spec(user_model, clock_start)
+    llm_ok = persona_step(session_llm, [], mode="llm")
+    if llm_ok is None or llm_ok.mode != "llm" or llm_ok.degraded:
+        problems.append(f"LLM 模式经 m1_core.model_client(mock) 未正常产出: {llm_ok}")
+
+    session_bad = PersonaSession.from_spec(user_model, clock_start)
+    session_bad.llm_provider = "openai_like"  # 无 api_base → 调用失败 → 降级
+    degraded = persona_step(session_bad, [], mode="llm")
+    if degraded is not None and not degraded.degraded:
+        problems.append("LLM 失败路径未走降级（degraded 标记缺失）")
 
     metrics = {"steps": len(script), "replay": len(first),
+               "llm_mode": llm_ok.mode if llm_ok else None,
                "llm_degraded": degraded.degraded if degraded else None}
     if problems:
         return _result(False, "；".join(problems), metrics)
     return _result(True, f"OPERATOR 脚本 {len(script)} 轮逐字确定性回放，两次一致；"
-                         f"LLM 模式占位阶段按降级路径回退", metrics)
+                         f"LLM 模式经 mock 正常产出（mode=llm），"
+                         f"失败 provider 按降级路径回退", metrics)
 
 
 # ---------------------------------------------------------------------------
