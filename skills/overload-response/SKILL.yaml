@@ -1,0 +1,19 @@
+# skills/overload-response/SKILL.yaml · SkillAsset 0.1.0（01 §2.7 SkillDescriptor）
+# 来源：M6 受控自进化候选（EVAL-M6-05-P 口径：方法在 ≥3 个不同任务实例出现且
+# 判据通过 → SkillDescriptor 候选 status=REVIEW），经 M7 评审流发布。
+# dependencies 为 M7 注册层附加键（不进 SkillDescriptor 冻结结构，注册层单独存放）。
+skill_id: skill.overload-response
+version: 0.1.0
+capability_domain: MAINTAIN
+disclosure:
+  level0: 过载响应处置
+  level1: 变压器过载研判与处置动作序列（两票/审批/工单），按 PHYS-TX-LOAD 判据口径分级。
+  level2_ref: skills/overload-response/SKILL.md
+entry:
+  prompt_ref: prompts/overload-response@v1
+  checklist: 过载研判清单（判据分级/操作票核验/审批链/证据三态）
+evidence_policy: 使用该 skill 时需附环境回读证据与黄金集成绩提升证明（受控自进化）。
+owner: m6-flywheel
+status: REVIEW
+dependencies:
+  - prompts/overload-response@v1

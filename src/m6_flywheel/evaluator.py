@@ -156,11 +156,21 @@ class MockRelease:
 
 def resolve_release(release_id: str, *, repo_root: Path | str | None = None,
                     releases_dir: Path | str | None = None) -> MockRelease:
-    """按 id 解析 release：正式发布物 → mock 清单 → 内建通用 mock。"""
+    """按 id 解析 release：正式发布物 → mock 清单 → 内建通用 mock。
+
+    解析序（M7 交付后新增首位候选，其余次序不变）：
+    1. ``releases/<id>/evaluation/cases.yaml``（M7 发布物自带的评估清单——
+       ReleaseBundle 本体不含 cases，发布目录内评估清单是重跑黄金集的权威脚本）；
+    2. ``releases/<id>/release.yaml``（旧式/中间态发布物）；
+    3. ``tests/fixtures/mock_releases/<id>.yaml``（离线 mock 清单）；
+    4. 内建通用 mock。
+    """
     root = repo_root_of(repo_root)
     candidates = []
     if releases_dir is not None:
+        candidates.append(Path(releases_dir) / release_id / "evaluation" / "cases.yaml")
         candidates.append(Path(releases_dir) / release_id / "release.yaml")
+    candidates.append(root / "releases" / release_id / "evaluation" / "cases.yaml")
     candidates.append(root / "releases" / release_id / "release.yaml")
     candidates.append(root / MOCK_RELEASE_DIR / f"{release_id}.yaml")
     for path in candidates:

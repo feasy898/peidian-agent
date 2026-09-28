@@ -486,3 +486,97 @@
   ReleaseGuard 放行/篡改黄金案例文件）全部被对应用例捕获后恢复全绿；CLI
   （ADDENDUM §E）`--release/--golden/--mode` 三参实测（REAL 拒绝 exit 2）；
   隔离断言零命中。
+
+---
+
+## 2026-09-28 · M7 资产层首条登记（注册/版本/评审/Release + rel-0001 发布）
+
+- **模块**：M7（`src/m7_registry/` 七组件 + `RELEASE-FORMAT.md` +
+  `assets/agent_contract_v1.yaml` + `prompts/daily-inspection.yaml、
+  prompts/overload-response.yaml` + `skills/overload-response/`（SKILL.yaml+SKILL.md）+
+  `tests/test_m7.yaml` + `src/m7_registry/eval_plugin.py` +
+  `tests/fixtures/m7_state_machines.yaml` + `tests/fixtures/mock_releases/rel-0001.yaml`
+  + `releases/rel-0001/`（首个 Agent Release 发布物））
+- **spec_ref**（按序拼接取 hash）：
+  - `specs/M7-registry-release.md`
+  - `specs/00-ontology.md`
+  - `specs/01-contracts.md`
+  - `specs/ADDENDUM.md`
+- **spec_hash → eval_hash**：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m7.yaml | `63631346e9622b06421faca778f4c8106d050abbbed2c461d362941661253dc6` | `12da220ff3d4c8c193a84b0fd2e6de3478b1ef060405c83aaabe515cc35fbaa0` |
+
+- **覆盖范围**：M7 §4 Eval 表 10 条机械生成（SPEC-M7-01/02/03/04/05/06/07 正例+
+  负例），另含 6 条表外补强——EVAL-M7-01-P2（四类资产齐备+版本链纪律全查：
+  重复注册/空转更新/显式 chain 改写全拒）、EVAL-M7-02-P（闭包正例：解析+打包
+  通过）、EVAL-M7-02-N3（循环依赖→打包失败，规格明列而表缺）、EVAL-M7-03-P2
+  （评审拒绝分支：跑分低于现行→REJECTED）、EVAL-M7-TABLE-P（DoD §5：评审流/
+  Release 状态机与 fixture diff 空+非法迁移行为级拒绝）、EVAL-M7-REL-P（端到端：
+  M6 实测→签名→资产评审→六要素打包→门禁→只写一次发布→manifest/签名/按发布物
+  重跑复核）。合计 16 条。
+- **登记的偏差与落盘口径**（机械落盘必要消歧，未改任何冻结语义）：
+  1. **M7 §5 DoD 引用的"01§5.4"不存在**（01 §5 只有 5.1-5.3 三状态机）：评审流
+     状态机按 M7 §2/§3 行为规格落盘（PROPOSED→EVALUATING→APPROVED→PUBLISHED，
+     REJECTED/WITHDRAWN 分支），表驱动 `review.REVIEW_TRANSITIONS` 与
+     `tests/fixtures/m7_state_machines.yaml`（新增 fixture，不动 S0 的
+     frozen_state_machines.yaml）diff 为空；Release 状态机 DRAFT→GATED→PUBLISHED
+     （PUBLISHED 后仅可 SUPERSEDED）同款落盘。
+  2. **评审/资产审计事件主题**：01 §4 事件目录无 review.*/asset.* 主题——评审
+     迁移落 `release.published {stage: review, from, to}`、publish 入口拒绝落
+     `{stage: asset-publish, rejected: true}`（沿用 M1/M2/M3/M6"就近落主题+
+     payload 细分"先例）；全部事件经 contracts.EventRecord 校验。
+  3. **六要素的空值口径**：model_ref/ontology_version/golden_scores 非空、
+     prompt/skill/tool_refs 非空列表才视为"已绑定"（空列表=要素缺失，缺一拒绝
+     打包）；RELEASE-FORMAT.md §2 登记。
+  4. **AgentContract 绑定通道**：冻结 ReleaseBundle（01 §2.12）无 agent 字段、
+     不可擅改——AgentContract 资产绑定落发布目录 `agent_contract.yaml` 快照 +
+     `manifest.yaml.agent_contract`（asset_id/version/sha256）；bundle_draft 必须
+     携带 agent_ref（M7 自有子契约字段，非冻结结构字段），缺失拒绝打包。
+  5. **M6 签名双层口径**：`by_domain.signature`（M7 侧 digest=sha256(canonical
+     成绩载荷)）+ `attestation`（M6 侧凭证 `m6_flywheel.attest`：对评估报告逐
+     案例成绩摘要签名，producer=M6）；校验链=digest 重算→run_ref 归档装载→
+     attestation 重算→从归档重推全部成绩逐块相等。`import_golden_scores` 是
+     唯一合法产出口（报告 release_id 必须等于打包 release；全部数字机械推导）。
+     by_domain 四块：capability（六能力域）/category（四类目）/catalog（12 条
+     种子逐条）/red_line（100% 断言记录）——目录映射来自 AgentContract 资产
+     behavior_catalog（数据源，非代码）。
+  6. **run_ref 解析序**：绝对路径 → release 目录内相对（发布后指向
+     `evaluation/report.json` 副本，digest 不含 run_ref 故发布时改写不断链）→
+     仓库根相对。
+  7. **评审基线**：candidate 总分（M6 报告 totals.score_100，缺则 pass_rate×100）
+     ≥ 现行已发布 release 的 golden_scores；无现行 release 时基线=0（首个
+     release 无可回归基线）。M7 只消费 M6 结果（runs/eval/ 归档），不自己跑分。
+  8. **资产存储**：JSONL journal（runtime/m7_registry/assets.jsonl）追加写+重放
+     重建（M3 幂等 journal 先例）；chain 整数为版本链权威，描述子自身 version
+     串（semver/v1）为 ref 组成部分；内容 hash 未变的更新拒绝（版本号不空转）。
+     publish_asset 是资产置 PUBLISHED 的唯一入口（AssetStore._set_status 模块
+     私有，无公开 setter）——SPEC-M7-03 无旁路的代码级落位。
+  9. **M6 evaluator 解析序扩展**（向后兼容增补）：release 解析新增首位候选
+     `releases/<id>/evaluation/cases.yaml`（发布物自带评估清单，重跑黄金集与
+     发布前实测同源）；既有候选次序不变，M6 既有用例行为零变化（--module m6
+     14/14 复测通过）。
+  10. **rel-0001 发布物**：`PYTHONPATH=src python -m m7_registry.assemble
+      --release-id rel-0001`（注册 20 项资产：PROMPT×2/SKILL×1/TOOL×16/AGENT×1，
+      全部经评审流 publish_asset 发布 → M6 实测 12 种子全过 97.67/100 → 签名
+      导入 → 六要素打包 → 门禁 5 项全过 → 只写一次发布）；已发布后 CLI 重入为
+      只读复核模式（manifest/签名/黄金重跑，零写入）。发布前 M6 实测经
+      `tests/fixtures/mock_releases/rel-0001.yaml`（与 mock-rel-0001 同源案例
+      清单）解析。
+- **并发写手协调登记**（M5 先例的同款情形）：本阶段开发期间另一会话
+  （dwfrun-c5e0dc03 actor_1_5）并发写入了 `src/m6_flywheel/attest.py`、
+  `m6_flywheel/__init__.py` 的 attest 导出（**采纳保留**——M6 侧签名凭证正是
+  SPEC-M7-04"带 M6 签名"的签名源，本模块按偏差 5 双层口径集成消费）与一份
+  SQLite 版 `m7_registry/assets.py`+`common.py`（**未采纳**——与在途的
+  JSONL AssetStore 全管线互斥，快照存 runtime/concurrent_writer_snapshot/ 供
+  审计）；其 23:03 对 assets.py 的覆写在落地前被本侧恢复版本覆盖（.mimosa
+  hook-state 可考）。
+- **复核门禁实测**：`python run_evals.py --module m7` 16/16 exit 0（含突变验证
+  四项：publish 接受伪造评审记录/放行 floating 版本/门禁废红线检查/只写一次
+  守卫放行——分别被 EVAL-M7-03-N/02-N/06-P/05-P+REL-P 捕获后恢复全绿）；
+  `--module all` 173/173 exit 0（m0 49 + m1 20 + m2 22 + m3 23 + m4 13 +
+  m5 16 + m6 14 + m7 16；rel-0001 发布前后各一轮）；CLI 复核
+  `python -m m7_registry.assemble --release-id rel-0001`（verify 模式 12 种子
+  重跑 1.0/97.67）；`python -m m6_flywheel.evaluator --release rel-0001` 按发布
+  物评估清单重跑 PASS；隔离断言零命中。

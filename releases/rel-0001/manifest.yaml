@@ -1,0 +1,36 @@
+# releases/<id>/manifest.yaml · M7 发布清单（只写一次；文件 hash 复核基准）
+release_id: rel-0001
+status: PUBLISHED
+published_at: '2026-09-28T15:09:45Z'
+contract_version: '1.1'
+agent_contract:
+  ref: agent.park-power-ops@1.0.0#f0439fd926e2
+  asset_id: agent.park-power-ops
+  version: 1.0.0
+  sha256: f0439fd926e2f376f452878e0eaf13121fca5ac388f208de605e06a2d6e092be
+gate:
+  release_id: rel-0001
+  passed: true
+  checks:
+  - name: catalog_complete
+    passed: true
+    detail: 行为目录 12 条全部有成绩记录
+  - name: catalog_passed
+    passed: true
+    detail: 黄金线达成：12 条种子全过
+  - name: red_line_100pct
+    passed: true
+    detail: 红线类目 100%（2 条通过记录在档）
+  - name: ontology_hash
+    passed: true
+    detail: ontology_version=f01ebaf1855523f5…
+  - name: contract_version
+    passed: true
+    detail: contract_version=1.1（现行 1.1）
+  missing: []
+files:
+  release.yaml: 02699885f66aa53cdad363c4c89f2c7c10ac391dcd47d720e49b2097312b9599
+  agent_contract.yaml: 96c6b64dbdfa90876afa21c50d841839359623a7546b88c8785e7c50ef492e90
+  evaluation/report.json: 6af7f9d039fffbda9e9b3114440a3484aaa580fa94b0f22d4c42fe9d51e364ad
+  evaluation/cases.yaml: 431424c7ec4f27e6ef05199d4587c8acae4733f7d1bc7051291855d3988fd6ff
+  manifest.yaml: self

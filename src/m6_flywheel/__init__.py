@@ -49,6 +49,12 @@ _LAZY_EXPORTS = {
     "skillize": ("skillize", "skillize"),
     "MethodLedger": ("skillize", "MethodLedger"),
     "SkillizeError": ("skillize", "SkillizeError"),
+    # attest（M6 黄金跑分签名；M7 SPEC-M7-04 消费侧签名源）
+    "attest_report": ("attest", "attest_report"),
+    "verify_attestation": ("attest", "verify_attestation"),
+    "attestation_payload": ("attest", "attestation_payload"),
+    "sign_payload": ("attest", "sign_payload"),
+    "AttestationError": ("attest", "AttestationError"),
 }
 
 

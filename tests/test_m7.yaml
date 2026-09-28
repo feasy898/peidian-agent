@@ -1,0 +1,440 @@
+# tests/test_m7.yaml
+# M7（资产层：注册/版本/评审/Release）数据驱动 EVAL 套件。
+# 用例从 specs/M7-registry-release.md §4 Eval 表逐行机械生成（10 条），另含
+# 表外补强 6 条——EVAL-M7-01-P2（SPEC-M7-01 四类资产齐备+版本链纪律全查）、
+# EVAL-M7-02-P（SPEC-M7-02 正例：闭包解析+打包通过）、EVAL-M7-02-N3（循环依赖
+# →打包失败，规格明列而表缺）、EVAL-M7-03-P2（评审拒绝分支：跑分低于现行）、
+# EVAL-M7-TABLE-P（DoD §5：评审流/Release 状态机表驱动与 fixture diff 空）、
+# EVAL-M7-REL-P（DoD/收尾：端到端 M6 实测→签名→评审→打包→门禁→只写一次发布
+# →manifest/签名/按发布物重跑复核）。合计 16 条。
+# schema 见 tests/EVAL-SCHEMA.md；执行器注册于 src/m7_registry/eval_plugin.py
+# （全部断言数据取自本文件 params/expect）。spec_hash 口径（01§6）：spec_ref
+# 列表按序拼接文件字节的 sha256。
+suite: m7
+title: M7 资产层（注册/版本/评审/Release）EVAL
+spec_ref:
+  - specs/M7-registry-release.md
+  - specs/00-ontology.md
+  - specs/01-contracts.md
+  - specs/ADDENDUM.md
+spec_hash: 63631346e9622b06421faca778f4c8106d050abbbed2c461d362941661253dc6
+executors:
+  - module: m7_registry.eval_plugin
+
+# ============================================================================
+# 公共数据锚（runner 只读各用例 params/expect）
+# ============================================================================
+_prompt_v1: &prompt_v1
+  asset_id: prompts/eval-report
+  version: v1
+  name: 巡检报告模板（EVAL）
+  template: "报告：{{park}}（{{devices}}）—— {{conclusion}}"
+  variables: [park, devices, conclusion]
+  compiler: format
+  dependencies: []
+
+_prompt_v2: &prompt_v2
+  asset_id: prompts/eval-report
+  version: v2
+  name: 巡检报告模板（EVAL v2）
+  template: "报告 v2：{{park}}（{{devices}}）—— {{conclusion}}（含规程 {{refs}}）"
+  variables: [park, devices, conclusion, refs]
+  compiler: format
+  dependencies: []
+
+_skill_v1: &skill_v1
+  skill_id: skill.eval-overload
+  version: 0.1.0
+  capability_domain: MAINTAIN
+  disclosure:
+    level0: 过载研判处置（EVAL）
+    level1: 变压器过载研判与处置序列（沙箱用例）
+    level2_ref: skills/overload-response/SKILL.md
+  entry:
+    prompt_ref: prompts/eval-report@v1
+    checklist: 过载研判清单
+  evidence_policy: 需附环境回读证据（沙箱）
+  owner: m7-eval
+  status: DRAFT
+  dependencies: [prompts/eval-report@v1]
+
+_tool_v1: &tool_v1
+  asset_id: tools/query.measurement
+  version: v1
+  capability: query.measurement@v1
+  params_schema: {type: object, required: [], properties: {device: {type: string}}}
+  risk: {level: LOW, reversible: false, default_policy: ALLOW}
+  idempotency_policy: CALLER_PROVIDED
+  dependencies: []
+
+_agent_v1: &agent_v1
+  contract_id: agent.park-power-ops
+  version: 1.0.0
+  title: 园区配电运维智能体契约（示范园区 PARK-001）
+  capability_domains:
+    PREDICT: {name: 预测研判, description: 态势感知与越限研判}
+    DISPATCH: {name: 调度操控, description: 两票制遥控编排与审批}
+    MAINTAIN: {name: 检修维护, description: 巡检/台账/缺陷闭环}
+    PLAN: {name: 计划编排, description: 巡检与检修计划编排}
+    SELF_HEAL: {name: 自愈处置, description: 中断/失真诚实上报}
+    TRADE: {name: 经营优化, description: 电价时段与需量控制}
+  constraints:
+    - {id: CL-RED-REMOTE-ORDER, text: 无操作票的遥控必须被拒, source: SAFE-TWO-TICKET, assertion: remote_without_order_refused}
+  behavior_catalog:
+    - {case_id: case_001, category: normal,    domain: MAINTAIN,  anchor: behavior:daily-inspection-report}
+    - {case_id: case_002, category: normal,    domain: PLAN,      anchor: behavior:asset-lookup}
+    - {case_id: case_003, category: normal,    domain: PREDICT,   anchor: PHYS-TX-LOAD}
+    - {case_id: case_004, category: normal,    domain: DISPATCH,  anchor: SAFE-OP-REMOTE}
+    - {case_id: case_005, category: boundary,  domain: TRADE,     anchor: COMM-TARIF-SYNC}
+    - {case_id: case_006, category: boundary,  domain: TRADE,     anchor: OP-DEMAND-LIMIT}
+    - {case_id: case_007, category: boundary,  domain: PREDICT,   anchor: PHYS-THD}
+    - {case_id: case_008, category: exception, domain: DISPATCH,  anchor: behavior:debounce-wait}
+    - {case_id: case_009, category: exception, domain: SELF_HEAL, anchor: behavior:sensing-outage-honesty}
+    - {case_id: case_010, category: exception, domain: SELF_HEAL, anchor: SAFE-OP-REMOTE}
+    - {case_id: case_011, category: red_line,  domain: DISPATCH,  anchor: SAFE-TWO-TICKET}
+    - {case_id: case_012, category: red_line,  domain: MAINTAIN,  anchor: behavior:red-line-refusal}
+
+cases:
+  # ================= SPEC-M7-01 资产四类 + 版本链 =================
+  - id: EVAL-M7-01-P
+    spec: SPEC-M7-01
+    title: 注册 Prompt 后改模板 → v1 只读，v2 新记录
+    form: contract
+    executor: m7.asset_versions
+    params:
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+      updates:
+        - {asset_id: prompts/eval-report, descriptor: *prompt_v2}
+    expect:
+      chains: {prompts/eval-report: 2}
+      v1_readonly: true          # 旧版本版本串/内容只读不覆盖（对照注册时原样）
+      reregister_rejected: true  # 同 asset_id 重复注册拒绝
+      unchanged_update_rejected: true  # 内容未变不产生新版本（版本号不空转）
+      explicit_chain_rejected: true     # 显式 chain 改写旧版本拒绝
+
+  - id: EVAL-M7-01-P2
+    spec: SPEC-M7-01
+    title: 四类资产（PROMPT/SKILL/TOOL/AGENT）齐注册 + 版本链纪律
+    form: contract
+    executor: m7.asset_versions
+    params:
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: SKILL, descriptor: *skill_v1}
+        - {type: TOOL, descriptor: *tool_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+      updates:
+        - asset_id: skill.eval-overload
+          descriptor:
+            <<: *skill_v1
+            version: 0.2.0
+            evidence_policy: 需附环境回读证据与黄金成绩提升证明（v2）
+        - asset_id: tools/query.measurement
+          descriptor:
+            <<: *tool_v1
+            version: v2
+            params_schema:
+              type: object
+              required: []
+              properties: {device: {type: string}, quantity: {type: string}}
+        - asset_id: agent.park-power-ops
+          descriptor:
+            <<: *agent_v1
+            version: 1.1.0
+    expect:
+      types: [AGENT, PROMPT, SKILL, TOOL]
+      chains:
+        {prompts/eval-report: 1, skill.eval-overload: 2,
+         tools/query.measurement: 2, agent.park-power-ops: 2}
+      v1_readonly: true
+
+  # ================= SPEC-M7-02 依赖闭包 =================
+  - id: EVAL-M7-02-P
+    spec: SPEC-M7-02
+    title: 闭包正例：显式版本解析完整，打包通过
+    form: contract
+    executor: m7.closure
+    params:
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: SKILL, descriptor: *skill_v1}
+        - {type: TOOL, descriptor: *tool_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+      skill_refs: [skill.eval-overload@0.1.0]
+      tool_refs: [tools/query.measurement@v1]
+      prompt_refs: [prompts/eval-report@v1]
+    expect:
+      ok: true
+
+  - id: EVAL-M7-02-N
+    spec: SPEC-M7-02
+    title: skill 引用 floating latest → 打包拒绝
+    form: negative_rejection
+    executor: m7.closure
+    params:
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: SKILL, descriptor: *skill_v1}
+        - {type: TOOL, descriptor: *tool_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+      skill_refs: [skill.eval-overload@latest]
+      tool_refs: [tools/query.measurement@v1]
+    expect:
+      ok: false
+      error_contains: [floating, SPEC-M7-02]
+
+  - id: EVAL-M7-02-N2
+    spec: SPEC-M7-02
+    title: 闭包缺 skill → 打包拒绝，错误含缺失 ID
+    form: negative_rejection
+    executor: m7.closure
+    params:
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: SKILL, descriptor: *skill_v1}
+        - {type: TOOL, descriptor: *tool_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+      skill_refs: [skill.eval-overload@0.1.0, skill.ghost@9.9.9]
+      tool_refs: [tools/query.measurement@v1]
+    expect:
+      ok: false
+      error_contains: [skill.ghost, 缺失]
+
+  - id: EVAL-M7-02-N3
+    spec: SPEC-M7-02
+    title: 循环依赖（prompt A↔B）→ 打包失败
+    form: negative_rejection
+    executor: m7.closure
+    params:
+      assets:
+        - type: PROMPT
+          descriptor:
+            asset_id: prompts/eval-a
+            version: v1
+            name: A
+            template: "A→{{x}}"
+            variables: [x]
+            compiler: format
+            dependencies: [prompts/eval-b@v1]
+        - type: PROMPT
+          descriptor:
+            asset_id: prompts/eval-b
+            version: v1
+            name: B
+            template: "B→{{x}}"
+            variables: [x]
+            compiler: format
+            dependencies: [prompts/eval-a@v1]
+        - {type: SKILL, descriptor: *skill_v1}
+        - {type: TOOL, descriptor: *tool_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+      prompt_refs: [prompts/eval-a@v1]
+      skill_refs: [skill.eval-overload@0.1.0]
+      tool_refs: [tools/query.measurement@v1]
+    expect:
+      ok: false
+      error_contains: [循环依赖]
+
+  # ================= SPEC-M7-03 变更评审 =================
+  - id: EVAL-M7-03-P
+    spec: SPEC-M7-03
+    title: 正常评审流（黄金成绩达标）→ PROPOSED→…→PUBLISHED 全事件
+    form: event_sequence
+    executor: m7.review_flow
+    params:
+      run_eval: {release: mock-rel-0001, golden_dir: golden/dev}
+      asset_id: prompts/eval-report
+      motivation: 巡检报告模板首发基线
+      impact: 影响面=日巡检报告产出（write.report 链路）
+      badcases: [none]
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+    expect:
+      final_state: PUBLISHED
+      transitions:
+        - [null, PROPOSED]
+        - [PROPOSED, EVALUATING]
+        - [EVALUATING, APPROVED]
+        - [APPROVED, PUBLISHED]
+
+  - id: EVAL-M7-03-P2
+    spec: SPEC-M7-03
+    title: 评审拒绝分支：candidate 跑分低于现行 → REJECTED
+    form: negative_rejection
+    executor: m7.review_flow
+    params:
+      asset_id: prompts/eval-report
+      candidate:
+        release_id: rel-eval-cand
+        score_100: 85
+        cases:
+          - {case_id: case_001, passed: true}
+          - {case_id: case_002, passed: true}
+          - {case_id: case_003, passed: false}
+      baseline:
+        release_id: rel-eval-base
+        score_100: 90
+        cases:
+          - {case_id: case_001, passed: true}
+          - {case_id: case_002, passed: true}
+          - {case_id: case_003, passed: true}
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+    expect:
+      final_state: REJECTED
+      transitions:
+        - [null, PROPOSED]
+        - [PROPOSED, EVALUATING]
+        - [EVALUATING, REJECTED]
+
+  - id: EVAL-M7-03-N
+    spec: SPEC-M7-03
+    title: 试图绕过评审直发 → publish 入口拒绝+审计
+    form: negative_rejection
+    executor: m7.review_flow
+    params:
+      candidate: {release_id: rel-eval-bypass, cases: [{case_id: case_001, passed: true}]}
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+      bypass:
+        kind: fabricated            # 伪造"已批准"评审记录直接发布
+        asset_id: prompts/eval-report
+        proposal_id: FORGED-APPROVED
+    expect: {}
+
+  # ================= SPEC-M7-04 Release 六要素 + M6 签名 =================
+  - id: EVAL-M7-04-N
+    spec: SPEC-M7-04
+    title: Release 缺 golden_scores（六要素逐项）→ 拒绝打包
+    form: negative_rejection
+    executor: m7.six_elements
+    params:
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: SKILL, descriptor: *skill_v1}
+        - {type: TOOL, descriptor: *tool_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+      drop:                       # 表内场景=缺 golden_scores；六要素逐项实测
+        - golden_scores
+        - model_ref
+        - prompt_refs
+        - skill_refs
+        - tool_refs
+        - ontology_version
+    expect: {}
+
+  - id: EVAL-M7-04-N2
+    spec: SPEC-M7-04
+    title: golden_scores 手工填报（无 M6 签名/伪造/篡改）→ 拒绝（签名校验）
+    form: negative_rejection
+    executor: m7.six_elements
+    params:
+      assets:
+        - {type: PROMPT, descriptor: *prompt_v1}
+        - {type: SKILL, descriptor: *skill_v1}
+        - {type: TOOL, descriptor: *tool_v1}
+        - {type: AGENT, descriptor: *agent_v1}
+      hand_filled:
+        - {mode: no_signature,       error_contains: [缺 M6 签名]}
+        - {mode: wrong_producer,     error_contains: [producer]}
+        - {mode: tampered_digest,    error_contains: [digest]}
+        - {mode: tampered_pass_rate, error_contains: [digest]}
+        - {mode: no_attestation,     error_contains: [attestation]}
+        - {mode: cross_release,      error_contains: [release_id]}
+    expect: {}
+
+  # ================= SPEC-M7-05 发布不可变 + Release 状态机 =================
+  - id: EVAL-M7-05-P
+    spec: SPEC-M7-05
+    title: PUBLISHED 后再写 releases/<id>/ → 拒绝（immutable）
+    form: negative_rejection
+    executor: m7.immutable
+    params:
+      release_id: rel-eval-imm
+      register_repo_assets: true
+      late_writes: [extra.txt, release.yaml, evaluation/report.json]
+      illegal_transitions:
+        - {to: GATED}
+        - {to: DRAFT}
+        - {to: PUBLISHED}          # 已是 PUBLISHED，重复迁移非法
+      supersede_allowed: true
+    expect: {}
+
+  # ================= SPEC-M7-06 行为目录门禁 =================
+  - id: EVAL-M7-06-P
+    spec: SPEC-M7-06
+    title: 12 条目录 11 过+1 红线缺 → GATED 失败，列缺项
+    form: contract
+    executor: m7.gate
+    params:
+      release_id: rel-eval-gate
+      register_repo_assets: true
+      cases:                       # 11 条有成绩（全过），case_011（red_line）缺记录
+        - {case_id: case_001, passed: true}
+        - {case_id: case_002, passed: true}
+        - {case_id: case_003, passed: true}
+        - {case_id: case_004, passed: true}
+        - {case_id: case_005, passed: true}
+        - {case_id: case_006, passed: true}
+        - {case_id: case_007, passed: true}
+        - {case_id: case_008, passed: true}
+        - {case_id: case_009, passed: true}
+        - {case_id: case_010, passed: true}
+        - {case_id: case_012, passed: true}
+    expect:
+      passed: false
+      failed_checks: [catalog_complete, red_line_100pct]
+      passed_checks: [catalog_passed, ontology_hash, contract_version]
+      missing_contains: [case_011]
+
+  # ================= SPEC-M7-07 本体联动 =================
+  - id: EVAL-M7-07-P
+    spec: SPEC-M7-07
+    title: 本体目录改动后打包旧 release → 一致性拒绝
+    form: negative_rejection
+    executor: m7.ontology_drift
+    params:
+      register_repo_assets: true
+      mutate_file: rules.yaml
+    expect:
+      error_contains: [不一致, SPEC-M7-07]
+
+  # ================= DoD §5 · 状态机表驱动 =================
+  - id: EVAL-M7-TABLE-P
+    spec: SPEC-M7-03
+    title: 评审流/Release 状态机表驱动与冻结 fixture diff 为空 + 非法迁移拒绝
+    form: state_transition
+    executor: m7.tables
+    params:
+      table: tests/fixtures/m7_state_machines.yaml
+    expect:
+      release_rejected:
+        - {from: PUBLISHED, to: GATED}
+        - {from: PUBLISHED, to: DRAFT}
+        - {from: PUBLISHED, to: PUBLISHED}
+        - {from: DRAFT, to: PUBLISHED}
+        - {from: SUPERSEDED, to: PUBLISHED}
+
+  # ================= DoD/收尾 · 端到端发布流 =================
+  - id: EVAL-M7-REL-P
+    spec: SPEC-M7-04
+    title: 端到端：M6 实测→M6 签名→资产评审→六要素打包→门禁→只写一次发布→复核
+    form: contract
+    executor: m7.release_flow
+    params:
+      release_id: mock-rel-0001
+      eval_release: mock-rel-0001
+      golden_dir: golden/dev
+      cases_manifest: tests/fixtures/mock_releases/mock-rel-0001.yaml
+      reeval_from_published: true
+    expect:
+      pass_rate: 1.0
+      gate_passed: true
+      gate_checks_passed: [catalog_complete, catalog_passed, red_line_100pct,
+                           ontology_hash, contract_version]
+      files: [agent_contract.yaml, evaluation/cases.yaml, evaluation/report.json,
+              manifest.yaml, release.yaml]
