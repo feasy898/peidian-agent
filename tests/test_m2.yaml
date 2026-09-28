@@ -1,0 +1,571 @@
+# tests/test_m2.yaml
+# M2（信息层：Context/状态/Artifact/Memory/Skill 披露）数据驱动 EVAL 套件。
+# 用例从 specs/M2-information.md §4 Eval 表逐行机械生成（16 条），
+# 另含 6 条表外补齐：SPEC-M2-04/06/09 在 §4 表无对应行，按 01§6
+# "每条行为规格条款必须映射至少一个 EVAL 用例" 补 EVAL-M2-04-P/06-P/09-P/09-N，
+# 状态机基准 diff 用例 EVAL-M2-08-P2（SPEC-M2-08 表驱动与 01§5.3 一致），
+# DoD §5 事件重建用例 EVAL-M2-EVLOG-P。合计 22 条。
+# schema 见 tests/EVAL-SCHEMA.md；执行器注册于 src/m2_information/eval_plugin.py。
+# spec_hash 口径（01§6）：spec_ref 列表按序拼接文件字节的 sha256。
+suite: m2
+title: M2 信息层（Context/状态/Artifact）EVAL
+spec_ref:
+  - specs/M2-information.md
+  - specs/00-ontology.md
+  - specs/01-contracts.md
+  - specs/ADDENDUM.md
+spec_hash: 00756a50360d11fa5f1f71baf038139d4caffc1c1fb5ad8be79efde50c717e00
+executors:
+  - module: m2_information.eval_plugin
+
+cases:
+  # ================= SPEC-M2-01 确定性编译 =================
+  - id: EVAL-M2-01-P
+    spec: SPEC-M2-01
+    title: 同状态同轮编译两次 hash 一致；skill 资产版本变更后 hash 必变
+    form: expression
+    executor: m2.compile_determinism
+    params:
+      task:
+        task_id: task-m2-01
+        user_input: 生成今日巡检报告并归档读数证据
+        plan:
+          - {stage: collect, gate: gate-data, artifacts_expected: [report.daily@v1]}
+          - {stage: report, gate: gate-schema, artifacts_expected: [report.daily@v1]}
+        todos:
+          - {id: todo-1, text: 读取 A 配电房量测, status: DONE}
+      skills:
+        - skill_id: pq-analysis
+          version: 1.2.0
+          capability_domain: PREDICT
+          disclosure:
+            level0: 电能质量分析技能
+            level1: 分析电压 THD 与功率因数越限并给出处置建议
+            level2_ref: "FULLTEXT：电能质量分析技能全文（阈值口径、处置清单、复盘模板）"
+          entry: {checklist: 清单-电能质量}
+          evidence_policy: 处置建议须挂三态证据与规则 ID
+          owner: m7-registry
+          status: PUBLISHED
+      skills_v2:
+        - skill_id: pq-analysis
+          version: 1.3.0
+          capability_domain: PREDICT
+          disclosure:
+            level0: 电能质量分析技能
+            level1: 分析电压 THD 与功率因数越限并给出处置建议（新版）
+            level2_ref: "FULLTEXT：电能质量分析技能全文 v1.3.0"
+          entry: {checklist: 清单-电能质量}
+          evidence_policy: 处置建议须挂三态证据与规则 ID
+          owner: m7-registry
+          status: PUBLISHED
+      turn: 1
+      compile_options:
+        task_domains: [PREDICT]
+    expect: {}
+
+  - id: EVAL-M2-01-N
+    spec: SPEC-M2-01
+    title: 向编译注入两个不同墙钟读数 → hash 不受影响（时钟只落 compiled_at）
+    form: negative_rejection
+    executor: m2.compile_wallclock
+    params:
+      task:
+        task_id: task-m2-01n
+        user_input: 复核昨日负荷曲线
+        todos: [{id: todo-1, text: 拉取曲线, status: IN_PROGRESS}]
+      now_list:
+        - "2026-09-28T08:00:00Z"
+        - "2027-03-01T23:59:59Z"
+      turn: 2
+    expect: {}
+
+  # ================= SPEC-M2-02 分层结构 =================
+  - id: EVAL-M2-02-P
+    spec: SPEC-M2-02
+    title: 100 轮任务全部 Manifest 层序恒定，无跳层覆盖（冲突按层序前者覆盖后者）
+    form: expression
+    executor: m2.layers
+    params:
+      task:
+        task_id: task-m2-02
+        user_input: 持续监测 A 配电房电能质量并按需分析
+        plan:
+          - {stage: collect, gate: gate-data, artifacts_expected: [report.daily@v1]}
+        todos:
+          - {id: todo-1, text: 轮询量测, status: IN_PROGRESS}
+      turns: 100
+      event:
+        capability: query.measurement@v1
+        observation: "第{turn}轮读数正常"
+        status: SUCCEEDED
+      compile_options:
+        task_domains: [PREDICT]
+      extra_sources:
+        - name: tenant.override
+          type: TENANT_RULE
+          text: 租户试图放宽审批通道的覆盖指令
+          origin: injected/tenant-override
+          directives: {approval_channel: loose}
+      expect_directives:
+        approval_channel: strict
+      expect_conflicts: 100
+    expect: {}
+
+  # ================= SPEC-M2-03 预算裁剪 =================
+  - id: EVAL-M2-03-P
+    spec: SPEC-M2-03
+    title: 预算 4000 tokens、源总量约 9000 → 裁剪后 ≤4000 且 policy 层 token 不变，Manifest 留裁剪记录
+    form: expression
+    executor: m2.budget_trim
+    params:
+      task:
+        task_id: task-m2-03
+        user_input: 汇总月度运行分析
+        todos: [{id: todo-1, text: 汇总, status: IN_PROGRESS}]
+      turn: 1
+      budget: 4000
+      extra_sources:
+        - {name: bulk-0, type: WORKSPACE_REF, tokens: 1500, origin: injected/bulk-0}
+        - {name: bulk-1, type: WORKSPACE_REF, tokens: 1500, origin: injected/bulk-1}
+        - {name: bulk-2, type: WORKSPACE_REF, tokens: 1500, origin: injected/bulk-2}
+        - {name: bulk-3, type: WORKSPACE_REF, tokens: 1500, origin: injected/bulk-3}
+        - {name: bulk-4, type: WORKSPACE_REF, tokens: 1500, origin: injected/bulk-4}
+        - {name: bulk-5, type: WORKSPACE_REF, tokens: 1500, origin: injected/bulk-5}
+    expect: {}
+
+  - id: EVAL-M2-03-N
+    spec: SPEC-M2-03
+    title: 构造 policy 被裁场景（预算小于 policy 层 token）→ 拒绝裁 policy，触发预算 PAUSED
+    form: negative_rejection
+    executor: m2.budget_protect
+    params:
+      task:
+        task_id: task-m2-03n
+        user_input: 极小预算任务
+      start_status: RUNNING
+      budget: 3
+      turn: 1
+      error_contains: 永不裁剪
+    expect: {}
+
+  # ================= SPEC-M2-04 Manifest 完整（表外补齐） =================
+  - id: EVAL-M2-04-P
+    spec: SPEC-M2-04
+    title: Manifest 记录全部 source 五字段；总 token 与各源之和一致；余额=预算-总量
+    form: expression
+    executor: m2.manifest_complete
+    params:
+      task:
+        task_id: task-m2-04
+        user_input: 巡检报告生成
+        plan:
+          - {stage: collect, gate: gate-data, artifacts_expected: [report.daily@v1]}
+        todos: [{id: todo-1, text: 取数, status: DONE}]
+      turns: 3
+      event:
+        capability: query.measurement@v1
+        observation: "第{turn}轮读数正常"
+      budget: 100000
+      extra_sources:
+        - {name: workspace.ref, type: WORKSPACE_REF, tokens: 120, origin: injected/manifest}
+      turn: 2
+    expect: {}
+
+  # ================= SPEC-M2-05 压缩四步 =================
+  - id: EVAL-M2-05-P
+    spec: SPEC-M2-05
+    title: 50 轮后压缩 → Commit/Compact/Rebuild/Validate 四步通过，五要素齐全
+    form: expression
+    executor: m2.compact_ok
+    params:
+      task:
+        task_id: task-m2-05
+        user_input: 生成日巡检报告并归档读数证据
+        plan:
+          - {stage: collect, gate: gate-data, artifacts_expected: [report.daily@v1]}
+          - {stage: report, gate: gate-schema, artifacts_expected: [report.daily@v1]}
+        todos:
+          - {id: todo-1, text: 读取量测, status: DONE}
+          - {id: todo-2, text: 生成报告, status: IN_PROGRESS}
+      turns: 50
+      event:
+        capability: query.measurement@v1
+        observation: "第{turn}轮读数正常"
+        status: SUCCEEDED
+      compact_turn: 50
+    expect: {}
+
+  - id: EVAL-M2-05-N
+    spec: SPEC-M2-05
+    title: 篡改 Compact 丢"验收缺口"要素 → Validate 失败回滚，任务状态与版本不变
+    form: negative_rejection
+    executor: m2.compact_tamper
+    params:
+      task:
+        task_id: task-m2-05n
+        user_input: 生成日巡检报告
+        plan:
+          - {stage: collect, gate: gate-data, artifacts_expected: [report.daily@v1]}
+        todos: [{id: todo-1, text: 生成报告, status: IN_PROGRESS}]
+      turns: 50
+      event:
+        capability: query.measurement@v1
+        observation: "第{turn}轮读数正常"
+      compact_turn: 51
+      drop_element: acceptance_gaps
+      error_contains: acceptance_gaps
+    expect: {}
+
+  # ================= SPEC-M2-06 Checkpoint 恢复（表外补齐） =================
+  - id: EVAL-M2-06-P
+    spec: SPEC-M2-06
+    title: Checkpoint 含 TaskState 全量+Workspace manifest 快照；恢复后回到快照点可续跑
+    form: expression
+    executor: m2.checkpoint
+    params:
+      task:
+        task_id: task-m2-06
+        user_input: 阶段性检修分析
+        current_stage: COLLECT
+        plan:
+          - {stage: collect, gate: gate-data, artifacts_expected: []}
+          - {stage: analyze, gate: gate-rule, artifacts_expected: [report.daily@v1]}
+      mutations:
+        - {status: RUNNING}
+        - {current_stage: ANALYZE}
+      workspace_files:
+        scratch/draft.txt: 分析草稿第一版
+      mutations_after_snapshot:
+        - {current_stage: REPORT, note: 快照后推进}
+    expect: {}
+
+  - id: EVAL-M2-EVLOG-P
+    spec: SPEC-M2-06（DoD §5 事件重建）
+    title: 完整任务生命周期后，从空库仅凭事件流重建 TaskState 与库内快照 diff 为空
+    form: expression
+    executor: m2.eventlog_rebuild
+    params:
+      task:
+        task_id: task-m2-evlog
+        user_input: 生成日巡检报告
+        plan:
+          - {stage: collect, gate: gate-data, artifacts_expected: [report.daily@v1]}
+      turns: 5
+      event:
+        capability: query.measurement@v1
+        observation: "第{turn}轮读数正常"
+      todos:
+        - {id: todo-1, text: 读取量测, status: DONE}
+      report_content:
+        devices:
+          - {device_id: TX-01, name_cn: 1 号变压器}
+        measurements:
+          - device_ref: TX-01
+            quantity: winding_temp
+            points:
+              - {ts: "2026-09-28T08:00:00Z", value: 72}
+              - {ts: "2026-09-28T12:00:00Z", value: 75}
+        conclusion: 变压器温度趋势平稳，未见越限
+        regulation_refs: [PHYS-TX-LOAD]
+      turn: 3
+    expect: {}
+
+  # ================= SPEC-M2-07 Workspace 隔离 =================
+  - id: EVAL-M2-07-P
+    spec: SPEC-M2-07
+    title: 任务 A 引用任务 B 的 scratch 文件被拒；引用 B 的 PUBLISHED artifact 允许（只读）
+    form: expression
+    executor: m2.workspace_isolation
+    params:
+      actor_task: task-m2-07a
+      owner_task: task-m2-07b
+      scratch_rel: scratch/notes.txt
+      scratch_content: 任务 B 内部草稿（不可跨任务读）
+      error_contains: 不在 artifacts/ 或 evidence/ 下
+      report_content:
+        devices:
+          - {device_id: TX-02, name_cn: 2 号变压器}
+        measurements:
+          - device_ref: TX-02
+            quantity: winding_temp
+            points:
+              - {ts: "2026-09-28T08:00:00Z", value: 68}
+        conclusion: 变压器温度正常
+        regulation_refs: [PHYS-TX-LOAD]
+      report_content_conclusion: 变压器温度正常
+    expect: {}
+
+  - id: EVAL-M2-07-N
+    spec: SPEC-M2-07
+    title: 任务 A 写任务 B 的 artifacts/ → 拒绝 + 审计事件（action.policy_decided DENY）
+    form: negative_rejection
+    executor: m2.workspace_crosswrite
+    params:
+      actor_task: task-m2-07na
+      owner_task: task-m2-07nb
+      target_rel: artifacts/evil.txt
+      payload: 越权写入内容
+      error_contains: 跨任务写被拒
+    expect: {}
+
+  # ================= SPEC-M2-08 Artifact 状态机 =================
+  - id: EVAL-M2-08-P
+    spec: SPEC-M2-08
+    title: REPORT 校验通过 → DRAFT→VALIDATING→READY→PUBLISHED 全事件可回放
+    form: expression
+    executor: m2.artifact_lifecycle
+    params:
+      task:
+        task_id: task-m2-08
+        user_input: 生成日巡检报告
+        plan:
+          - {stage: report, gate: gate-schema, artifacts_expected: [report.daily@v1]}
+      report_content:
+        devices:
+          - {device_id: TX-01, name_cn: 1 号变压器}
+          - {device_id: BUS-A1, name_cn: A 段母线}
+        measurements:
+          - device_ref: TX-01
+            quantity: winding_temp
+            points:
+              - {ts: "2026-09-28T08:00:00Z", value: 71}
+              - {ts: "2026-09-28T12:00:00Z", value: 74}
+              - {ts: "2026-09-28T16:00:00Z", value: 73}
+          - device_ref: BUS-A1
+            quantity: voltage_ratio
+            points:
+              - {ts: "2026-09-28T08:00:00Z", value: 1.01}
+        conclusion: 设备运行正常，负载率与电压偏差均在合格范围
+        regulation_refs: [PHYS-TX-LOAD, PHYS-V-RANGE]
+      expect_events:
+        - [NONE, DRAFT]
+        - [DRAFT, VALIDATING]
+        - [VALIDATING, READY]
+        - [READY, PUBLISHED]
+    expect: {}
+
+  - id: EVAL-M2-08-P2
+    spec: SPEC-M2-08
+    title: task/artifact 迁移表与 01§5 冻结基准（frozen_state_machines.yaml）diff 为空
+    form: expression
+    executor: m2.state_tables
+    params:
+      table: tests/fixtures/frozen_state_machines.yaml
+    expect: {}
+
+  - id: EVAL-M2-08-N
+    spec: SPEC-M2-08
+    title: schema 缺 conclusion 段提交 PUBLISH → REJECTED 且 ValidationReport 带失败 detail
+    form: negative_rejection
+    executor: m2.artifact_invalid
+    params:
+      task:
+        task_id: task-m2-08n
+        user_input: 生成缺字段报告
+      report_content:
+        devices:
+          - {device_id: TX-03, name_cn: 3 号变压器}
+        measurements:
+          - device_ref: TX-03
+            quantity: winding_temp
+            points:
+              - {ts: "2026-09-28T08:00:00Z", value: 66}
+        conclusion: 本应存在但被用例删除的结论段
+        regulation_refs: [PHYS-TX-LOAD]
+      omit_sections: [conclusion]
+      error_contains: conclusion
+    expect: {}
+
+  # ================= SPEC-M2-09 产物即证据（表外补齐） =================
+  - id: EVAL-M2-09-P
+    spec: SPEC-M2-09
+    title: evidence/ 接受 ActionResult.evidence 三态序列化与只读读数快照
+    form: expression
+    executor: m2.evidence_gate
+    params:
+      task: {task_id: task-m2-09, user_input: 归档取证}
+      accept:
+        action-ev-1:
+          action_id: act-901
+          evidence:
+            intended: {capability: query.measurement@v1, arguments: {device: TX-01}}
+            issued: {executor: sim, issued_at: "2026-09-28T08:00:01Z"}
+            observed: {quantity: winding_temp, value: 74, ts: "2026-09-28T08:00:02Z"}
+        snapshot-ev-1:
+          device_ref: TX-01
+          quantity: winding_temp
+          value: 74
+          unit: C
+          ts: "2026-09-28T08:00:00Z"
+        snapshot-ev-2:
+          - {device_ref: BUS-A1, quantity: U, value: 10.15, unit: kV, ts: "2026-09-28T08:05:00Z"}
+          - {device_ref: BUS-A1, quantity: f, value: 50.01, unit: Hz, ts: "2026-09-28T08:05:00Z"}
+    expect: {}
+
+  - id: EVAL-M2-09-N
+    spec: SPEC-M2-09
+    title: evidence/ 拒绝模型生成文本与无证据结构的伪内容
+    form: negative_rejection
+    executor: m2.evidence_reject
+    params:
+      task: {task_id: task-m2-09n, user_input: 伪取证}
+      reject:
+        model-text: 模型结论：经分析一切正常，无需进一步核查。
+        fake-structure: {summary: 这是模型生成的总结，不是三态证据}
+      error_contains: 只接受
+    expect: {}
+
+  # ================= SPEC-M2-10 写入六问 / Knowledge 只读 =================
+  - id: EVAL-M2-10-P
+    spec: SPEC-M2-10
+    title: 写 EPISODIC（含来源+时效）成功且 provenance 落盘；矛盾未验证写入被冲突检查拒绝
+    form: expression
+    executor: m2.memory_write
+    params:
+      task: {task_id: task-m2-10, user_input: 记录巡检事实}
+      write:
+        content: {subject: TX-01 绕组温度, claim: 日巡检实测 74 摄氏度，趋势平稳}
+        type: EPISODIC
+        provenance:
+          why_now: 日巡检发现温度接近关注阈值，需入记忆供趋势研判
+          source: action/act-301
+          trace_id: trace-m2-10
+          verification: VERIFIED
+          ttl_days: 90
+      expect_provenance:
+        verification: VERIFIED
+        source: action/act-301
+      conflict_write:
+        content: {subject: TX-01 绕组温度, claim: 模型推测温度其实正常，无需关注}
+        type: EPISODIC
+        provenance:
+          why_now: 模型复核生成相反推测
+          source: model/inference
+          trace_id: trace-m2-10
+          verification: UNVERIFIED
+          ttl_days: 30
+    expect: {}
+
+  - id: EVAL-M2-10-N
+    spec: SPEC-M2-10
+    title: 写 SPECULATIVE 推测 → 直接 REJECTED（归因 verification 问题）
+    form: negative_rejection
+    executor: m2.memory_speculative
+    params:
+      task: {task_id: task-m2-10n, user_input: 试图写入推测}
+      write:
+        content: {subject: TX-02 故障原因, claim: 猜测可能是冷却回路异常}
+        type: EPISODIC
+        provenance:
+          why_now: 告警尚未定位，先记推测
+          source: model/inference
+          trace_id: trace-m2-10n
+          verification: SPECULATIVE
+          ttl_days: 7
+      expect_question: verification
+      error_contains: SPECULATIVE
+    expect: {}
+
+  - id: EVAL-M2-10-N2
+    spec: SPEC-M2-10
+    title: agent 直接改 Knowledge 条目 → 拒绝 + 审计事件（Knowledge 只读，变更走 M7 评审）
+    form: negative_rejection
+    executor: m2.knowledge_readonly
+    params:
+      task: {task_id: task-m2-10n2, user_input: 检索两票制要点}
+      entry:
+        title: 两票制操作要点
+        body: 遥控操作前必须有已签发操作票；签发人须为签发人角色。
+      review: {reviewer: reviewer-001, review_ref: M7-REV-2026-091}
+      change: {body: 被运行时篡改的内容}
+      error_contains: 只读
+    expect: {}
+
+  # ================= SPEC-M2-11 记忆分类与 TTL =================
+  - id: EVAL-M2-11-P
+    spec: SPEC-M2-11
+    title: TTL 过期的 EPISODIC 检索不返回且过期计数入报告；WORKING 随任务归档清理
+    form: expression
+    executor: m2.memory_ttl
+    params:
+      task: {task_id: task-m2-11, user_input: 记忆时效验证}
+      query: TX-02
+      writes:
+        fresh:
+          content: {subject: TX-02 负荷记录, claim: 昨日最大负荷 1180kW}
+          provenance:
+            why_now: 昨日运行复盘需要负荷事实
+            source: action/act-401
+            trace_id: trace-m2-11
+            verification: VERIFIED
+            ttl_days: 90
+        stale:
+          content: {subject: TX-02 旧检修记录, claim: 一季度检修已完成}
+          provenance:
+            why_now: 归档历史检修事实
+            source: action/act-101
+            trace_id: trace-m2-11
+            verification: VERIFIED
+            valid_until: "2026-01-01T00:00:00Z"
+            expired: true
+      working_write:
+        content: {subject: 会话工作记忆, claim: 当前任务处于报告阶段}
+        provenance:
+          why_now: 任务执行中需要短期记忆
+          source: session/current
+          trace_id: trace-m2-11
+          verification: UNVERIFIED
+    expect: {}
+
+  # ================= SPEC-M2-12 Skill 渐进披露 =================
+  - id: EVAL-M2-12-P
+    spec: SPEC-M2-12
+    title: 触发电能质量分析任务 → level1 目录出现对应 skill；未选 skill 的 level2 不加载；DEPRECATED 全层不可见
+    form: expression
+    executor: m2.skill_disclosure
+    params:
+      task: {task_id: task-m2-12, user_input: 分析 A 配电房电能质量越限情况}
+      skills:
+        - skill_id: pq-analysis
+          version: 1.2.0
+          capability_domain: PREDICT
+          disclosure:
+            level0: 电能质量分析技能
+            level1: 分析电压 THD 与功率因数越限并给出处置建议
+            level2_ref: "FULLTEXT：电能质量分析技能全文（阈值口径、处置清单、复盘模板，约数千字）"
+          entry: {checklist: 清单-电能质量}
+          evidence_policy: 处置建议须挂三态证据与规则 ID
+          owner: m7-registry
+          status: PUBLISHED
+        - skill_id: tou-strategy
+          version: 0.4.0
+          capability_domain: TRADE
+          disclosure:
+            level0: 储能充放策略技能
+            level1: 按生效电价方案编排储能充放计划
+            level2_ref: "FULLTEXT：储能充放策略全文"
+          entry: {}
+          evidence_policy: 策略仅可引用已生效电价方案
+          owner: m7-registry
+          status: PUBLISHED
+        - skill_id: legacy-report
+          version: 0.9.0
+          capability_domain: PLAN
+          disclosure:
+            level0: 旧版报告技能
+            level1: 已废弃的旧版报告模板
+            level2_ref: "FULLTEXT：旧版报告全文"
+          entry: {}
+          evidence_policy: 无
+          owner: m7-registry
+          status: DEPRECATED
+      compile_options:
+        task_domains: [PREDICT]
+      turn: 1
+      expect_level1_skill: pq-analysis
+      expect_level1_absent: [tou-strategy]
+      expect_never_present: [legacy-report]
+      selected_skills: [pq-analysis]
+      expect_disclose_rejected:
+        legacy-report: 1
+    expect: {}

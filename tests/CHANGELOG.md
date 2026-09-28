@@ -185,3 +185,67 @@
      DEV 1 + 性能 1）。
 - **复核门禁实测**：`python run_evals.py --module m5` 16/16 exit 0；
   `--module all` 78/78 exit 0（m0 49 + m4 13 + m5 16）；隔离断言零命中。
+
+---
+
+## 2026-09-28 · M2 信息层首条登记（Context/状态/Artifact/Memory/Skill 披露）
+
+- **模块**：M2（`src/m2_information/` + `src/m2_information/FORMATS.md` +
+  `tests/test_m2.yaml` + `src/m2_information/eval_plugin.py`）
+- **spec_ref**（按序拼接取 hash）：
+  - `specs/M2-information.md`
+  - `specs/00-ontology.md`
+  - `specs/01-contracts.md`
+  - `specs/ADDENDUM.md`
+- **spec_hash → eval_hash**：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m2.yaml | `00756a50360d11fa5f1f71baf038139d4caffc1c1fb5ad8be79efde50c717e00` | `b658309ab823b56ee0bd94b6ff1957435b7366d19023b5acc56198d1074ac5f8` |
+
+- **覆盖范围**：M2 §4 Eval 表 16 条机械生成（SPEC-M2-01/02/03/05/07/08/10/11/12
+  各条款正例+负例），另含 6 条表外补齐——01§6 要求每条 SPEC 条款至少映射一个
+  用例，而 §4 表缺 SPEC-M2-04/06/09 行：补 EVAL-M2-04-P（Manifest 完整）、
+  EVAL-M2-06-P（Checkpoint 全量+恢复）、EVAL-M2-09-P/09-N（evidence/ 门禁正负）、
+  EVAL-M2-08-P2（task/artifact 迁移表与 frozen_state_machines.yaml diff 为空）、
+  EVAL-M2-EVLOG-P（DoD §5：空库事件重建 TaskState 与快照 diff 为空）。
+  合计 22 条，全部通过（22/22）。
+- **登记的偏差与落盘口径**（均为机械落盘时的必要消歧，未改任何冻结语义）：
+  1. **ContextManifest 裁剪记录**：01§2.4 的 source 五字段为封闭集（contracts
+     check_keys 拒绝未知字段），裁剪记录以双落方式留档——被裁源在 Manifest 内
+     `tokens=0` 留存、`origin` 追加 `;trimmed=dropped@priority=<P>` 注记；完整
+     trim_log/filter_log/conflicts/directives 落 `workspace/manifest/turn-<n>.json`
+     编译记录（FORMATS.md §3.4）。
+  2. **非状态字段的状态提交事件**：01§4 事件目录无 task.updated；非状态字段
+     （todos/plan/budget/context_manifest_hash 等）提交落 `task.status_changed`
+     且 `from==to`、载荷带 mutation/version/updated_at，事件重建按同一
+     `apply_state_mutation` 折叠（单一变更语义口径）。非法迁移拒绝事件
+     `accepted=false`，重建时跳过。
+  3. **审计事件主题**：跨任务写拒绝与 Knowledge 只读拒绝需落审计事件，但事件
+     目录无独立安全主题——落 `action.policy_decided {decision: DENY,
+     capability: workspace.write_cross|knowledge.mutate}`（producer=M2）。
+  4. **policy 永不裁的负向口径**（EVAL-M2-03-N）：仅剩 SYSTEM_POLICY 层仍超预算
+     时拒绝编译——落 `budget.exhausted {kind: token}` 并将任务 RUNNING→PAUSED
+     （合法迁移），抛 `ContextBudgetExceededError`；不产出超额 Manifest。
+  5. **write_memory 契约哨兵**：01§3.2 返回 `MemoryId | REJECTED`——六问未过
+     返回字符串 `"REJECTED"`（不抛错），最近拒绝原因存
+     `MemoryStore.last_rejection`；SPECULATIVE 归因 verification 问。
+  6. **Skill 披露面**：SPEC-M2-12 仅明令"未注册与 DEPRECATED 不出现在任何层"；
+     实现默认可见状态为 PUBLISHED（DRAFT/REVIEW 未过 M7 发布门禁同样不入层，
+     可经 `SkillRegistry(visible_status=...)` 调整）；level0 ≤10 词在注册时强校验
+     （词数口径：CJK 每字 1 词，ASCII 按空白分词）。任务能力域与 skill 域的匹配
+     为集合交集（task_domains 为编译入参，来自任务目标/动作元数据）。
+  7. **超集表**：StateStore 在规格四表（task_state/artifacts/memory/checkpoints）
+     之上增 knowledge/sessions/calls 三表（Knowledge 只读条目与 Call⊂Session⊂Task
+     三级管理），不违反规格最小集。
+  8. **PostgreSQL 迁移位**（DoD §5）：`StateStore(dsn)` 连接串可配；
+     `postgres*` 抛 NotImplementedError（本期不实现）。
+  9. **hash 确定性输入**：sha256(规范 JSON{task_id, turn, version, sources 五元组,
+     total_tokens})；`compiled_at`（时钟）与 ULID 随机量不进 hash；System 层源
+     origin 携带内容 hash、Skill 源 origin 携带 `skill_id@version` 指纹，资产
+     版本变化必然翻转 hash。
+  10. **电价语义隔离**：M2 无电价判定义务；CI 墙钟扫描口径下 m2_information
+      源码不含任何电价标记词，真实时钟仅存在于 ids.py/timestamps.py
+      （时间戳落盘用途，非电价判定）。
+- **复核门禁实测**：`python run_evals.py --module m2` 22/22 exit 0；
+  `--module all` 100/100 exit 0（m0 49 + m2 22 + m4 13 + m5 16）；隔离断言零命中。
