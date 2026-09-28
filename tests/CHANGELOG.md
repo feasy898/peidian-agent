@@ -144,3 +144,44 @@
   9. **TIMELINE 审计列**：四类时间对齐行的 monotonic_ms/wall_at 为真实时间源
      审计列，确定性 diff（diff_runs/EVAL-M5-01-P）按约定剔除，判据列
      business_at/sim_elapsed_s 逐步比对。
+
+---
+
+## 2026-09-28 · M5 复核修订（并发写手提交 92f3c1e 的验收审计）
+
+- **模块**：M5（对 92f3c1e 交付的复核修复；spec 未变更，spec_hash 不变）
+- **spec_hash → eval_hash**：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m5.yaml | `54bb8cb6cc6004505198f6894e436925f97946bc32691bece62eafba79afa97b` | `324e6a61f83ed39821190d4b6c92e33b84224a1986ef737ec96c7c8215edfb3c` |
+
+- **修订内容**（复核发现的缺陷修复）：
+  1. **确定性泄漏**：`simulate()` 的 `latency_ms` 原以 `perf_counter` 实测，
+     会进入轨迹 steps，使含 sut 动作的场景（如 dev-02b）重放逐步 diff 非空，
+     违反 SPEC-M5-01。改为 SIMULATION 模式确定性常数 0（真实时延属 MONOTONIC
+     审计域，由 M3 REAL 路由计量）；`AUDIT_COLUMNS` 增列 `latency_ms` 作为
+     diff 二道防线。已实测 dev-02b 两次 persist 重放 4 层证据 diff 为空。
+  2. **PHYS-TX-TEMP 落规程**：M5 §2 告警生成明列"温度>85℃"，92f3c1e 版无
+     温度规程条款致该告警不可达（CHANGELOG 旧口径"无对应规程阈值则不产告警"）。
+     按 ADDENDUM §A（REG-TECH 条款文字自拟）补 `PHYS-TX-TEMP`（scope=Transformer，
+     metric=winding_temp_c，>85→P2），实现 M5 §2 温度告警且零硬编码
+     （SPEC-M5-08）。配套物理常数 `tx_temp_rise_c` 75→55K（顶油温升类建模
+     常数，非阈值），使正常负载（≤0.88 负载率 → ≈73℃）不误报；已实测
+     86.9℃ 触发 P2。
+  3. **persona 墙钟哨兵**：`_next_due_time` 远期哨兵由 `datetime.now()+10y`
+     改为常量 `datetime.max`（原值虽不进输出，但业务模块应零 wall-clock）。
+  4. **SOC 兜底**：`_soc_bounds` 规程缺失时的兜底 (10,90) 属硬编码阈值，
+     改为物理量程 (0,100)（百分数表示域，非运行限值；此时告警引擎无规则
+     同样不判定）。
+  5. **dev-02b 继承修复**：规格 §7 dev-02b 为"dev-02 基础上"升级指令，
+     92f3c1e 版丢失 dev-02 的 SENSOR_STUTTER 注入，已恢复。
+  6. **EVAL-M5-DEV-P 新增**（表外补强，DoD §6"三个开发场景可一键跑"落位）：
+     dev-01/02/02b 经 run_scenario 一键跑通；dev-02b 断言操作票+ASK→GRANT→
+     分闸成功链（approval.granted / action.completed SUCCEEDED /
+     breakers.SG-A02=OPEN / 操作票 COMPLETED / SENSOR_STUTTER 注入落时间线）。
+  7. **计数更正**：92f3c1e 的登记条目称"16 条（表内 12+补强 3+性能 1）"，
+     实际为 15 条（补强 2）；本版合计 16 条（表内 12 + 补强 P4/P5 共 2 +
+     DEV 1 + 性能 1）。
+- **复核门禁实测**：`python run_evals.py --module m5` 16/16 exit 0；
+  `--module all` 78/78 exit 0（m0 49 + m4 13 + m5 16）；隔离断言零命中。

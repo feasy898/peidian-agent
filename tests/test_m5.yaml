@@ -1,11 +1,12 @@
 # tests/test_m5.yaml
 # M5（仿真层：环境/四时钟/场景引擎）数据驱动 EVAL 套件。
 # 用例从 specs/M5-simulation.md §5 Eval 表逐行机械生成（12 条），
-# 另含 3 条补强/DoD 用例：EVAL-M5-05-P4/P5（COMM_LOSS/DEVICE_TRIP 补全
-# SPEC-M5-05 五类注入覆盖）、EVAL-M5-PERF-P（DoD §6：100×24h 仿真步 <30s）。
-# 合计 16 条。schema 见 tests/EVAL-SCHEMA.md；执行器注册于
-# src/m5_simulation/eval_plugin.py（全部断言数据取自本文件 params/expect）。
-# spec_hash 口径（01§6）：spec_ref 列表按序拼接文件字节的 sha256。
+# 另含 4 条补强/DoD 用例：EVAL-M5-05-P4/P5（COMM_LOSS/DEVICE_TRIP 补全
+# SPEC-M5-05 五类注入覆盖）、EVAL-M5-DEV-P（DoD §6：三个开发场景一键跑，
+# 含 dev-02b 操作票+ASK→GRANT→分闸链断言）、EVAL-M5-PERF-P（DoD §6：
+# 100×24h 仿真步 <30s）。合计 16 条。schema 见 tests/EVAL-SCHEMA.md；
+# 执行器注册于 src/m5_simulation/eval_plugin.py（全部断言数据取自本文件
+# params/expect）。spec_hash 口径（01§6）：spec_ref 列表按序拼接文件字节的 sha256。
 suite: m5
 title: M5 仿真层（环境/四时钟/场景引擎）EVAL
 spec_ref:
@@ -265,6 +266,29 @@ cases:
       rule: PHYS-TX-LOAD
       level: P2
       text_contains: 过载预警
+
+  # ================= DoD §6 三个开发场景一键跑（含 dev-02b 遥控审批链）=================
+  - id: EVAL-M5-DEV-P
+    spec: SPEC-M5-03（DoD §6 场景种子）
+    title: dev-01/02/02b 一键跑通；dev-02b 走操作票+ASK→GRANT→分闸成功链
+    form: expression
+    executor: m5.dev_scenarios
+    params:
+      scenarios:
+        - scenario: scenarios/dev-01-report.yaml
+          expect_state:
+            - {path: park_id, expect: PARK-001}
+        - scenario: scenarios/dev-02-alarm.yaml
+          expect_events:
+            - {type: alarm.raised, payload: {rule: PHYS-TX-LOAD, level: P2}}
+        - scenario: scenarios/dev-02b-remote.yaml
+          expect_events:
+            - {type: approval.granted}
+            - {type: action.completed, payload: {status: SUCCEEDED}}
+            - {type: sim.injected, payload: {fault_type: SENSOR_STUTTER}}
+          expect_state:
+            - {path: breakers.SG-A02, expect: OPEN}
+            - {path: switch_orders.SO-0915-002.status, expect: COMPLETED}
 
   # ================= DoD §6 性能门槛 =================
   - id: EVAL-M5-PERF-P

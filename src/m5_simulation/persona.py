@@ -155,12 +155,16 @@ def persona_step(persona: PersonaSession, history: list | None = None,
 
 
 def _next_due_time(persona: PersonaSession):
-    """会话内下一条到期时刻（无步骤取远期，保证 due 判定确定）。"""
-    from datetime import datetime, timedelta, timezone
+    """会话内下一条到期时刻（无步骤取确定性远期哨兵，保证 due 判定确定）。
+
+    远期哨兵用 ``datetime.max``（常量），不用墙钟——本模块不得引入任何
+    真实时间源（SPEC-M5-02：业务路径零 wall-clock）。
+    """
+    from datetime import datetime, timezone
 
     if persona.cursor < len(persona.script):
         return persona.script[persona.cursor]["at_abs"]
-    return datetime.now(timezone.utc) + timedelta(days=3650)
+    return datetime.max.replace(tzinfo=timezone.utc)
 
 
 def _llm_degrade_note(persona: PersonaSession, exc: Exception) -> None:

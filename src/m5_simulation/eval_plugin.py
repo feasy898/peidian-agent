@@ -761,6 +761,61 @@ def exec_physics_load_rate(case: dict, ctx: Any) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# DoD §6 · 三个开发场景一键跑（dev-02b 遥控链行为断言）
+# ---------------------------------------------------------------------------
+def exec_dev_scenarios(case: dict, ctx: Any) -> dict:
+    """scenarios/dev-*.yaml 全部可一键跑（run_scenario 一站式）。
+
+    断言全部数据驱动（params.scenarios[].expect 路径/值）：
+    常见路径见 tests/test_m5.yaml EVAL-M5-DEV-P（如 breakers.SG-A02=OPEN、
+    approval.granted 事件存在、dev-02b 遥控 SUCCEEDED）。
+    """
+    params = case.get("params") or {}
+    problems: list = []
+    metrics: dict = {"scenarios": len(params.get("scenarios") or [])}
+
+    for entry in params.get("scenarios") or []:
+        rel = str(entry.get("scenario"))
+        spec_data = ctx.load_yaml(rel)
+        instance = (spec_data.get("environment") or {}).get("park_instance")
+        with _instance_path_env(ctx, instance):
+            result = run_scenario(ScenarioSpec.from_dict(spec_data), repo_root=ctx.root)
+        scenario_id = result.scenario_id
+
+        # 事件断言（type/payload 键值）
+        for want in entry.get("expect_events") or []:
+            matched = any(
+                e["type"] == str(want.get("type"))
+                and all((e.get("payload") or {}).get(k) == v
+                        for k, v in (want.get("payload") or {}).items())
+                for e in getattr(result, "env_events", [])
+            )
+            if not matched:
+                problems.append(f"{scenario_id}: 缺事件 {want}")
+
+        # 终态路径断言（dot 路径；值或 ABSENT）
+        for check in entry.get("expect_state") or []:
+            node: Any = result.state_final
+            for part in str(check.get("path", "")).split("."):
+                if isinstance(node, dict) and part in node:
+                    node = node[part]
+                else:
+                    node = None
+                    break
+            if check.get("expect") == "ABSENT":
+                if node is not None:
+                    problems.append(f"{scenario_id}: {check.get('path')} 应缺失，实际 {node!r}")
+            elif node != check.get("expect"):
+                problems.append(f"{scenario_id}: {check.get('path')}={node!r}"
+                                f" != 期望 {check.get('expect')!r}")
+
+    if problems:
+        return _result(False, "；".join(problems), metrics)
+    return _result(True, f"{len(params.get('scenarios') or [])} 个开发场景一键跑通，"
+                         f"遥控审批链/告警/终态断言全部成立", metrics)
+
+
+# ---------------------------------------------------------------------------
 # DoD §6 · 性能门槛（100×24h 仿真步 < 30s）
 # ---------------------------------------------------------------------------
 def exec_perf_ticks(case: dict, ctx: Any) -> dict:
@@ -811,5 +866,6 @@ EXECUTORS = {
     "m5.concurrent_isolation": exec_concurrent_isolation,
     "m5.regulation_sourced": exec_regulation_sourced,
     "m5.physics_load_rate": exec_physics_load_rate,
+    "m5.dev_scenarios": exec_dev_scenarios,
     "m5.perf_ticks": exec_perf_ticks,
 }

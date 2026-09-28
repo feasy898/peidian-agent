@@ -19,7 +19,6 @@ SUT 桩链（dev-02b 遥控场景）：计划事件 ``action.request`` → 本�
 from __future__ import annotations
 
 import json
-import time as _time
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -82,7 +81,6 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
         "arguments": arguments,
     }
     now_s = env.clock.sim_elapsed_s
-    started = _time.perf_counter()
 
     known = capability_id in (env.ontology.actions or {})
     deny_locked = capability_id in _DENY_ALWAYS_HINT
@@ -92,7 +90,9 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
             action, "FAILED", [], f"[{code}] {message}",
             evidence={"intended": intended, "issued": issued, "observed": None},
             error={"code": code, "message": message},
-            latency_ms=int((_time.perf_counter() - started) * 1000),
+            # SIMULATION 模式延迟为确定性常数（真实时延计量属 MONOTONIC 审计域，
+            # 由 M3 REAL 路由负责；此处禁止墙钟/单调钟泄漏进重放轨迹，SPEC-M5-01）
+            latency_ms=0,
         )
         return result, env
 
@@ -114,7 +114,7 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
         return _succeed(action, intended, issued,
                         {"measurements": snapshot, "count": len(snapshot),
                          "business_at": iso_z(env.clock.business_now())},
-                        observation="量测快照（含时标/质量标志）", started=started), env
+                        observation="量测快照（含时标/质量标志）"), env
     if capability_id == "query.asset":
         device = env.devices.get(str(arguments.get("device", "")))
         if device is None:
@@ -123,7 +123,7 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
         return _succeed(action, intended, issued,
                         {"device": device.id, "type": device.type,
                          "attributes": device.attributes, "state": device.state},
-                        observation=f"台账快照 {device.id}", started=started), env
+                        observation=f"台账快照 {device.id}"), env
     if capability_id == "query.regulation":
         rule_id = str(arguments.get("rule_id", ""))
         entry = _find_rule(env, rule_id)
@@ -131,7 +131,7 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
             return _fail("NO_SUCH_RULE", f"规则 ID 不存在: {rule_id!r}")
         issued = {"rule_id": rule_id}
         return _succeed(action, intended, issued, {"rule": entry},
-                        observation=f"规程条款 {rule_id}", started=started), env
+                        observation=f"规程条款 {rule_id}"), env
 
     # ---- 写类（先变更 env，再回读 observed）
     if capability_id == "execute.remote_control":
@@ -161,7 +161,7 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
         order.setdefault("executed", []).append({"device": device.id, "operation": operation})
         return _succeed(action, intended, issued, observed,
                         observation=f"遥控{operation} {device.id} 完成（环境回读确认）",
-                        started=started, refs=[order_code]), env
+                        refs=[order_code]), env
     if capability_id == "execute.capacitor_switch":
         device = env.devices.get(str(arguments.get("device", "")))
         if device is None:
@@ -177,7 +177,7 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
                     "ts": env.iso_at(now_s)}
         return _succeed(action, intended, issued, observed,
                         observation=f"电容投切 {device.id} → {target}（环境回读确认）",
-                        started=started), env
+                        ), env
     if capability_id == "create.switch_order":
         code = str(arguments.get("code", "") or f"SO-{env.next_event_id()}")
         env.switch_orders[code] = {
@@ -190,7 +190,7 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
         return _succeed(action, intended, issued,
                         {"switch_order": code, "status": env.switch_orders[code]["status"]},
                         observation=f"操作票 {code} 登记（状态 {env.switch_orders[code]['status']}）",
-                        started=started, refs=[code]), env
+                        refs=[code]), env
     if capability_id in ("create.work_order", "create.inspection_record", "write.report"):
         marker = {"capability": capability_id, "arguments": arguments,
                   "recorded_at": env.iso_at(now_s)}
@@ -198,13 +198,13 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
         issued = {"marker": action.action_id}
         return _succeed(action, intended, issued, marker,
                         observation=f"{capability_id} 已登记（仿真侧产物标记）",
-                        started=started, refs=[action.action_id]), env
+                        refs=[action.action_id]), env
     if capability_id.startswith(("analyze.",)):
         issued = {"capability": capability_id, "args": arguments}
         observed = {"note": "简化物理口径的分析回执（精度边界见 M5 §2）",
                     "arguments": arguments, "business_at": env.iso_at(now_s)}
         return _succeed(action, intended, issued, observed,
-                        observation=f"{capability_id} 分析回执", started=started), env
+                        observation=f"{capability_id} 分析回执", ), env
 
     return _fail("SIM_ROUTE_UNSUPPORTED", f"仿真路由未实现该动作: {capability_id!r}")
 
@@ -248,13 +248,17 @@ def _action_result(action, status, refs, observation, *, evidence, error=None,
     }
 
 
-def _succeed(action, intended, issued, observed, *, observation, started,
+def _succeed(action, intended, issued, observed, *, observation,
              refs=None) -> dict:
-    """构造 SUCCEEDED ActionResult dict（evidence 三态齐全：intended/issued/observed）。"""
+    """构造 SUCCEEDED ActionResult dict（evidence 三态齐全：intended/issued/observed）。
+
+    SIMULATION 模式 latency_ms 为确定性常数 0（SPEC-M5-01：重放轨迹不得含
+    真实时间源测量值；真实时延由 MONOTONIC 审计域另行计量）。
+    """
     return _action_result(
         action, "SUCCEEDED", refs or [], observation,
         evidence={"intended": intended, "issued": issued, "observed": observed},
-        latency_ms=max(int((_time.perf_counter() - started) * 1000), 1),
+        latency_ms=0,
     )
 
 
@@ -719,6 +723,7 @@ class ScenarioEngine:
             "reproduction": {"deterministic": True, "seed": self.seed},
         })
         result.trajectory = trajectory  # 便捷字段（diff_runs 用；不属契约字段）
+        result.env_events = list(env.event_log)  # 便捷字段（EVAL 事件断言用；不属契约字段）
         return result
 
 

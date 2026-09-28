@@ -32,7 +32,9 @@ MODEL_DEFAULTS: dict[str, Any] = {
     "voltage_drop_k": 0.04,     # M5 §2：电压=标称×(1−k×馈线负载率)
     "power_factor": 0.92,       # 缺省功率因数（设备/回路属性可覆盖）
     "ambient_c": 25.0,          # 环境温度
-    "tx_temp_rise_c": 75.0,     # 变压器满载温升（temp = ambient + rise×load_rate）
+    "tx_temp_rise_c": 55.0,     # 变压器满载温升 K（顶油温升类建模常数；
+                                # temp = ambient + rise×load_rate + 事件漂移，
+                                # 阈值 85℃ 在 REG-TECH PHYS-TX-TEMP，非代码）
     "thd_base": 0.03,           # THD 基线
     "thd_load_coeff": 0.01,     # THD 随负载率分量
     "noise_amplitude": 0.03,   # 负荷扰动幅度（±3%，seed 控制）
@@ -178,7 +180,9 @@ class PhysicsEngine:
         if len(values) >= 2:
             return min(values) + float(self.params["soc_deadband"]), \
                    max(values) - float(self.params["soc_deadband"])
-        return 10.0, 90.0  # 规程缺失时的模型兜底（不触发告警口径）
+        # 规程缺失时的物理量程兜底（0-100 为百分数表示的物理范围，
+        # 非运行限值阈值；此时告警引擎同样因无规则而不判定，SPEC-M5-08）
+        return 0.0, 100.0
 
     def _bess_step(self, env: SimEnv, bess, sim_elapsed_s: float) -> float:
         """BESS 一阶积分：返回本步净充电功率（+充/−放，kW）。"""

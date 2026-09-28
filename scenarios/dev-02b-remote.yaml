@@ -16,7 +16,9 @@ environment:
   park_instance: seed            # PARK-001
   clock_start: 2026-09-15T08:30:00Z
   speed: 60.0
-  injections: []
+  injections:
+    # 遥信抖动（dev-02 基础上继承：3 秒内 4 次翻转，SPEC-M5-05）
+    - {at: "+70m", type: SENSOR_STUTTER, target: SG-A01, params: {flips: 4, window_s: 3, debounce_s: 2}}
 
 user_model:
   persona: OPERATOR

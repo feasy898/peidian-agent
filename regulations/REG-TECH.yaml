@@ -82,3 +82,15 @@ rules:
     thresholds:
       - {op: "<", value: 10, level: P2, name: SOC 下越界}
       - {op: ">", value: 90, level: P2, name: SOC 上越界}
+
+  - id: PHYS-TX-TEMP
+    title: 变压器绕组温度
+    category: physical
+    scope: Transformer
+    metric: winding_temp_c
+    unit: degC
+    criterion: "winding_temp_c（绕组温度，℃；M5 仿真量测口径：环境温度 + 满载温升×负载率 + 事件漂移）"
+    clauses:
+      - 变压器绕组温度 > 85℃ 越限（specs/M5-simulation.md §2 告警生成口径）。
+    thresholds:
+      - {op: ">", value: 85, level: P2, name: 绕组温度越限}

@@ -21,8 +21,8 @@ from typing import Any
 
 __all__ = ["RunRecorder", "AUDIT_COLUMNS", "strip_audit_columns"]
 
-#: TIMELINE 行中的审计列（真实时间源；确定性比对时剔除）
-AUDIT_COLUMNS = ("monotonic_ms", "wall_at")
+#: TIMELINE/轨迹行中的审计列（真实时间源或其派生测量；确定性比对时剔除）
+AUDIT_COLUMNS = ("monotonic_ms", "wall_at", "latency_ms")
 
 _EVIDENCE_FILES = {
     "INTERACTION_LOG": "interaction_log.jsonl",
