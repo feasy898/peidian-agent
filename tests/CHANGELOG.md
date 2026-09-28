@@ -397,3 +397,31 @@
   验证：改迁移表/拆完成门禁/废预算检查点/Observe 采信自述 四类故意破坏均被
   对应用例捕获）；`--module all` 143/143 exit 0（m0 49 + m1 20 + m2 22 +
   m3 23 + m4 13 + m5 16；连续 8 次全绿）；隔离断言零命中。
+
+---
+
+## 2026-09-28 · M1 复核修订（独立复核发现的两处缺口修复）
+
+- **模块**：M1（`src/m1_core/loop.py` 产物策略幂等入账 + `tests/test_m1.yaml`
+  EVAL-M1-MW-P 场景补齐；spec 未变更，spec_hash 不变）
+- **spec_hash → eval_hash**：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m1.yaml | `c8a2cd2b51a8462b74d1f8877515cd3a2e2583d2b8c636de7481badea44589ec` | `7307d4417bea4c860c0237e9e37c2514032c03a6566c748205f94a6f0d02aa28` |
+
+- **修订内容**（复核 588da80 交付时实测发现）：
+  1. **产物策略幂等入账补齐**：首条登记偏差 5 声明"同 action_id 重复入账
+     幂等跳过"但实现缺失——复现实测：同幂等键（同 todo_id 同参数）重发
+     write.report，M3 正确回放首结果零二次执行，但 loop 重复落第二条
+     ArtifactRecord（2 条 READY）。补 created_by.action_id 去重守卫后实测
+     1 条 READY、M3 执行计数 1、TaskState.artifacts 无重复。
+  2. **EVAL-M1-MW-P 补 06 形态场景**：用例标题与 M1 DoD 均为"移除全部
+     中间件后 EVAL-M1-01/02/06 仍通过"，但场景列表只有 01（report3）与
+     02（ask_wait）。补 need_more 场景（write.report 缺 measurements 段 →
+     产物 REJECTED → 完成申请 NEED_MORE_EVIDENCE；纯 run_task 可达，无
+     seed 步骤依赖），三场景在 缺省/全移除/单移除(safety) 三态下语义一致。
+- **复核门禁实测**：`python run_evals.py --module m1` 20/20 exit 0；
+  `--module all` 143/143 exit 0；`--selftest` integrity=OK schema=OK；
+  隔离断言零命中（scripts/ci_isolation.py 的 holdout 实例隔离正则对全部
+  交付目录 grep 零命中）；src/ 电价词面文件墙钟 token 终扫零命中。

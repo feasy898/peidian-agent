@@ -644,6 +644,11 @@ class AgentCore:
         policy = self.artifact_policy.get(capability)
         if not policy:
             return
+        # 幂等入账：同 action_id 已落产物则跳过（M3 幂等键回放返回首结果——
+        # 原 action_id 重入 Observe 不重复建 ArtifactRecord；CHANGELOG 偏差 5 口径）
+        for existing in self.info.store.list_artifacts(task_id):
+            if existing.created_by.action_id == result.action_id:
+                return
         arguments = dict((result.evidence.intended or {}).get("arguments") or {})
         content = {str(section): arguments.get(section)
                    for section in policy.get("content_sections", [])}

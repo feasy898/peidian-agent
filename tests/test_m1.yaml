@@ -719,6 +719,39 @@ cases:
                 - {capability: execute.capacitor_switch@v1, purpose: 电容投切,
                    arguments: {device: CB-A, state: "ON"}}
           user_input: 把 A 房电容投上
+        # 06 形态（EVAL-M1-06-P 同口径的纯 run_task 版）：报告内容缺 measurements
+        # 段 → 产物 REJECTED → 完成申请 NEED_MORE_EVIDENCE（无 seed 步骤依赖）
+        - name: need_more
+          env: *report3_env
+          now: "2026-09-28T08:00:00Z"
+          task:
+            task_id: task-m1
+            user_input: 出报告并申请完成
+            max_turns: 2
+            current_stage: WORK
+            plan:
+              - {stage: WORK, gate: g1, artifacts_expected: []}
+              - {stage: DONE, gate: g2, artifacts_expected: [report.daily@v1]}
+            todos: []
+            budget: {token_max: 100000, token_used: 0, action_max: 10, action_used: 0}
+          script:
+            - text: 报告已出具，申请完成。
+              usage: {prompt_tokens: 80, completion_tokens: 20}
+              tool_calls:
+                - capability: write.report@v1
+                  purpose: 出报告（缺 measurements 段，产物必 REJECTED）
+                  arguments:
+                    title: 园区日巡检报告
+                    date: "2026-09-28"
+                    devices: [TX-01]
+                    conclusion: 报告内容缺量测段
+                    regulation_refs: [PHYS-TX-LOAD]
+              completion_claim:
+                expected_artifacts: [report.daily@v1]
+                evidence_refs: []
+                summary: 报告已出具（申请完成）
+              request_input: true
+          user_input: 出报告并申请完成
       remove_one: safety
       registration_order: [rec-a, rec-b, rec-c]
     expect: {}
