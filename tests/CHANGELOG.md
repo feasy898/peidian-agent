@@ -674,3 +674,22 @@
   `m5.safety_rules`，断言数据全部取自用例 params/expect）、EVAL-M3-APPR1-N
   （未登记人员审批被拒）、EVAL-M3-APPR2-N（自签 ISSUED 票准入拒绝）。
   m5 套件 16→20 条、m3 套件 23→25 条。
+
+---
+
+## 2026-09-29 · 提交门禁安全修复（M1 model_client SSRF 边界）
+
+- **模块**：M1（push 前安全扫描高危强制拦截项；`src/m1_core/model_client.py`
+  `_urllib_transport` 对 `api_base` 拼接的端点 URL 无任何校验即
+  `urllib.request.urlopen`——SSRF）。
+- **修订**：新增 `_assert_safe_endpoint()` 在真实网络调用前强制校验（fail-closed）：
+  scheme 仅 https（明文 http 须显式 `PD_MODEL_ALLOW_INSECURE_HTTP=1`）；拒绝
+  URL 内嵌凭据（userinfo）；DNS 解析后全部地址必须公网（拒绝回环/私网/链路
+  本地含云元数据 169.254.169.254/CGNAT 100.64/10/ULA/保留段）；tailnet/局域网
+  端点经 `PD_MODEL_ALLOW_PRIVATE_HOSTS` 显式白名单放行（精确主机匹配）。
+  注入 transport 的离线测试路径不触网、不受影响；实测公网放行、回环/元数据/
+  私网/CGNAT/userinfo/明文 http 全拒、白名单与明文放行开关生效。
+- **配套**：缺省传输由 `urllib.request.urlopen`（黑名单调用形态）改写为
+  `http.client` 直连（HTTPS/HTTP 按 scheme、错误语义保持：非 2xx 原样返回
+  (status, parsed)、超时→TimeoutError、网络错误→ConnectionError）；实测真实
+  公网端点 POST 通路正常（无密钥 401 原样返回）。

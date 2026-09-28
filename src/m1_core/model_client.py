@@ -26,11 +26,13 @@
 """
 from __future__ import annotations
 
+import http.client
+import ipaddress
 import json
 import os
+import socket
 import time
-import urllib.error
-import urllib.request
+import urllib.parse
 from typing import Any, Callable, Mapping
 
 __all__ = [
@@ -97,30 +99,96 @@ def _messages_text(messages: list) -> str:
     )
 
 
+#: SSRF 防护（网络边界强制）：模型端点仅允许 https 公网地址。
+#: 私网/回环/链路本地/CGNAT（含 100.64/10 tailnet）/保留段一律拒绝——
+#: 防止注入的 api_base 把请求打向内网或云元数据（169.254.169.254）。
+#: 局域网/tailnet 部署的例外必须显式声明：环境变量
+#: ``PD_MODEL_ALLOW_PRIVATE_HOSTS``（逗号分隔主机名/IP 字面量，精确匹配）。
+_ALLOW_INSECURE_HTTP_ENV = "PD_MODEL_ALLOW_INSECURE_HTTP"
+_ALLOW_PRIVATE_HOSTS_ENV = "PD_MODEL_ALLOW_PRIVATE_HOSTS"
+
+
+def _explicit_host_allowlist() -> frozenset:
+    raw = os.environ.get(_ALLOW_PRIVATE_HOSTS_ENV, "") or ""
+    return frozenset(item.strip().lower() for item in raw.split(",") if item.strip())
+
+
+def _assert_safe_endpoint(url: str) -> None:
+    """SSRF 边界校验（默认传输发起请求前必经）：scheme/凭据/解析地址全检，fail-closed。"""
+    try:
+        parts = urllib.parse.urlsplit(str(url))
+    except ValueError as exc:
+        raise ModelClientError(f"模型端点 URL 非法: {exc}") from exc
+    scheme = str(parts.scheme or "").lower()
+    if scheme not in ("https", "http"):
+        raise ModelClientError(f"模型端点 scheme 必须为 https: {scheme!r}")
+    if (scheme == "http"
+            and os.environ.get(_ALLOW_INSECURE_HTTP_ENV, "") not in ("1", "true")):
+        raise ModelClientError("模型端点禁止明文 http（显式放行：设置 "
+                               f"{_ALLOW_INSECURE_HTTP_ENV}=1）")
+    if (parts.username or parts.password):
+        raise ModelClientError("模型端点 URL 不得内嵌凭据（userinfo）")
+    hostname = str(parts.hostname or "")
+    if not hostname:
+        raise ModelClientError("模型端点缺主机名")
+    allowlist = _explicit_host_allowlist()
+    if hostname.lower() in allowlist:
+        return  # 运维显式声明的私网端点（如 tailnet 网关）——责任明确转移
+    try:
+        addr_infos = socket.getaddrinfo(hostname, None)
+    except OSError as exc:
+        raise ModelClientError(f"模型端点主机解析失败: {hostname!r} ({exc})") from exc
+    for info in addr_infos:
+        address = str(info[4][0])
+        try:
+            ip = ipaddress.ip_address(address.split("%", 1)[0])
+        except ValueError:
+            continue
+        if not ip.is_global:
+            raise ModelClientError(
+                f"模型端点解析到非公网地址 {address}（SSRF 防护拒绝；"
+                f"私网端点须显式加入 {_ALLOW_PRIVATE_HOSTS_ENV}）")
+
+
 def _urllib_transport(url: str, headers: dict, payload: dict,
                       timeout_s: float) -> tuple[int, dict]:
-    """缺省 HTTP 传输（stdlib urllib；返回 (status, body_dict)）。"""
-    request = urllib.request.Request(
-        url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json", **headers},
-        method="POST",
-    )
+    """缺省 HTTPS 传输（stdlib ``http.client`` 直连；返回 (status, body_dict)）。
+
+    SSRF 边界：``_assert_safe_endpoint`` 强制校验（scheme/凭据/解析地址）
+    后才允许建连；非 2xx 不抛异常、原样返回 (status, parsed_body)——
+    与原 urllib 实现的 HTTPError 语义一致，供上层重试/错误分类。
+    """
+    _assert_safe_endpoint(url)  # SSRF 边界：建连前强制校验
+    parts = urllib.parse.urlsplit(str(url))
+    is_https = str(parts.scheme or "").lower() == "https"
+    port = int(parts.port) if parts.port else (443 if is_https else 80)
+    path = parts.path or "/"
+    if parts.query:
+        path = f"{path}?{parts.query}"
+    conn_cls = http.client.HTTPSConnection if is_https else http.client.HTTPConnection
+    connection = conn_cls(parts.hostname, port, timeout=float(timeout_s))
     try:
-        with urllib.request.urlopen(request, timeout=float(timeout_s)) as response:
-            body = response.read().decode("utf-8")
-            return int(response.status), (json.loads(body) if body else {})
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        try:
-            parsed = json.loads(body) if body else {}
-        except (TypeError, ValueError):
-            parsed = {"error": {"message": body[:500]}}
-        return int(exc.code), parsed
-    except urllib.error.URLError as exc:
-        reason = str(getattr(exc, "reason", "") or exc)
-        if "timed out" in reason.lower() or "timeout" in reason.lower():
-            raise TimeoutError(f"请求超时（{timeout_s}s）: {reason}") from exc
-        raise ConnectionError(f"网络错误: {reason}") from exc
+        connection.request(
+            "POST", path,
+            body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json", **headers},
+        )
+        response = connection.getresponse()
+        status = int(response.status)
+        body = response.read().decode("utf-8", errors="replace")
+    except (TimeoutError, socket.timeout) as exc:  # socket.timeout 是 TimeoutError 别名
+        raise TimeoutError(f"请求超时（{timeout_s}s）: {exc}") from exc
+    except (http.client.HTTPException, OSError) as exc:
+        raise ConnectionError(f"网络错误: {exc}") from exc
+    finally:
+        connection.close()
+    try:
+        parsed = json.loads(body) if body else {}
+    except (TypeError, ValueError):
+        parsed = {"error": {"message": body[:500]}}
+    if status >= 400 and not (isinstance(parsed, dict) and "error" in parsed):
+        parsed = {"error": {"message": body[:500]}}
+    return status, parsed
 
 
 class ModelClient:
