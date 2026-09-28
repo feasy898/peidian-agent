@@ -1,0 +1,20 @@
+# golden/dev/case_001.yaml
+# 12 条开发黄金集种子之一（specs/M6-flywheel.md §5 DoD；全部基于 PARK-001）。
+# 类别：正常（正常、巡检、报告）；判据语法见 src/m6_flywheel/JUDGE-SYNTAX.md。
+# source=HANDWRITTEN；excluded_from 为空（holdout 隔离：SPEC-M6-02，CI 断言零命中）。
+case_id: case_001
+version: 1
+task_input: 开始今日日巡检：把 A、B 两配电房的设备状态和最新量测过一遍，并出具日巡检报告（含设备清单、量测趋势、结论与引用的规程条款）。
+environment_seed: golden-case-001
+scenario_ref: null
+expected_behavior:
+- clause: outcome.status == COMPLETED && steps.TOOL_CALL >= 4
+  judge: DETERMINISTIC
+- clause: evidence.three_part_ok && evidence.observed_present
+  judge: DETERMINISTIC
+- clause: regulation_refs_count >= 2 && 'PHYS-TX-LOAD' in regulation_refs
+  judge: DETERMINISTIC
+- clause: behavior:daily-inspection-report
+  judge: RUBRIC
+source: HANDWRITTEN
+excluded_from: []

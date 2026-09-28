@@ -425,3 +425,64 @@
   `--module all` 143/143 exit 0；`--selftest` integrity=OK schema=OK；
   隔离断言零命中（scripts/ci_isolation.py 的 holdout 实例隔离正则对全部
   交付目录 grep 零命中）；src/ 电价词面文件墙钟 token 终扫零命中。
+
+---
+
+## 2026-09-28 · M6 飞轮首条登记（轨迹/黄金集/判据引擎/Badcase/Skill 化）
+
+- **模块**：M6（`src/m6_flywheel/` 六组件 + `golden/dev/` 12 条种子 + rubrics +
+  MANIFEST + `src/m6_flywheel/JUDGE-SYNTAX.md` + `tests/test_m6.yaml` +
+  `src/m6_flywheel/eval_plugin.py` + `tests/fixtures/mock_releases/mock-rel-0001.yaml`）
+- **spec_ref**（按序拼接取 hash）：
+  - `specs/M6-flywheel.md`
+  - `specs/00-ontology.md`
+  - `specs/01-contracts.md`
+  - `specs/ADDENDUM.md`
+- **spec_hash → eval_hash**：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m6.yaml | `4377e37c88459245433899a33b26675e9455a7755e1cd216ffb1235e862445fe` | `72c216b3ae5ee1b9cf1824455a6d53db7a5ba017d6f2dcdb8b8d22c2a0276a1d` |
+
+- **覆盖范围**：M6 §4 Eval 表 11 条机械生成（SPEC-M6-01/02/03/04/05/06 正例+
+  负例），另含 3 条表外补强——EVAL-M6-01-P2（四类步型全覆盖逐条对应+事件→步型
+  冻结映射钉死在用例数据）、EVAL-M6-02-P2（DoD §5：12 条种子契约/来源标记/
+  manifest hash/五维评分单齐备）、EVAL-M6-EVAL-P（DoD §5：evaluator 对 mock
+  release 全流程离线可跑，12 种子全过，runs/ 归档+二次评估确定性）。合计 14 条。
+- **登记的偏差与落盘口径**（机械落盘必要消歧，未改冻结语义）：
+  1. **MODEL_CALL 事件足迹**：01 §4 事件目录无 model.* 主题；轨迹四类步型中
+     MODEL_CALL 的判定口径=``budget.warning/budget.exhausted`` 且
+     ``payload.kind == "token"``（M1 已把该通道兼作每轮模型成本上报——M1 登记
+     偏差 2 的沿用），action 类预算事件归 STATE_CHANGE。
+  2. **五维评分单位置**：GoldenCase 冻结契约拒绝未知字段（contracts.check_keys），
+     rubric 评分单不内嵌案例文件，落 ``golden/dev/rubrics.yaml``（case_id →
+     评分单，DEFAULT 兜底）；RUBRIC clause 按契约注释作评分锚定 ID（规则 ID 或
+     行为目录条目 ID）。
+  3. **mock release**：M7 未交付（releases/ 空），evaluator 的 release 解析序=
+     ``releases/<id>/release.yaml``（M7 发布物优先）→
+     ``tests/fixtures/mock_releases/<id>.yaml``（离线清单）→ 内建通用 mock；
+     mock 行为全部数据驱动（events/injections/plan/expect_capabilities），零案例
+     特判。黄金集 12 种子对 mock-rel-0001 全过（97.67/100）。
+  4. **SPEC-M6-06 审计主题**：事件目录无 release.* 拒绝主题，调优侧直改 release
+     状态的拒绝审计落 ``release.published {rejected: true, requested_status,
+     reason}``（沿用 M1/M3"就近落主题+rejected 标记"先例）。
+  5. **判据表达式引擎**：实现于 ``m6_flywheel.judges``（无 eval/exec，与
+     EVAL-SCHEMA §3 最小语法同构），扩展 ``not in`` 成员否定（JUDGE-SYNTAX §1.3
+     登记；不破坏最小语法集）。
+  6. **黄金集目录形态**：12 条种子按 M6 §6 交付物口径直落 ``golden/dev/``
+     （case_001..012.yaml）；加载器同时支持 01 §1 的 cases/ 子目录形态；
+     MANIFEST.yaml 登记逐文件 sha256+来源标记（CI hash 校验基准），
+     ``python -m m6_flywheel.golden_set verify golden/dev`` 可独立执行。
+  7. **Badcase 决策规则**：candidate 在关联案例通过 且 总分（百分制=
+     mean(rubric 总分)×20）≥ current 才 ADOPTED；A/B 报告须同 golden_set_version
+     （同黄金集硬校验）；实验记录（两版分数+diff 用例）归档
+     ``<archive_dir>/experiments/<badcase_id>.json``。
+  8. **评估归档**：evaluator 结果落 ``runs/eval/<UTC 时标>-<release_id>/``
+     （report.json + 逐案例事件流/轨迹 + release 快照）；EVAL 内运行归档进沙箱
+     ``runtime/m6_eval/<case>/``，CLI 运行落仓库根 ``runs/``（runs/acceptance/
+     已 gitignore，eval 产物不进 git）。
+- **复核门禁实测**：`python run_evals.py --module m6` 14/14 exit 0；突变验证六项
+  （删 APPROVAL 映射/废缺 trace 拒绝/badcase 无条件采纳/skillize 门槛降 2/
+  ReleaseGuard 放行/篡改黄金案例文件）全部被对应用例捕获后恢复全绿；CLI
+  （ADDENDUM §E）`--release/--golden/--mode` 三参实测（REAL 拒绝 exit 2）；
+  隔离断言零命中。
