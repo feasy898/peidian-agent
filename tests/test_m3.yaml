@@ -1,0 +1,732 @@
+# tests/test_m3.yaml
+# M3 Action Gateway EVAL 套件 · 从 specs/M3-action-gateway.md §4 Eval 表机械生成
+# （01§6 协议；spec→eval hash 对登记 tests/CHANGELOG.md）。
+# 执行器插件：m3_action.eval_plugin（m3.execute / m3.registry / m3.negative_matrix）。
+# 用例一律数据驱动：请求/期望/事件序全部来自本文件，runner/插件无硬编码特判。
+suite: m3
+title: M3 行动网关（Policy 三值/审批/幂等）EVAL
+spec_ref:
+  - specs/M3-action-gateway.md
+  - specs/00-ontology.md
+  - specs/01-contracts.md
+  - specs/ADDENDUM.md
+spec_hash: 91b5cab10ea229719052f1b9498ea75eeb17d539ebf94734f76885c40a4eaa8c
+executors:
+  - module: m3_action.eval_plugin
+
+# ---------------------------------------------------------------------------
+# 公共请求模板说明（YAML 锚点）：风险级与 00§1.3 动作表一致；
+# requested_at/now 全部显式（确定性，不触墙钟）；trace_id 由 task 派生。
+# ---------------------------------------------------------------------------
+cases:
+  # ================= SPEC-M3-01 三事实区分 =================
+  - id: EVAL-M3-01-P
+    spec: SPEC-M3-01
+    title: 已注册已披露角色发 query.measurement → 正常执行链
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request: &query_req
+            action_id: act-101
+            task_id: task-dev-101
+            turn: 1
+            capability: query.measurement@v1
+            actor: {user: OP-001, agent: park-agent@v0.1.0}
+            purpose: 读取 TX-01 当前有功功率
+            arguments: {device: TX-01}
+            risk: {level: LOW, reversible: false}
+            idempotency_key: idem-101
+            requested_at: 2026-09-15T08:00:00Z
+    expect:
+      results: {r1: {action_id: act-101, status: SUCCEEDED, error_code: null}}
+      decisions: {r1: ALLOW}
+      event_seqs:
+        task-dev-101: [action.requested, action.policy_decided, action.executing, action.completed]
+
+  - id: EVAL-M3-01-N
+    spec: SPEC-M3-01
+    title: 请求未注册动作 query.secret → REJECTED/UNREGISTERED（不进主链）
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-102
+            task_id: task-dev-102
+            capability: query.secret@v1
+            idempotency_key: idem-102
+    expect:
+      results: {r1: {status: REJECTED, error_code: UNREGISTERED}}
+      event_types_absent:
+        task-dev-102: [action.requested, action.executing, action.completed]
+      event_payloads:
+        - {type: action.policy_decided, contains: {decision: DENY, stage: admission, error_code: UNREGISTERED}}
+
+  - id: EVAL-M3-01-N2
+    spec: SPEC-M3-01
+    title: 已注册但未对该角色披露 → 同样 REJECTED（NOT_DISCLOSED）
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      register:
+        - capability_id: query.custom_telemetry@v1
+          action_id: query.custom_telemetry
+          version: v1
+          name_cn: 定制遥测查询
+          risk_level: LOW
+          reversible: false
+          default_policy: ALLOW
+          policy_locked: false
+          params_schema: {type: object, required: [point], properties: {point: {type: string}}}
+          disclosed_roles: [值班员]   # 只对值班员披露
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-103
+            task_id: task-dev-103
+            capability: query.custom_telemetry@v1
+            arguments: {point: TX-01.p_kw}
+            idempotency_key: idem-103
+            actor: {user: OP-004, agent: park-agent@v0.1.0}   # 审批人（未披露角色）
+    expect:
+      results: {r1: {status: REJECTED, error_code: NOT_DISCLOSED}}
+      event_types_absent:
+        task-dev-103: [action.requested, action.executing]
+      event_payloads:
+        - {type: action.policy_decided, contains: {stage: admission, error_code: NOT_DISCLOSED}}
+
+  # ================= SPEC-M3-02 契约校验 =================
+  - id: EVAL-M3-02-N
+    spec: SPEC-M3-02
+    title: ActionRequest 缺 idempotency_key → 契约拒绝，不进主事件链
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            action_id: act-201
+            task_id: task-dev-201
+            turn: 1
+            capability: query.measurement@v1
+            actor: {user: OP-001, agent: park-agent@v0.1.0}
+            purpose: 缺幂等键的请求
+            arguments: {device: TX-01}
+            risk: {level: LOW, reversible: false}
+            requested_at: 2026-09-15T08:00:00Z
+    expect:
+      results:
+        r1: {status: REJECTED, error_code: CONTRACT_INVALID, error_contains: idempotency_key}
+      event_types_absent:
+        task-dev-201: [action.requested, action.executing, action.completed]
+
+  - id: EVAL-M3-02-N2
+    spec: SPEC-M3-02
+    title: arguments 类型错（string 传 int）→ REJECTED + schema 错误路径
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-202
+            task_id: task-dev-202
+            capability: query.asset@v1
+            arguments: {device: 123}        # int，schema 声明 string
+            idempotency_key: idem-202
+    expect:
+      results:
+        r1: {status: REJECTED, error_code: SCHEMA_INVALID, error_contains: arguments.device}
+      event_types_absent:
+        task-dev-202: [action.requested, action.executing]
+
+  # ================= SPEC-M3-03 业务语义粒度 =================
+  - id: EVAL-M3-03-P
+    spec: SPEC-M3-03
+    title: CI 断言注册表 vs 本体动作表 diff 为空（16 个动作全部独立注册）
+    form: negative_rejection
+    executor: m3.registry
+    params: {actions_table: ontology/actions.yaml}
+    expect: {action_count: 16, diff_empty: true, split_registration: true}
+
+  - id: EVAL-M3-03-P2
+    spec: SPEC-M3-03
+    title: 不可改清单双重表达一致 + 生命周期迁移表与冻结表 diff 为空（DoD）
+    form: negative_rejection
+    executor: m3.registry
+    params: {actions_table: ontology/actions.yaml}
+    expect:
+      action_count: 16
+      diff_empty: true
+      immutable_consistent: true
+      immutable_deny: [bypass.approval, modify.asset_history, modify.protection_setting]
+      lifecycle_table_matches_fixture: true
+
+  # ================= SPEC-M3-04 三值判定 =================
+  - id: EVAL-M3-04-P
+    spec: SPEC-M3-04
+    title: create.work_order（值班员）→ ALLOW + 判定事件
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-401
+            task_id: task-dev-401
+            capability: create.work_order@v1
+            purpose: TX-01 重过载告警消缺
+            arguments: {code: WO-0915-001, type: 消缺, related_alarm: AL-0001, description: 值班员创建消缺工单}
+            risk: {level: MEDIUM, reversible: true}
+            idempotency_key: idem-401
+    expect:
+      results: {r1: {action_id: act-401, status: SUCCEEDED, error_code: null}}
+      decisions: {r1: ALLOW}
+      event_seqs:
+        task-dev-401: [action.requested, action.policy_decided, action.executing, action.completed]
+
+  - id: EVAL-M3-04-P2
+    spec: SPEC-M3-04
+    title: execute.remote_control（任何角色）→ ASK→WAITING_APPROVAL+approval.requested
+    form: expression
+    executor: m3.execute
+    params:
+      env:
+        park_instance: seed
+        clock_start: 2026-09-15T08:00:00Z
+        switch_orders:
+          SO-0915-001: {status: ISSUED, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-402
+            task_id: task-dev-402
+            capability: execute.remote_control@v1
+            purpose: 值班员指令：切除 2 号变压器这一路
+            arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-001}
+            risk: {level: HIGH, reversible: false}
+            idempotency_key: idem-402
+    expect:
+      results: {r1: {status: WAITING_APPROVAL}}
+      decisions: {r1: ASK}
+      event_seqs:
+        task-dev-402: [action.requested, action.policy_decided, action.waiting_approval, approval.requested]
+      event_types_absent:
+        task-dev-402: [action.executing, action.completed]
+
+  # ================= SPEC-M3-05 红线不可改 =================
+  - id: EVAL-M3-05-N
+    spec: SPEC-M3-05
+    title: 超管角色请求 modify.protection_setting → DENY（不可覆盖清单生效）
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway:
+        evaluation: true
+        actor_roles: {OP-001: 超级管理员}   # 自造最高权限角色——不可改清单对任何角色生效
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-501
+            task_id: task-dev-501
+            capability: modify.protection_setting@v1
+            purpose: 超管尝试修改保护定值
+            arguments: {device: SG-A01, setting: {overcurrent_a: 800}}
+            risk: {level: CRITICAL, reversible: false}
+            idempotency_key: idem-501
+    expect:
+      results: {r1: {status: DENIED, error_code: POLICY_DENIED}}
+      decisions: {r1: DENY}
+      event_seqs:
+        task-dev-501: [action.requested, action.policy_decided, action.completed]
+      event_payloads:
+        - {stream: task-dev-501, type: action.policy_decided, contains: {decision: DENY, locked: true}}
+
+  - id: EVAL-M3-05-N2
+    spec: SPEC-M3-05
+    title: 审批人批准后请求把 remote_control 改为永久 ALLOW → 拒绝+审计事件
+    form: expression
+    executor: m3.execute
+    params:
+      env:
+        park_instance: seed
+        clock_start: 2026-09-15T08:00:00Z
+        switch_orders:
+          SO-0915-002: {status: ISSUED, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-502
+            task_id: task-dev-502
+            capability: execute.remote_control@v1
+            purpose: 审批链上的遥控请求
+            arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-002}
+            risk: {level: HIGH, reversible: false}
+            idempotency_key: idem-502
+        - id: a1
+          op: approve
+          action_id: act-502
+          decision: GRANT
+          approver: OP-004
+          now: 2026-09-15T08:01:00Z
+        - id: o1
+          op: override
+          role: 审批人
+          capability: execute.remote_control
+          decision: ALLOW       # 审批人企图把缺省 ASK 永久改为 ALLOW
+    expect:
+      results:
+        r1: {status: WAITING_APPROVAL}
+        a1: {status: SUCCEEDED}
+      overrides: {o1: {accepted: false, effective: ASK}}
+      event_payloads:
+        - {type: action.policy_decided, contains: {override_rejected: true, decision: ASK}}
+
+  - id: EVAL-M3-05-N3
+    spec: SPEC-M3-05
+    title: GRANT 只放行单次——放行后缺省仍 ASK，再次请求重回 WAITING_APPROVAL
+    form: expression
+    executor: m3.execute
+    params:
+      env:
+        park_instance: seed
+        clock_start: 2026-09-15T08:00:00Z
+        switch_orders:
+          SO-0915-003: {status: ISSUED, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-503
+            task_id: task-dev-503
+            capability: execute.remote_control@v1
+            purpose: 第一次遥控（将获批准）
+            arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-003}
+            risk: {level: HIGH, reversible: false}
+            idempotency_key: idem-503
+        - id: a1
+          op: approve
+          action_id: act-503
+          decision: GRANT
+          approver: OP-004
+          now: 2026-09-15T08:01:00Z
+        - id: r2
+          op: request
+          now: 2026-09-15T08:02:00Z
+          request:
+            <<: *query_req
+            action_id: act-504
+            task_id: task-dev-503
+            turn: 2
+            capability: execute.remote_control@v1
+            purpose: 第二次遥控（缺省未被批准改写，应再走审批）
+            arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-003}
+            risk: {level: HIGH, reversible: false}
+            idempotency_key: idem-504
+    expect:
+      results:
+        a1: {status: SUCCEEDED}
+        r2: {status: WAITING_APPROVAL}
+      decisions: {r2: ASK}
+
+  # ================= SPEC-M3-06 角色覆盖单向收紧 =================
+  - id: EVAL-M3-06-P
+    spec: SPEC-M3-06
+    title: 值班员对 create.work_order 配收紧为 ASK 生效；反向放宽被拒
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway:
+        evaluation: true
+        role_overrides: {值班员: {create.work_order: ASK}}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-601
+            task_id: task-dev-601
+            capability: create.work_order@v1
+            purpose: 值班员工单（已被角色覆盖收紧为 ASK）
+            arguments: {code: WO-0915-601, type: 检修}
+            risk: {level: MEDIUM, reversible: true}
+            idempotency_key: idem-601
+        - id: o1
+          op: override
+          role: 值班员
+          capability: create.work_order
+          decision: ALLOW        # 反向放宽——必须被拒
+        - id: r2
+          op: request
+          now: 2026-09-15T08:02:00Z
+          request:
+            <<: *query_req
+            action_id: act-602
+            task_id: task-dev-601
+            turn: 2
+            capability: create.work_order@v1
+            purpose: 放宽尝试后的复验请求（仍应为 ASK）
+            arguments: {code: WO-0915-602, type: 检修}
+            risk: {level: MEDIUM, reversible: true}
+            idempotency_key: idem-602
+    expect:
+      results:
+        r1: {status: WAITING_APPROVAL}
+        r2: {status: WAITING_APPROVAL}
+      decisions: {r1: ASK, r2: ASK}
+      overrides: {o1: {accepted: false, effective: ASK}}
+      event_payloads:
+        - {type: action.policy_decided, contains: {override_applied: true, decision: ASK}}
+
+  # ================= SPEC-M3-07 审批超时 =================
+  - id: EVAL-M3-07-P
+    spec: SPEC-M3-07
+    title: 审批 301s 无响应 → REJECTED/timeout + 任务收 approval.timeout 事件
+    form: expression
+    executor: m3.execute
+    params:
+      env:
+        park_instance: seed
+        clock_start: 2026-09-15T08:00:00Z
+        switch_orders:
+          SO-0915-004: {status: ISSUED, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+      gateway: {evaluation: true, approval_timeout_s: 300}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-701
+            task_id: task-dev-701
+            capability: execute.remote_control@v1
+            purpose: 无人响应的遥控请求
+            arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-004}
+            risk: {level: HIGH, reversible: false}
+            idempotency_key: idem-701
+        - id: e1
+          op: expire
+          now: 2026-09-15T08:05:01Z   # 301s > 300s
+    expect:
+      results:
+        r1: {status: WAITING_APPROVAL}
+        e1: {status: REJECTED, error_code: APPROVAL_TIMEOUT}
+      event_seqs:
+        task-dev-701: [action.requested, action.policy_decided, action.waiting_approval, approval.requested, approval.timeout, action.completed]
+      event_payloads:
+        - {stream: task-dev-701, type: approval.timeout, contains: {timeout: true}}
+        - {stream: task-dev-701, type: action.completed, contains: {status: REJECTED, timeout: true}}
+
+  - id: EVAL-M3-07-P2
+    spec: SPEC-M3-07
+    title: approval 队列持久化——重启后 WAITING_APPROVAL 项不丢（DoD §5）
+    form: expression
+    executor: m3.execute
+    params:
+      env:
+        park_instance: seed
+        clock_start: 2026-09-15T08:00:00Z
+        switch_orders:
+          SO-0915-005: {status: ISSUED, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+      gateway: {evaluation: true, approval_timeout_s: 300}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-702
+            task_id: task-dev-702
+            capability: execute.remote_control@v1
+            purpose: 重启前的遥控请求
+            arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-005}
+            risk: {level: HIGH, reversible: false}
+            idempotency_key: idem-702
+        - {op: restart}               # 网关重启：从同一 sandbox 重放审批日志
+        - id: a1
+          op: approve
+          action_id: act-702
+          decision: GRANT
+          approver: OP-004
+          now: 2026-09-15T08:03:00Z
+    expect:
+      results:
+        r1: {status: WAITING_APPROVAL}
+        a1: {status: SUCCEEDED}
+      event_seqs:
+        task-dev-702: [action.requested, action.policy_decided, action.waiting_approval, approval.requested, approval.granted, action.executing, action.completed]
+
+  # ================= SPEC-M3-08 幂等 =================
+  - id: EVAL-M3-08-P
+    spec: SPEC-M3-08
+    title: 同 key 二发（首结果 SUCCEEDED）→ 同 action_id 同 status，M5 状态零变化
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-801
+            task_id: task-dev-801
+            capability: create.switch_order@v1
+            purpose: 创建操作票（首次执行）
+            arguments: {code: SO-0915-801, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+            risk: {level: MEDIUM, reversible: true}
+            idempotency_key: idem-801
+        - {op: snapshot, id: s1}
+        - id: r2
+          op: request
+          now: 2026-09-15T08:01:00Z
+          request:                       # 同 key 重发（action_id 不同）→ 返回首个结果
+            <<: *query_req
+            action_id: act-802
+            task_id: task-dev-801
+            turn: 2
+            capability: create.switch_order@v1
+            purpose: 同 key 重发（不得二次执行）
+            arguments: {code: SO-0915-801, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+            risk: {level: MEDIUM, reversible: true}
+            idempotency_key: idem-801
+        - {op: snapshot, id: s2}
+    expect:
+      results:
+        r1: {status: SUCCEEDED}
+        r2: {action_id: act-801, status: SUCCEEDED}   # 含原 action_id 同 status
+      executions: 1
+      snapshots_equal: [[s2, s1]]      # 二发后 M5 状态零变化
+
+  - id: EVAL-M3-08-P2
+    spec: SPEC-M3-08
+    title: 执行器崩溃（claim 后中断）同 key 重试 → 零二次副作用
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - {op: snapshot, id: s0}
+        - id: c1
+          op: crash_claim              # 白盒崩溃注入：副作用前只落幂等 claim 即中断
+          request:
+            <<: *query_req
+            action_id: act-803
+            task_id: task-dev-803
+            capability: create.switch_order@v1
+            purpose: 崩溃注入的首次请求
+            arguments: {code: SO-0915-803, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+            risk: {level: MEDIUM, reversible: true}
+            idempotency_key: idem-803
+            requested_at: 2026-09-15T08:00:00Z
+        - {op: restart}
+        - id: r1
+          op: request
+          now: 2026-09-15T08:01:00Z
+          request:                       # 同 key 重试 → 命中崩溃 claim，不执行
+            <<: *query_req
+            action_id: act-803
+            task_id: task-dev-803
+            capability: create.switch_order@v1
+            purpose: 崩溃后同 key 重试（不得二次副作用）
+            arguments: {code: SO-0915-803, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+            risk: {level: MEDIUM, reversible: true}
+            idempotency_key: idem-803
+        - {op: snapshot, id: s1}
+    expect:
+      results: {r1: {action_id: act-803, status: REQUESTED}}
+      executions: 0
+      snapshots_equal: [[s1, s0]]
+
+  # ================= SPEC-M3-09 证据三态 =================
+  - id: EVAL-M3-09-P
+    spec: SPEC-M3-09
+    title: 遥控模拟自报成功但环境回读未变 → 不得标 SUCCEEDED（降级 FAILED）
+    form: expression
+    executor: m3.execute
+    params:
+      env:
+        park_instance: seed
+        clock_start: 2026-09-15T08:00:00Z
+        switch_orders:
+          SO-0915-006: {status: ISSUED, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+      gateway:
+        evaluation: true
+        isolate_execution_env: true    # 执行落在环境深拷贝：执行器自报成功，真实环境未变
+      steps:
+        - {op: snapshot, id: s0}
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-901
+            task_id: task-dev-901
+            capability: execute.remote_control@v1
+            purpose: 失联执行器场景：自报成功但回读未变
+            arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-006}
+            risk: {level: HIGH, reversible: false}
+            idempotency_key: idem-901
+        - id: a1
+          op: approve
+          action_id: act-901
+          decision: GRANT
+          approver: OP-004
+          now: 2026-09-15T08:01:00Z
+        - {op: snapshot, id: s1}
+    expect:
+      results:
+        a1: {status: FAILED, error_code: OBSERVATION_MISMATCH, error_contains: 环境回读}
+      snapshots_equal: [[s1, s0]]      # 真实环境零变化
+      event_payloads:
+        - {stream: task-dev-901, type: action.completed, contains: {status: FAILED}}
+
+  # ================= SPEC-M3-10 路由隔离 =================
+  - id: EVAL-M3-10-P
+    spec: SPEC-M3-10
+    title: 黄金集 runner（evaluation 上下文）请求 REAL → 拒绝（强制 SIMULATION）
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          mode: REAL
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-1001
+            task_id: task-dev-1001
+            idempotency_key: idem-1001
+    expect:
+      results: {r1: {status: REJECTED, error_code: REAL_FORBIDDEN_IN_EVAL}}
+      event_types_absent:
+        task-dev-1001: [action.requested, action.executing]
+
+  - id: EVAL-M3-10-N
+    spec: SPEC-M3-10
+    title: 非评估上下文 REAL 但缺环境变量开关 → 拒绝（REAL_NOT_CONFIGURED）
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      env_flags: {}                    # 未设置 PD_REAL_MODE
+      gateway: {evaluation: false}
+      steps:
+        - id: r1
+          op: request
+          mode: REAL
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-1002
+            task_id: task-dev-1002
+            idempotency_key: idem-1002
+    expect:
+      results: {r1: {status: REJECTED, error_code: REAL_NOT_CONFIGURED}}
+
+  - id: EVAL-M3-10-N2
+    spec: SPEC-M3-10
+    title: 有环境变量但双人开关未满足 → 拒绝（REAL_DUAL_SWITCH_REQUIRED）
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      env_flags: {PD_REAL_MODE: "1"}
+      gateway: {evaluation: false, dual_approvers: [OP-004]}   # 只有一人 → 不满足双人
+      steps:
+        - id: r1
+          op: request
+          mode: REAL
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-1003
+            task_id: task-dev-1003
+            idempotency_key: idem-1003
+    expect:
+      results: {r1: {status: REJECTED, error_code: REAL_DUAL_SWITCH_REQUIRED}}
+
+  - id: EVAL-M3-10-P2
+    spec: SPEC-M3-10
+    title: 环境变量+双人开关齐备 → REAL 路由接通（仅 mock 适配器，无真实设备）
+    form: expression
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      env_flags: {PD_REAL_MODE: "1"}
+      gateway: {evaluation: false, dual_approvers: [OP-004, OP-003]}
+      steps:
+        - id: r1
+          op: request
+          mode: REAL
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-1004
+            task_id: task-dev-1004
+            idempotency_key: idem-1004
+    expect:
+      results: {r1: {status: FAILED, error_code: REAL_MOCK_ONLY}}
+
+  # ================= SPEC-M3-11 write-path 负向测试 =================
+  - id: EVAL-M3-11-P
+    spec: SPEC-M3-11
+    title: read-only persona 全写类动作矩阵 → 全部 DENY/ASK，M5 状态 diff 空
+    form: negative_rejection
+    executor: m3.negative_matrix
+    params: {matrix: tests/negative_matrix.yaml}
+    expect: {actions: 6, side_effect_free: true}

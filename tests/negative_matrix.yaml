@@ -1,0 +1,80 @@
+# tests/negative_matrix.yaml
+# write-path 负向测试矩阵（SPEC-M3-11，CI 常驻）："只读"是测试结论，不是声明。
+# 逐动作断言三件事（src/m3_action/negative_test.run_negative_matrix 机械执行）：
+#   1) Policy 判定 ∈ {DENY, ASK}（action.policy_decided 事件）；
+#   2) 终态 ∈ {DENIED, REJECTED, WAITING_APPROVAL}——绝不 EXECUTING/SUCCEEDED；
+#   3) 零副作用：M5 环境状态快照（env.state_final()）逐动作前后 diff 为空。
+# 全部数据驱动：动作集/角色覆盖/期望判定/请求参数均为本文件声明，执行器无特判。
+meta:
+  source: specs/M3-action-gateway.md SPEC-M3-11
+  version: "1.0"
+  note: read-only persona 覆盖只做合法单向收紧（ALLOW→DENY / ASK→DENY，SPEC-M3-06）
+
+# 只读 persona：对可覆盖写类动作收紧到 DENY；两个 execute.* 缺省 ASK 动作——
+# capacitor_switch（未锁）收紧 ASK→DENY；remote_control（ASK 永久锁定）不可覆盖，
+# 保持缺省 ASK → WAITING_APPROVAL（不执行，零副作用；两种路径都要"只读成立"）
+persona:
+  id: READ_ONLY
+  actor: {user: OP-001, agent: m3-negative-matrix@v1}
+  role_overrides:
+    write.report: DENY
+    create.work_order: DENY
+    create.switch_order: DENY
+    create.inspection_record: DENY
+    execute.capacitor_switch: DENY  # ASK→DENY（未锁定动作的合法单向收紧，SPEC-M3-06）
+
+env:
+  park_instance: seed
+  clock_start: 2026-09-15T08:00:00Z
+  speed: 60.0
+  switch_orders:                  # 预置已签发操作票（若动作被放行即违反两票制的证据链）
+    SO-NEG-001:
+      status: ISSUED
+      steps: ["断开 SG-A02"]
+      devices: [SG-A02]
+      issuer: OP-003
+
+actions:
+  # ---- 写类动作全集（工单/操作票/巡检记录/报告/遥控/投切）----
+  - capability: write.report@v1
+    expected_decision: DENY
+    purpose: 负例：read-only 下生成报告
+    arguments:
+      title: 日巡检报告（负例）
+      date: "2026-09-15"
+      devices: [TX-01]
+      conclusion: 只读证明矩阵负例请求，必须被拒绝
+      regulation_refs: [PHYS-TX-LOAD]
+
+  - capability: create.work_order@v1
+    expected_decision: DENY
+    purpose: 负例：read-only 下创建工单
+    arguments: {code: WO-NEG-001, type: 消缺, description: 只读矩阵负例工单}
+
+  - capability: create.switch_order@v1
+    expected_decision: DENY
+    purpose: 负例：read-only 下创建操作票
+    arguments:
+      code: SO-NEG-002
+      steps: ["断开 SG-A02"]
+      devices: [SG-A02]
+      issuer: OP-003
+
+  - capability: create.inspection_record@v1
+    expected_decision: DENY
+    purpose: 负例：read-only 下登记巡检记录
+    arguments:
+      route: A 配电房
+      items:
+        - {device: TX-01, part: 本体, method: 目视, result: 正常}
+      inspector: OP-001
+
+  - capability: execute.remote_control@v1
+    expected_decision: ASK         # ASK 永久锁定不可覆盖（SPEC-M3-05）→ WAITING_APPROVAL，零副作用
+    purpose: 负例：遥控走缺省 ASK（等待审批，不产生任何副作用）
+    arguments: {device: SG-A02, operation: OPEN, switch_order: SO-NEG-001}
+
+  - capability: execute.capacitor_switch@v1
+    expected_decision: DENY        # persona 收紧 ASK→DENY（未锁定动作合法收紧）
+    purpose: 负例：电容投切被 read-only persona 收紧为 DENY
+    arguments: {device: CB-A, state: "ON"}

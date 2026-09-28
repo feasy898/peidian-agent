@@ -249,3 +249,71 @@
       （时间戳落盘用途，非电价判定）。
 - **复核门禁实测**：`python run_evals.py --module m2` 22/22 exit 0；
   `--module all` 100/100 exit 0（m0 49 + m2 22 + m4 13 + m5 16）；隔离断言零命中。
+
+---
+
+## 2026-09-28 · M3 行动网关首条登记（Policy 三值/审批/幂等）
+
+- **模块**：M3（`src/m3_action/` + `tools/` 16 个动作适配器 + `tests/test_m3.yaml` +
+  `tests/negative_matrix.yaml` + `src/m3_action/eval_plugin.py`）
+- **spec_ref**（按序拼接取 hash）：
+  - `specs/M3-action-gateway.md`
+  - `specs/00-ontology.md`
+  - `specs/01-contracts.md`
+  - `specs/ADDENDUM.md`
+- **spec_hash → eval_hash**：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m3.yaml | `91b5cab10ea229719052f1b9498ea75eeb17d539ebf94734f76885c40a4eaa8c` | `0579c547d5380180657c08ec9bec6297a74b9287df78ef11f388a68115e3c8de` |
+
+- **覆盖范围**：M3 §4 Eval 表 15 条机械生成（SPEC-M3-01..11 各条款正例+负例），
+  另含 8 条表外补强——EVAL-M3-01-N2（已注册未披露角色，SPEC-M3-01 后半）、
+  03-P2（不可改清单双重表达+生命周期表 vs frozen_state_machines diff 空，DoD）、
+  05-N3（GRANT 只放行单次不改缺省）、07-P2（approval 队列重启持久化，DoD §5）、
+  08-P2（执行器崩溃 claim 后同 key 重试零二次副作用）、10-N/N2/P2（REAL 三重
+  门禁逐级接线负向）。合计 23 条，全部通过（23/23）。
+- **登记的偏差与落盘口径**（均为机械落盘时的必要消歧，未改任何冻结语义）：
+  1. **准入失败不进生命周期**：契约/注册/披露/schema/路由（REAL 被拒）失败发生
+     在 01§5.2 REQUESTED 之前，状态 REJECTED（SPEC-M3-01/02 口径），不落
+     `action.requested`（不进事件主链）；审计事件沿用 M2 先例落
+     `action.policy_decided {decision: DENY, stage: admission}`（事件目录无
+     error.* 主题，producer=M3）。
+  2. **不可改清单对 ASK 锁定动作拒绝一切覆盖**（含收紧 ASK→DENY）——与
+     tests/EVAL-SCHEMA.md §2 policy_decision 参照语义（policy_locked 任何覆盖
+     被拒）一致；SPEC-M3-11 矩阵对 execute.remote_control 期望缺省 ASK
+     （WAITING_APPROVAL，不执行，零副作用同样成立）。
+  3. **SPEC-M3-06 收紧基准=当前生效判定**（已存覆盖优先于缺省）：已收紧为 ASK
+     的角色再请求 ALLOW（即使 ALLOW==缺省）属放宽，拒绝且维持 ASK。
+  4. **tools/ 布局**：16 个动作适配器位于仓库根 tools/（01 §1 目录树约定，
+     每个 action 一个模块，模块名=动作 ID 的 "."→"__"）；pyproject 仅打包 src/
+     包，EVAL/运行从仓库根装载（registry 兜底把仓库根加入 sys.path，pathlib
+     推断不依赖 cwd）。参数 schema/幂等键策略/披露面来自适配器声明，风险/缺省
+     Policy 来自 ontology/actions.yaml（数据权威，装配即断言 diff 空）。
+  5. **幂等键策略两档**：CALLER_PROVIDED（原样采用，读/分析类）与
+     CALLER_PROVIDED_UNIQUE_ARGS（同 key 不得承载不同 (capability, arguments)，
+     写/执行类——冲突 REJECTED/KEY_CONFLICT，不进主链）。
+  6. **幂等 write-ahead**：runtime/m3_action/idempotency.jsonl 在副作用前先落
+     claim；崩溃后同 key 重试命中 claim 返回首个结果不执行（EVAL-M3-08-P2 以
+     M5 state_final 快照 diff 验证零二次副作用）。
+  7. **审批持久化**：runtime/m3_action/approvals.jsonl（enqueued/resolved/
+     expired 重放重建 pending，条目携带完整 ActionRequest——重启后 GRANT 仍可
+     继续执行，EVAL-M3-07-P2）。
+  8. **失联执行器建模**：gateway `isolate_execution_env` 选项让执行落在
+     env.deep_copy()（执行器在副本上自报成功），observer 独立回读真实环境发现
+     未兑现 issued 声明 → 降级 FAILED/OBSERVATION_MISMATCH（SPEC-M3-09
+     "自报成功不构成 observed" 的可测落位）。
+  9. **trace/事件确定性**：ActionRequest 无 trace 字段（01§2.1 冻结不可加），
+     trace_id 从 task 派生（`trace-<task_id>`）；event_id 为流内递增序号
+     （EVT-M3-<seq>，journal 重放续序）；SIMULATION latency_ms=0（与 M5 复核
+     口径一致，真实时延属 MONOTONIC 审计域）。事件分片与 M2 同名
+     `task-<task_id>.jsonl`；EVAL 用例事件流隔离在 runtime/m3_eval/<case>/events。
+  10. **REAL 门禁三重**：非评估上下文 + 环境变量 PD_REAL_MODE + 双人开关
+      （两个不同审批人 id）齐备才路由 REAL，且仅 mock 适配器
+      （FAILED/REAL_MOCK_ONLY）；评估上下文（gateway evaluation=True 或
+      PD_EVALUATION 置位）强制 SIMULATION（01 §8 仿真即默认）。
+  11. **时间纪律**：m3_action 无电价语义；唯一墙钟读取位是 clocking.now_iso()
+      （审批超时缺省与事件时间戳缺省，EVAL 一律显式传 now 不触墙钟）。
+- **复核门禁实测**：`python run_evals.py --module m3` 23/23 exit 0（重复运行
+  结果稳定）；`--module all` 123/123 exit 0（m0 49 + m2 22 + m3 23 + m4 13 +
+  m5 16）；隔离断言零命中。
