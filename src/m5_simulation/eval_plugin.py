@@ -824,6 +824,172 @@ def exec_dev_scenarios(case: dict, ctx: Any) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 00§1.4 R-安全规程 · M5 判据层负向（SAFE-ISSUE-HUMAN / ORDER-SEQ / SINGLE-OP）
+# ---------------------------------------------------------------------------
+def exec_safety_rules(case: dict, ctx: Any) -> dict:
+    """安全规程在 M5 判据层的行为断言（params.kind 数据驱动，零案例特判）：
+
+    - ``issue_human``：agent 请求登记 status=ISSUED 操作票 → FAILED/SAFE_ISSUE_HUMAN
+      （SAFE-ISSUE-HUMAN：签发动作不属于任何 agent 动作集）；DRAFT 登记仍放行；
+    - ``order_seq``：遥控步骤必须按票面 steps 声明顺序执行（跳步 →
+      FAILED/SAFE_ORDER_SEQ），全部步骤完成才置 COMPLETED；
+    - ``single_op``：票已有执行流（executing）→ FAILED/SAFE_SINGLE_OP（互斥）；
+    - ``scenario_issue_role``：桩链计划票签发人非持证签发人 → 仅登记 DRAFT +
+      合规事件，GRANT 后遥控仍被两票制拒绝（NO_SWITCH_ORDER）。
+
+    操作票经 ``params.order`` 预置（等价 m3 用例 env_spec.switch_orders 的
+    环境预置口径——票是人工签发事实，非 agent 产物）。
+    """
+    params = case.get("params") or {}
+    expect = dict(case.get("expect") or {})
+    kind = str(params.get("kind", ""))
+    problems: list = []
+
+    if kind == "scenario_issue_role":
+        at_s = _at_seconds(params, str(params.get("at", "+10m")))
+        settle_s = float(params.get("settle_s", 2700.0))
+        with _instance_path_env(ctx, params.get("instance")):
+            engine = _engine({
+                "instance": params.get("instance", "seed"),
+                "clock_start": params.get("clock_start"),
+                "injections": params.get("injections"),
+                "events": params.get("events"),
+                "behavior_script": params.get("behavior_script"),
+                "timeout_s": params.get("timeout_s", 600),
+                "stop_conditions": [f"duration_s:{int(at_s + settle_s + 1800)}"],
+            })
+            result = engine.run()
+        env = engine.env
+        order_code = ""
+        for event in params.get("events") or []:
+            args = ((event.get("params") or {}).get("args") or {})
+            if args.get("switch_order"):
+                order_code = str(args["switch_order"])
+        order = (env.switch_orders.get(order_code) or {})
+        if order.get("status") != expect.get("order_status"):
+            problems.append(f"操作票 {order_code} 状态 {order.get('status')!r} "
+                            f"!= 期望 {expect.get('order_status')!r}")
+        compliance = [e for e in env.event_log
+                      if e["type"] == "grid.event"
+                      and (e.get("payload") or {}).get("kind") == "compliance"
+                      and (e.get("payload") or {}).get("rule") == "SAFE-ISSUE-HUMAN"]
+        if expect.get("compliance_event") and not compliance:
+            problems.append("缺 SAFE-ISSUE-HUMAN 合规事件（grid.event{kind: compliance}）")
+        completed = [e for e in env.event_log if e["type"] == "action.completed"]
+        want_status = expect.get("action_completed_status")
+        if want_status and not any((e.get("payload") or {}).get("status") == want_status
+                                   for e in completed):
+            problems.append(f"缺 action.completed{{status: {want_status}}} 事件"
+                            f"（实际 {[ (e.get('payload') or {}).get('status') for e in completed ]}）")
+        if want_status and not any(
+                "NO_SWITCH_ORDER" in str((e.get("payload") or {}).get("capability_hint") or "")
+                for e in completed):
+            problems.append("action.completed 缺 NO_SWITCH_ORDER 拒绝码（两票制应在 GRANT 后仍拦截）")
+        device = str(((params.get("events") or [{}])[0].get("subject")) or "")
+        device_obj = env.devices.get(device)
+        breaker = device_obj.breaker_state if device_obj is not None else None
+        if expect.get("breaker_state") is not None and breaker != expect["breaker_state"]:
+            problems.append(f"{device} 断路器 {breaker!r} != 期望 {expect['breaker_state']!r}"
+                            "（被拒遥控不得产生副作用）")
+        metrics = {"order_status": order.get("status"), "compliance_events": len(compliance),
+                   "breaker": breaker}
+        if problems:
+            return _result(False, "；".join(problems), metrics)
+        return _result(True, f"非持证签发人的计划票仅登记 DRAFT（{len(compliance)} 条合规事件）；"
+                             f"GRANT 后遥控被两票制拒绝，{device} 断路器保持 {breaker}",
+                       metrics)
+
+    with _instance_path_env(ctx, params.get("instance")):
+        engine = _engine({
+            "instance": params.get("instance", "seed"),
+            "clock_start": params.get("clock_start", "2026-09-15T08:30:00Z"),
+            "stop_conditions": [f"duration_s:{int(params.get('warmup_s', 1800))}"],
+        })
+        engine.run()
+    env = engine.env
+    order_spec = dict(params.get("order") or {})
+    code = str(order_spec.get("code", ""))
+    if code:
+        env.switch_orders[code] = {"code": code,
+                                   "status": str(order_spec.get("status", "ISSUED")),
+                                   "steps": list(order_spec.get("steps") or []),
+                                   "devices": list(order_spec.get("devices") or []),
+                                   "issuer": str(order_spec.get("issuer", ""))}
+        if params.get("hold_executing"):
+            # 预置并发执行流持票（SAFE-SINGLE-OP 互斥前提；正常由执行窗口置位）
+            env.switch_orders[code]["executing"] = True
+
+    def _run_action(capability: str, args: dict) -> dict:
+        result, _env_after = simulate({"capability": capability,
+                                       "action_id": "act-safe-eval",
+                                       "arguments": dict(args)}, env)
+        return result
+
+    if kind == "issue_human":
+        create_spec = dict(params.get("create_args") or {})
+        result = _run_action(str(create_spec.get("capability", "create.switch_order@v1")),
+                             dict(create_spec.get("args") or {}))
+        error = result.get("error") or {}
+        if result.get("status") != expect.get("status"):
+            problems.append(f"自签票请求状态 {result.get('status')} != 期望 {expect.get('status')}"
+                            f"（error={error}）")
+        if error.get("code") != expect.get("error_code"):
+            problems.append(f"错误码 {error.get('code')!r} != 期望 {expect.get('error_code')!r}")
+        if expect.get("order_absent") and str((create_spec.get("args") or {}).get("code")) in env.switch_orders:
+            problems.append("被拒的 ISSUED 登记不得产生任何操作票（order_absent 违反）")
+        follow = dict(params.get("draft_followup") or {})
+        if follow:
+            fresult = _run_action(str(follow.get("capability", "create.switch_order@v1")),
+                                  dict(follow.get("args") or {}))
+            fcode = str((follow.get("args") or {}).get("code", ""))
+            forder = env.switch_orders.get(fcode) or {}
+            if fresult.get("status") != expect.get("followup_status"):
+                problems.append(f"DRAFT 草稿登记状态 {fresult.get('status')} != "
+                                f"期望 {expect.get('followup_status')}（正常业务不得误伤）")
+            if forder.get("status") != expect.get("followup_order_status"):
+                problems.append(f"DRAFT 票状态 {forder.get('status')!r} != "
+                                f"期望 {expect.get('followup_order_status')!r}")
+        metrics = {"error_code": error.get("code"), "orders": sorted(env.switch_orders)}
+        if problems:
+            return _result(False, "；".join(problems), metrics)
+        return _result(True, "agent 自签 ISSUED 票被拒（SAFE_ISSUE_HUMAN，零副作用）；"
+                             "DRAFT 草稿登记正常放行（签发须持证签发人在 agent 动作集之外完成）",
+                       metrics)
+
+    steps_spec = list(params.get("remote_steps") or [])
+    for index, entry in enumerate(steps_spec):
+        want = dict(entry.get("expect") or {})
+        result = _run_action("execute.remote_control@v1", dict(entry.get("args") or {}))
+        error = result.get("error") or {}
+        order = env.switch_orders.get(code) or {}
+        if result.get("status") != want.get("status"):
+            problems.append(f"步 {index + 1}: 状态 {result.get('status')} != 期望 "
+                            f"{want.get('status')}（error={error}）")
+        if want.get("error_code") and error.get("code") != want["error_code"]:
+            problems.append(f"步 {index + 1}: 错误码 {error.get('code')!r} != "
+                            f"期望 {want['error_code']!r}")
+        device_obj = env.devices.get(str((entry.get("args") or {}).get("device", "")))
+        breaker = device_obj.breaker_state if device_obj is not None else None
+        if want.get("breaker_state") is not None and breaker != want["breaker_state"]:
+            problems.append(f"步 {index + 1}: 断路器 {breaker!r} != 期望 "
+                            f"{want['breaker_state']!r}")
+        if want.get("order_status") is not None and order.get("status") != want["order_status"]:
+            problems.append(f"步 {index + 1}: 操作票状态 {order.get('status')!r} != "
+                            f"期望 {want['order_status']!r}")
+    metrics = {"remote_steps": len(steps_spec),
+               "final_order_status": (env.switch_orders.get(code) or {}).get("status")}
+    if problems:
+        return _result(False, "；".join(problems), metrics)
+    if kind == "order_seq":
+        return _result(True, f"{len(steps_spec)} 步序列判据全部成立：跳步拒绝"
+                             f"（SAFE_ORDER_SEQ）、按序放行、全部步骤完成才 COMPLETED", metrics)
+    if kind == "single_op":
+        return _result(True, f"已有执行流的操作票被拒（SAFE_SINGLE_OP 互斥，{len(steps_spec)} 步判据成立）",
+                       metrics)
+    return _result(False, f"未知 kind: {kind!r}", metrics)
+
+
+# ---------------------------------------------------------------------------
 # DoD §6 · 性能门槛（100×24h 仿真步 < 30s）
 # ---------------------------------------------------------------------------
 def exec_perf_ticks(case: dict, ctx: Any) -> dict:
@@ -875,5 +1041,6 @@ EXECUTORS = {
     "m5.regulation_sourced": exec_regulation_sourced,
     "m5.physics_load_rate": exec_physics_load_rate,
     "m5.dev_scenarios": exec_dev_scenarios,
+    "m5.safety_rules": exec_safety_rules,
     "m5.perf_ticks": exec_perf_ticks,
 }

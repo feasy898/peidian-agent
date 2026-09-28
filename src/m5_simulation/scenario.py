@@ -14,7 +14,10 @@
 SUT 桩链（dev-02b 遥控场景）：计划事件 ``action.request`` → 本体缺省 Policy
 （数据驱动）→ ASK 则发 ``approval.requested``，persona GRANT/DENY 或
 ``interactions.timeout_s``（墙钟秒 × speed 换算为仿真秒）决定终态；
-``execute.remote_control`` 无已签发操作票一律拒绝（SAFE-TWO-TICKET 红线）。
+``execute.remote_control`` 无已签发操作票一律拒绝（SAFE-TWO-TICKET 红线）；
+票面签发人必须为已登记持证签发人、agent 只能登记 DRAFT 票（SAFE-ISSUE-HUMAN）；
+遥控步骤按票面 steps 顺序执行不得跳步（SAFE-ORDER-SEQ）；每票同时刻仅一个
+执行流（SAFE-SINGLE-OP 互斥）。
 """
 from __future__ import annotations
 
@@ -51,8 +54,21 @@ __all__ = [
 #: 安全步数上限（防 stop_conditions 配置失误导致死循环）
 MAX_TICKS = 20000
 
-#: 动作能力 → 缺省策略查表键（ontology/actions.yaml 数据驱动，禁止硬编码策略）
-_DENY_ALWAYS_HINT = {"modify.protection_setting", "modify.asset_history", "bypass.approval"}
+#: 缺省 Policy=DENY 拒绝口径：ontology/actions.yaml 数据驱动（``default_policy: DENY``
+#: 即缺省拒绝，与 M3 PolicyEngine 缺省判定同源）——无第三份硬编码动作清单；
+#: 加载后由 :func:`_default_deny_actions` 现算，漂移即随 yaml 同步。
+
+
+def _default_deny_actions(env: SimEnv) -> set:
+    """缺省 Policy=DENY 的动作集（ontology/actions.yaml 数据驱动，无硬编码清单）。
+
+    与 M3 ``registry.assert_immutable_consistency`` 的 yaml_locked_deny 口径同源
+    （当前两者重合：DENY 动作均 policy_locked）；simulate 无角色上下文，按缺省
+    判定拒绝即可。
+    """
+    actions = env.ontology.actions or {}
+    return {aid for aid, a in actions.items()
+            if str((a or {}).get("default_policy")) == "DENY"}
 
 
 # ===========================================================================
@@ -64,7 +80,8 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
     - 读类（query.*）：返回带时标快照（含 stale 标志），observed=环境读数；
     - 写类：先变更 env 再回读（observed 必须来自环境回读，01 §2.2）；
     - ``execute.remote_control`` 无已签发操作票 → FAILED（SAFE-TWO-TICKET）；
-    - 冻结 DENY 动作（modify.*/bypass.approval）→ 拒绝执行（缺省 Policy 永久 DENY）；
+    - 缺省 Policy=DENY 动作（ontology/actions.yaml 数据驱动）→ DENIED 终态
+      （01 §5.2 冻结迁移：DENY→DENIED；与 SUT 桩链同口径）；
     - 未登记动作 → FAILED（UNREGISTERED_CAPABILITY，红线 1）。
     """
     if not isinstance(action, ActionRequest):
@@ -83,7 +100,9 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
     now_s = env.clock.sim_elapsed_s
 
     known = capability_id in (env.ontology.actions or {})
-    deny_locked = capability_id in _DENY_ALWAYS_HINT
+    default_policy = (env.ontology.actions.get(capability_id) or {}).get("default_policy") \
+        if known else None
+    deny_by_default = known and str(default_policy) == "DENY"
 
     def _fail(code: str, message: str, issued: dict | None = None) -> tuple:
         result = _action_result(
@@ -99,12 +118,16 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
     if not known:
         return _fail("UNREGISTERED_CAPABILITY",
                      f"动作未在本体登记: {capability_id!r}（红线：未注册能力禁止执行）")
-    if deny_locked:
-        default_policy = (env.ontology.actions[capability_id] or {}).get("default_policy")
-        return _fail(
-            "POLICY_DENIED",
-            f"{capability_id} 缺省 Policy={default_policy}（永久 DENY），仿真路由同样拒绝",
-        )
+    if deny_by_default:
+        # 01 §5.2 冻结迁移：DENY 判定 → DENIED 终态（与 SUT 桩链/ M3 gateway 同口径）
+        return _action_result(
+            action, "DENIED", [],
+            f"[POLICY_DENIED] {capability_id} 缺省 Policy=DENY，仿真路由同样拒绝",
+            evidence={"intended": intended, "issued": None, "observed": None},
+            error={"code": "POLICY_DENIED",
+                   "message": f"{capability_id} 缺省 Policy=DENY（数据驱动拒绝）"},
+            latency_ms=0,
+        ), env
 
     # ---- 读类
     if capability_id == "query.measurement":
@@ -143,24 +166,49 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
         if order is None or order.get("status") != "ISSUED":
             return _fail("NO_SWITCH_ORDER",
                          f"遥控缺少已签发操作票: {order_code!r}（SAFE-TWO-TICKET 红线）")
+        # SAFE-SINGLE-OP：每张操作票同一时刻只有一个执行流（互斥）
+        if order.get("executing"):
+            return _fail("SAFE_SINGLE_OP",
+                         f"操作票 {order_code!r} 已有执行流在执行（SAFE-SINGLE-OP 互斥红线）")
+        # SAFE-ORDER-SEQ：操作步骤必须按 steps 声明顺序执行，不得跳步
+        steps = [str(s) for s in (order.get("steps") or [])]
+        done = list(order.get("executed") or [])
+        try:
+            step_no = int(arguments.get("step", len(done) + 1))
+        except (TypeError, ValueError):
+            return _fail("SAFE_ORDER_SEQ",
+                         f"步骤号非法: {arguments.get('step')!r}（SAFE-ORDER-SEQ）")
+        if steps and step_no != len(done) + 1:
+            return _fail("SAFE_ORDER_SEQ",
+                         f"操作步骤跳步: 请求第 {step_no} 步，操作票 {order_code} "
+                         f"声明顺序应执行第 {len(done) + 1} 步（SAFE-ORDER-SEQ）")
         operation = str(arguments.get("operation", "OPEN")).upper()
         target_state = "OPEN" if operation == "OPEN" else "CLOSED"
         issued = {"device": device.id, "operation": operation, "switch_order": order_code,
-                  "step": arguments.get("step", 1)}
-        env.set_breaker(device.id, target_state, now_s, reason=f"遥控{operation}（操作票 {order_code}）")
-        if device.type == "Transformer":
-            # 变压器遥控分闸 → 退出运行（冷备）；合闸 → 恢复运行
-            if target_state == "OPEN" and device.state == "RUNNING":
-                env.set_device_state(device.id, "COLD_STANDBY", now_s, reason="遥控分闸退出")
-            elif target_state == "CLOSED" and device.state != "RUNNING":
-                env.set_device_state(device.id, "RUNNING", now_s, reason="遥控合闸恢复")
+                  "step": step_no}
+        order["executing"] = True   # SAFE-SINGLE-OP：执行流持票（结束/异常均释放）
+        try:
+            env.set_breaker(device.id, target_state, now_s,
+                            reason=f"遥控{operation}（操作票 {order_code}）")
+            if device.type == "Transformer":
+                # 变压器遥控分闸 → 退出运行（冷备）；合闸 → 恢复运行
+                if target_state == "OPEN" and device.state == "RUNNING":
+                    env.set_device_state(device.id, "COLD_STANDBY", now_s, reason="遥控分闸退出")
+                elif target_state == "CLOSED" and device.state != "RUNNING":
+                    env.set_device_state(device.id, "RUNNING", now_s, reason="遥控合闸恢复")
+        finally:
+            order["executing"] = False
         readback_device = env.devices.get(device.id)
         observed = {"device": device.id, "breaker_state": readback_device.breaker_state,
                     "device_state": readback_device.state, "ts": env.iso_at(now_s)}
-        order["status"] = "COMPLETED"
-        order.setdefault("executed", []).append({"device": device.id, "operation": operation})
+        order.setdefault("executed", []).append(
+            {"step": step_no, "device": device.id, "operation": operation})
+        # 全部声明步骤执行完毕才置 COMPLETED；多步票执行中保持 ISSUED（后续步可继续）
+        order["status"] = "COMPLETED" if (not steps or len(order["executed"]) >= len(steps)) \
+            else "ISSUED"
         return _succeed(action, intended, issued, observed,
-                        observation=f"遥控{operation} {device.id} 完成（环境回读确认）",
+                        observation=f"遥控{operation} {device.id} 完成"
+                                    f"（操作票 {order_code} 第 {step_no} 步，环境回读确认）",
                         refs=[order_code]), env
     if capability_id == "execute.capacitor_switch":
         device = env.devices.get(str(arguments.get("device", "")))
@@ -179,17 +227,26 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
                         observation=f"电容投切 {device.id} → {target}（环境回读确认）",
                         ), env
     if capability_id == "create.switch_order":
+        # SAFE-ISSUE-HUMAN：签发动作不属于任何 agent 动作集（agent 不得签发、不得代签）
+        # —— agent 侧登记只产生 DRAFT 草稿票；DRAFT→ISSUED 只能由持证签发人完成
+        requested_status = str(arguments.get("status") or "DRAFT").upper()
+        if requested_status != "DRAFT":
+            return _fail(
+                "SAFE_ISSUE_HUMAN",
+                f"agent 不得签发/代签操作票（status={requested_status!r}；"
+                f"SAFE-ISSUE-HUMAN：签发动作不属于任何 agent 动作集）——仅允许登记 DRAFT 草稿票")
         code = str(arguments.get("code", "") or f"SO-{env.next_event_id()}")
         env.switch_orders[code] = {
-            "code": code, "status": str(arguments.get("status", "ISSUED")),
+            "code": code, "status": "DRAFT",
             "steps": list(arguments.get("steps") or []),
             "devices": list(arguments.get("devices") or []),
             "issuer": str(arguments.get("issuer", "")),
         }
         issued = {"code": code}
         return _succeed(action, intended, issued,
-                        {"switch_order": code, "status": env.switch_orders[code]["status"]},
-                        observation=f"操作票 {code} 登记（状态 {env.switch_orders[code]['status']}）",
+                        {"switch_order": code, "status": "DRAFT"},
+                        observation=f"操作票 {code} 登记为 DRAFT（未签发；"
+                                    f"DRAFT→ISSUED 须由持证签发人完成，SAFE-ISSUE-HUMAN）",
                         refs=[code]), env
     if capability_id in ("create.work_order", "create.inspection_record", "write.report"):
         marker = {"capability": capability_id, "arguments": arguments,
@@ -207,6 +264,14 @@ def simulate(action: ActionRequest | Mapping, env: SimEnv) -> tuple:
                         observation=f"{capability_id} 分析回执", ), env
 
     return _fail("SIM_ROUTE_UNSUPPORTED", f"仿真路由未实现该动作: {capability_id!r}")
+
+
+def _operator_role(env: SimEnv, user: str) -> str | None:
+    """查实例人员角色（SAFE-ISSUE-HUMAN 判据数据源：env.operators，未登记 → None）。"""
+    for op in getattr(env, "operators", None) or []:
+        if isinstance(op, Mapping) and str(op.get("id")) == str(user):
+            return str(op.get("role", "")) or None
+    return None
 
 
 def _loose_action_identity(action: Mapping) -> tuple:
@@ -535,15 +600,27 @@ class ScenarioEngine:
             env.emit(EventType.APPROVAL_REQUESTED, action_id,
                      {"capability": capability, "timeout_s": self.spec.interactions.timeout_s},
                      plan["at_s"])
-            # 遥控前登记操作票（SAFE-TWO-TICKET：签发人角色必须是"签发人"）
+            # 遥控前登记操作票（SAFE-TWO-TICKET：签发人角色必须是"签发人"）。
+            # SAFE-ISSUE-HUMAN：票面签发人必须是实例已登记且角色=签发人 的人员
+            # （数据驱动自 env.operators）；校验不过 → 仅登记 DRAFT（两票制随后拒绝
+            # 遥控），并发合规事件留痕——不因场景计划写法而架空签发纪律。
             order_code = str(arguments.get("switch_order", "") or "")
             if order_code and order_code not in env.switch_orders:
+                issuer = str(arguments.get("issuer", "") or "")
+                issuer_role = _operator_role(env, issuer)
+                issued_ok = issuer_role == "签发人"
                 env.switch_orders[order_code] = {
-                    "code": order_code, "status": "ISSUED",
+                    "code": order_code, "status": "ISSUED" if issued_ok else "DRAFT",
                     "steps": list(arguments.get("steps") or []),
                     "devices": [arguments.get("device", "")],
-                    "issuer": str(arguments.get("issuer", "OP-003")),
+                    "issuer": issuer,
                 }
+                if not issued_ok:
+                    env.emit(EventType.GRID_EVENT, order_code,
+                             {"kind": "compliance", "rule": "SAFE-ISSUE-HUMAN",
+                              "detail": (f"票面签发人 {issuer!r}（角色 {issuer_role!r}）"
+                                         f"不是已登记的持证签发人，操作票仅登记为 DRAFT")},
+                             plan["at_s"])
             self.pending_approval = {
                 "action": action, "capability": capability,
                 "requested_at_s": plan["at_s"], "business_at": plan["business_at"],

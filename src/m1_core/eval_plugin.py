@@ -91,7 +91,11 @@ def _build_harness(ctx: Any, case: dict, params: dict, sandbox: Path):
 
     repo_root = Path(ctx.root)
     clock = _fixed_clock(params)
-    info = InformationLayer(sandbox, now_fn=clock)
+    from m4_semantic.regulation import rule_id_checker
+
+    info = InformationLayer(sandbox, now_fn=clock,
+                            # SPEC-M4-05 / ADDENDUM §B 联动：regulation_refs 存在性核对
+                            rule_id_checker=rule_id_checker(repo_root=repo_root))
     env = _build_env(dict(params.get("env") or {}), repo_root) \
         if params.get("env") is not None else None
     gateway = ActionGateway(

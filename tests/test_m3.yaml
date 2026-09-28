@@ -730,3 +730,66 @@ cases:
     executor: m3.negative_matrix
     params: {matrix: tests/negative_matrix.yaml}
     expect: {actions: 6, side_effect_free: true}
+  # ================= 审批权归属 fail-closed + 签发不属于 agent 动作集（00§1.4） =================
+  - id: EVAL-M3-APPR1-N
+    spec: SPEC-M3-05（00§1.4 R-授权规则：审批权威 fail-closed）
+    title: 未登记人员 submit_approval GRANT → REJECTED/APPROVER_NOT_AUTHORIZED（不因角色未知静默放行）
+    form: negative_rejection
+    executor: m3.execute
+    params:
+      env:
+        park_instance: seed
+        clock_start: 2026-09-15T08:00:00Z
+        switch_orders:
+          SO-0915-AP1: {status: ISSUED, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-003}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-ap1
+            task_id: task-dev-ap1
+            capability: execute.remote_control@v1
+            purpose: 未登记人员企图审批的遥控请求
+            arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-AP1}
+            risk: {level: HIGH, reversible: false}
+            idempotency_key: idem-ap1
+        - id: a1
+          op: approve
+          action_id: act-ap1
+          decision: GRANT
+          approver: OP-999            # seed 花名册无此人（角色未知 → 一律拒绝）
+          now: 2026-09-15T08:01:00Z
+    expect:
+      results:
+        r1: {status: WAITING_APPROVAL}
+        a1: {status: REJECTED, error_code: APPROVER_NOT_AUTHORIZED}
+      event_payloads:
+        - {stream: task-dev-ap1, type: approval.denied, contains: {reason: APPROVER_NOT_AUTHORIZED}}
+
+  - id: EVAL-M3-APPR2-N
+    spec: SPEC-M3-03（00§1.4 R-安全规程：SAFE-ISSUE-HUMAN）
+    title: agent 请求登记 status=ISSUED 操作票 → 准入拒绝/SCHEMA_INVALID（status 枚举仅 DRAFT）
+    form: negative_rejection
+    executor: m3.execute
+    params:
+      env: {park_instance: seed, clock_start: 2026-09-15T08:00:00Z}
+      gateway: {evaluation: true}
+      steps:
+        - id: r1
+          op: request
+          now: 2026-09-15T08:00:00Z
+          request:
+            <<: *query_req
+            action_id: act-ap2
+            task_id: task-dev-ap2
+            capability: create.switch_order@v1
+            purpose: agent 自铸已签发操作票（应被准入拒绝）
+            arguments: {code: SO-0915-AP2, steps: ["断开 SG-A02"], devices: [SG-A02],
+                        issuer: OP-003, status: ISSUED}
+            risk: {level: MEDIUM, reversible: true}
+            idempotency_key: idem-ap2
+    expect:
+      results: {r1: {status: REJECTED, error_code: SCHEMA_INVALID}}

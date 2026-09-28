@@ -376,6 +376,29 @@ cases:
       error_contains: conclusion
     expect: {}
 
+  - id: EVAL-M2-08-N2
+    spec: SPEC-M2-08
+    title: 规程引用不存在规则 ID（SPEC-M4-05 联动）→ REJECTED（存在性校验，非仅形态）
+    form: negative_rejection
+    executor: m2.artifact_invalid
+    params:
+      task:
+        task_id: task-m2-08n2
+        user_input: 引用不存在规程条款的报告
+      report_content:
+        devices:
+          - {device_id: TX-03, name_cn: 3 号变压器}
+        measurements:
+          - device_ref: TX-03
+            quantity: winding_temp
+            points:
+              - {ts: "2026-09-28T08:00:00Z", value: 66}
+        conclusion: 四段形态齐全但规程引用不可解析
+        regulation_refs: [PHYS-TX-LOAD, PHYS-BOGUS-999]
+      omit_sections: []
+      error_contains: 规则 ID 不存在
+    expect: {}
+
   # ================= SPEC-M2-09 产物即证据（表外补齐） =================
   - id: EVAL-M2-09-P
     spec: SPEC-M2-09

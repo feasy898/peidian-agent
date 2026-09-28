@@ -8,7 +8,7 @@ holdout 独立验收实例的字样（场景 ID、电价方案 ID、操作规程
     golden/ scenarios/ src/ tests/ ontology/ regulations/
     tools/ skills/ prompts/ assets/
 
-匹配正则： ``PARK-002|TARIFF-2026B|OP-10[1-4]``
+匹配正则： ``PARK-002|TARIFF-2026B|OP-1[0-9]``
 
 退出码：0 = 全部零命中；1 = 存在命中（列出命中文件与行号）。
 
@@ -27,7 +27,8 @@ import sys
 from pathlib import Path
 
 # 隔离正则：独立验收实例的实例 ID / 电价方案 ID / 操作规程 ID 段
-ISOLATION_PATTERN = r"PARK-002|TARIFF-2026B|OP-10[1-4]"
+# （ADDENDUM §F 原文 ``OP-1x`` 通配一位 → 等宽正则 ``OP-1[0-9]``，覆盖 OP-10..OP-19 段）
+ISOLATION_PATTERN = r"PARK-002|TARIFF-2026B|OP-1[0-9]"
 
 # 扫描目录（相对仓库根）；与 ADDENDUM §F 的目录清单一致
 SCAN_DIRS = (

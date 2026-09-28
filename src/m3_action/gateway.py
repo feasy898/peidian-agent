@@ -8,7 +8,9 @@
 - ``query_policy(capability, actor, context) -> PolicyDecision``
 - ``submit_approval(action_id, decision: GRANT/DENY, approver) -> ActionResult``
 
-幂等规则：同 idempotency_key 重复请求返回首个结果（含原 action_id），不重复执行。
+幂等规则：同 idempotency_key 重复请求返回首个结果（含原 action_id），不重复执行；
+审批终态（GRANT 执行完成/DENY 拒绝/超时）均回写幂等 journal——同 key 重试
+返回终态结果而非过期的 WAITING_APPROVAL 中间态。
 
 Action 生命周期（01 §5.2，表驱动，与 tests/fixtures/frozen_state_machines.yaml
 必须 diff 为空——EVAL 断言）：REQUESTED → POLICY_DECIDED → (DENY→DENIED) |
@@ -253,8 +255,15 @@ class ActionGateway:
         trace = entry.trace_id
         stream = self.events.task_stream(entry.task_id)
         approver_role = self.actor_roles.get(str(approver))
-        if self.actor_roles and approver_role not in (None, "审批人"):
-            # 审批权归属：审批人 persona（HITL 权威）；角色未知时放行（实例未登记人员）
+        if approver_role != "审批人":
+            # 审批权归属（HITL fail-closed）：仅实例已登记且角色=审批人 的人员可决断。
+            # 未登记人员（角色 None）与实例未登记任何人员（actor_roles 为空）一律
+            # 拒绝——审批权威无法建立时不得静默放行（00§1.4 R-授权规则）。
+            if self.actor_roles:
+                reason_msg = (f"审批人 {approver!r}（角色 {approver_role!r}）不是审批人")
+            else:
+                reason_msg = ("实例未登记操作员，审批权威不可建立（HITL fail-closed）"
+                              f"——审批人 {approver!r} 请求被拒")
             self.events.append(EventType.APPROVAL_DENIED.value, action_id,
                                {"capability": entry.capability, "approver": approver,
                                 "approver_role": approver_role,
@@ -262,9 +271,9 @@ class ActionGateway:
                                trace_id=trace, occurred_at=now, stream=stream)
             result = self._result_dict(
                 action_id, trace, "REJECTED", {"action_id": action_id},
-                observation=f"[APPROVER_NOT_AUTHORIZED] 审批人角色 {approver_role!r} 无审批权",
+                observation=f"[APPROVER_NOT_AUTHORIZED] {reason_msg}",
                 error={"code": "APPROVER_NOT_AUTHORIZED",
-                       "message": f"审批人 {approver!r}（角色 {approver_role!r}）不是审批人"})
+                       "message": reason_msg})
             return self._as_result(result)
 
         decision = str(decision).upper()
@@ -292,8 +301,8 @@ class ActionGateway:
                  "arguments": dict(req.arguments)},
                 observation="[APPROVAL_DENIED] 审批人拒绝",
                 error={"code": "APPROVAL_DENIED", "message": f"审批人 {approver!r} 拒绝"})
-            self._complete_action(result, req, trace, stream, now)
-            return self._as_result(result)
+            # 幂等 journal 回写终态：同 key 重试返回 REJECTED 而非过期 WAITING_APPROVAL
+            return self._finish(result, req, trace, stream, now)
 
         # GRANT：只放行单次（policy 缺省不变——EVAL-M3-05 断言）
         self.events.append(EventType.APPROVAL_GRANTED.value, action_id,
@@ -335,8 +344,8 @@ class ActionGateway:
                 req = ActionRequest.from_dict(entry.request)
             except ContractValidationError:  # pragma: no cover - 入队前已过契约
                 pass
-            self._complete_action(result, req, trace, stream, now)
-            results.append(self._as_result(result))
+            # 幂等 journal 回写终态：同 key 重试返回 REJECTED/timeout 而非过期 WAITING_APPROVAL
+            results.append(self._finish(result, req, trace, stream, now))
         return results
 
     # =================================================================

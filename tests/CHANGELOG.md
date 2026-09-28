@@ -580,3 +580,97 @@
   `python -m m7_registry.assemble --release-id rel-0001`（verify 模式 12 种子
   重跑 1.0/97.67）；`python -m m6_flywheel.evaluator --release rel-0001` 按发布
   物评估清单重跑 PASS；隔离断言零命中。
+
+---
+
+## 2026-09-28 · 独立评审缺口修复（M2/M3/M5/M6 四模块六项）
+
+- **模块**：M2/M3/M5/M6（独立评审 six findings 处置；spec 未变更，spec_hash 不变）
+- **spec_hash → eval_hash**（受影响 suite 的新版登记）：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m2.yaml | `00756a50360d11fa5f1f71baf038139d4caffc1c1fb5ad8be79efde50c717e00` | `72820122d481b65f6edb5644949571615067d7757869ea80f3f1dedd26ea6157` |
+  | test_m6.yaml | `4377e37c88459245433899a33b26675e9455a7755e1cd216ffb1235e862445fe` | `566aa15af27600d89f72eabe6e81adf5b9622325855db5044fbe306a0e24e2cb` |
+
+- **修订内容**（评审 medium×3 全修、low×3 全处置）：
+  1. **M6 黄金/红线链路真实化（medium）**：CaseRunner 原先由评估器自造
+     action.policy_decided（抄 ontology 缺省 Policy）、按 mock 计划元数据合成
+     approval.* 事件、自发 task.status_changed{accepted:true}——黄金跑分证明的
+     只是 M5 simulate 内部检查+脚本计划。现改为：每条计划步经 **M3
+     ActionGateway.execute_action** 全链（契约/注册/披露/schema 准入 → 幂等
+     claim → PolicyEngine 三值判定（含角色/锁定语义）→ 审批队列 → SIMULATION
+     路由 → Observer 环境回读+自报降级）；审批决断走真实
+     submit_approval/check_approval_timeouts（COMM_LOSS 窗口内不放行 → 超时
+     语义保留）；task 生命周期经 **M2 InformationLayer**（create_task +
+     commit_state，01§5.1 迁移表+乐观锁校验，RUNNING→VERIFYING→COMPLETED
+     合法路径）；mock 计划只声明「何时请求何能力+审批决定」，不再伪造事件。
+     12 种子对真实链全过（97.67/100 不变）；M7 rel-0001 门禁复跑通过。
+  2. **M4→M2 规则 ID 存在性联动接线（medium）**：ADDENDUM §B「M4 SPEC-M4-05
+     联动校验规则 ID 存在性」原先只是 artifact.py 可选钩子、全仓无注入点。
+     现 `m4_semantic.regulation.rule_id_checker()` 工厂（绑定
+     RegulationIndex.unknown_rule_ids）注入全部 InformationLayer 构造点
+     （m1/m2 eval_plugin、M6 CaseRunner）；新增 EVAL-M2-08-N2（report.daily@v1
+     引用 PHYS-BOGUS-999 → REJECTED「规则 ID 不存在」）钉死联动行为。
+  3. **M5 simulate 拒绝口径数据驱动+终态对齐（medium）**：删除第三份硬编码
+     DENY 清单 `_DENY_ALWAYS_HINT`，改按 `ontology/actions.yaml` 的
+     default_policy=DENY 现算（与 M3 registry.assert_immutable_consistency 同
+     源，无交叉校验缺口）；该路径终态由 FAILED/POLICY_DENIED 改为 **DENIED**
+     （01§5.2 冻结迁移 DENY→DENIED，与 SUT 桩链及 M3 gateway 一致）。
+  4. **CI 隔离正则宽化（low）**：窄正则（OP-1 后接 0 再接 [1-4]）→ 宽正则 `OP-1[0-9]`（ADDENDUM §F
+     原文 `OP-1x` 通配一位的等宽正则，覆盖 OP-1 开头后接一位数字的整段）；宽模式对全部
+     交付目录实测零命中。
+  5. **M3 审批终态幂等 journal 回写（low）**：submit_approval(DENY) 与
+     check_approval_timeouts 原先只落事件不回写幂等 journal（同 key 重试返回
+     过期 WAITING_APPROVAL）；现走 _finish → executor.complete，重试返回终态
+     REJECTED（含 APPROVAL_DENIED/APPROVAL_TIMEOUT 错误码）。实测
+     ASK→DENY→同 key 重试 与 ASK→超时→重试 均返回终态。
+  6. **HOLDOUT.md 交付位置澄清（low）**：specs/README.md §0 的 HOLDOUT.md 行
+     补注——该文件随验收包交付、由验收人独立保管，不进开发仓库（ADDENDUM §F
+     红线：仓库任何路径不得出现 holdout 场景/实例/判据文件，CI 断言零命中）。
+  7. **mock release 计划数据 schema 对齐**（1 的配套）：三份清单
+     （mock-rel-0001.yaml / rel-0001.yaml / releases/rel-0001/evaluation/
+     cases.yaml）+ test_m6 内联 A/B 计划的参数补齐为 gateway PARAMS_SCHEMA
+     合规形态（write.report 四段齐、analyze.load_forecast 补 horizon_h、
+     create.switch_order steps 转字符串数组、modify.protection_setting 的
+     setting 转对象）——真实链准入校验生效后的必要数据修正。
+- **复核门禁实测**：`python run_evals.py --module all` 174/174 exit 0（m0 49 +
+  m1 20 + m2 23 + m3 23 + m4 13 + m5 16 + m6 14 + m7 16）；隔离断言（宽化
+  正则）零命中。
+
+---
+
+## 2026-09-28 · 安全规程判据落地缺口修复（M3/M5 五项）
+
+- **模块**：M3/M5（独立评审 SAFE 系 findings 处置；specs 未变更，spec_hash 不变）
+- **spec_hash → eval_hash**（受影响 suite 的新版登记）：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m3.yaml | `91b5cab10ea229719052f1b9498ea75eeb17d539ebf94734f76885c40a4eaa8c` | `eb1a6b01093cdea59a119f3a549a5791fc948787b9176de8fce40dbbe32e4285` |
+  | test_m5.yaml | `54bb8cb6cc6004505198f6894e436925f97946bc32691bece62eafba79afa97b` | `577055177ee5cf2b15f1b34c4afea454025b4d272fddc7e930dd74a818e2c0c2` |
+
+- **修订内容**：
+  1. **SAFE-ISSUE-HUMAN 强制（medium）**：`tools/create__switch_order.py` status
+     枚举收窄为 `[DRAFT]`（原 `[DRAFT, ISSUED]` 缺省 ISSUED——agent 可零审批
+     自铸已签发票）；M5 `simulate()` 对 `create.switch_order` 的非 DRAFT 请求
+     一律 FAILED/`SAFE_ISSUE_HUMAN`（双保险：M3 准入 SCHEMA_INVALID 拒绝 +
+     M5 判据层兜底）。DRAFT→ISSUED 的签发只能由持证签发人在 agent 动作集之外
+     完成（M6 evaluator `issue_by` 场景人因签发 + M5 桩链预置票签发人角色校验，
+     角色数据源=实例 `env.operators`）。
+  2. **SAFE-ORDER-SEQ 强制（medium）**：`execute.remote_control` 的 step 与票面
+     `steps` 声明顺序对照（跳步 → FAILED/`SAFE_ORDER_SEQ`）；多步票逐步放行、
+     全部声明步骤完成才置 COMPLETED（执行中保持 ISSUED）。
+  3. **SAFE-SINGLE-OP 强制（medium）**：票级 `executing` 执行流互斥标记——
+     已有执行流的票再受执行 → FAILED/`SAFE_SINGLE_OP`（结束/异常均释放）。
+  4. **M3 审批权 fail-closed（low）**：`submit_approval` 审批主体校验收紧——
+     仅已登记且角色=审批人 可决断；未登记人员（角色 None）与实例未登记任何
+     人员（actor_roles 为空）一律 REJECTED/`APPROVER_NOT_AUTHORIZED`（原实现
+     对两种情形静默放行）。空花名册分支经直连 Python 用例实测。
+  5. **EVAL-M5-02-N 扫描面补全（low）**：wall-clock 电价词面扫描 `scan_dirs`
+     由 `[src]` 扩为 `[src, tools, scripts]`（SPEC-M5-02/README§4"业务代码"
+     全口径；实测 tools/scripts 零违例）。
+- **新增负向 EVAL**：EVAL-M5-SAFE1-N/SAFE2-N/SAFE3-N/SAFE4-N（执行器
+  `m5.safety_rules`，断言数据全部取自用例 params/expect）、EVAL-M3-APPR1-N
+  （未登记人员审批被拒）、EVAL-M3-APPR2-N（自签 ISSUED 票准入拒绝）。
+  m5 套件 16→20 条、m3 套件 23→25 条。

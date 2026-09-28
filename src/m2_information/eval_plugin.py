@@ -51,9 +51,13 @@ def _sandbox(ctx: Any, case: dict) -> Path:
 
 
 def _make_layer(ctx: Any, case: dict, params: dict, *, suffix: str = "") -> InformationLayer:
+    from m4_semantic.regulation import rule_id_checker
+
     return InformationLayer(
         _sandbox(ctx, case).parent / f"{case.get('id')}{suffix}",
         skills=params.get("skills"),
+        # SPEC-M4-05 / ADDENDUM §B 联动：regulation_refs 规则 ID 存在性核对（M4 钩子）
+        rule_id_checker=rule_id_checker(repo_root=Path(ctx.root)),
     )
 
 
@@ -483,7 +487,10 @@ def exec_eventlog_rebuild(case: dict, ctx: Any) -> dict:
     params = case.get("params") or {}
     problems: list[str] = []
     sandbox = _sandbox(ctx, case)
-    layer = InformationLayer(sandbox, skills=params.get("skills"))
+    from m4_semantic.regulation import rule_id_checker
+
+    layer = InformationLayer(sandbox, skills=params.get("skills"),
+                             rule_id_checker=rule_id_checker(repo_root=Path(ctx.root)))
     spec = dict(params.get("task") or {})
     task_id = str(spec.get("task_id") or "task-eval")
     _create_task_from(layer, spec, "trace-rebuild")

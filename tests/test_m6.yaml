@@ -373,7 +373,7 @@ cases:
             plan:
               - {at: "+5m", capability: query.measurement@v1, arguments: {device: TX-01}}
               - {at: "+10m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
-              - {at: "+20m", capability: analyze.load_forecast@v1, arguments: {device: TX-02}}
+              - {at: "+20m", capability: analyze.load_forecast@v1, arguments: {device: TX-02, horizon_h: 24}}
           case_ab_002: *ab_candidate_plan
       badcase:
         case_id: case_ab_002

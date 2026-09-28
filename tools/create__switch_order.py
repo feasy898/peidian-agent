@@ -3,6 +3,10 @@
 
 SPEC-M3-03：创建操作票 ≠ 执行遥控——与 execute.remote_control 严格独立注册，
 禁止合并为同一 capability（风险级/缺省 Policy 均不同）。
+SAFE-ISSUE-HUMAN（00§1.4 / REG-SAFE）：签发动作不属于任何 agent 动作集——
+本适配器只能登记 DRAFT 草稿票；status 枚举不含 ISSUED，DRAFT→ISSUED 的签发
+只能由实例已登记且角色=签发人 的人员在 agent 动作集之外完成（M5 判据层
+SAFE_ISSUE_HUMAN 双重兜底）。
 """
 from __future__ import annotations
 
@@ -20,9 +24,11 @@ PARAMS_SCHEMA = {
         "devices": {"type": "array", "items": {"type": "string"},
                     "description": "操作对象设备"},
         "issuer": {"type": "string",
-                   "description": "签发人（SAFE-ISSUE-HUMAN：签发动作不属于 agent 动作集）"},
-        "status": {"type": "string", "enum": ["DRAFT", "ISSUED"],
-                   "description": "登记状态（缺省 ISSUED）"},
+                   "description": "拟定签发人（仅草稿登记；签发须由持证签发人完成——"
+                                  "SAFE-ISSUE-HUMAN：agent 不得签发、不得代签）"},
+        "status": {"type": "string", "enum": ["DRAFT"],
+                   "description": "登记状态（仅 DRAFT 草稿票；签发状态 ISSUED 不属于 "
+                                  "agent 动作集——SAFE-ISSUE-HUMAN）"},
     },
 }
 IDEMPOTENCY_KEY_POLICY = "CALLER_PROVIDED_UNIQUE_ARGS"

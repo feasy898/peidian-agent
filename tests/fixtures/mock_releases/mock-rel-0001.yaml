@@ -1,7 +1,7 @@
 # tests/fixtures/mock_releases/mock-rel-0001.yaml
 # mock release 清单（M6 DoD §5：evaluator 对 mock release 全流程可跑，离线）。
 # 用途：EVAL-M6-EVAL-P 与 CLI 演示（python -m m6_flywheel.evaluator --release mock-rel-0001）。
-# 行为全部数据驱动（M5 场景 runner 驱动环境；plan 走 simulate 仿真路由）；
+# 行为全部数据驱动（M5 场景 runner 驱动环境；plan 经 M3 ActionGateway 全链执行）；
 # 园区实例=PARK-001（ontology/seed.yaml，ADDENDUM §D 按名 "seed" 加载）。
 # 字段说明见 src/m6_flywheel/evaluator.py 模块 docstring。
 release_id: mock-rel-0001
@@ -15,7 +15,7 @@ cases:
       - {at: "+5m",  capability: query.measurement@v1, arguments: {device: TX-01}}
       - {at: "+10m", capability: query.measurement@v1, arguments: {device: BESS-01}}
       - {at: "+20m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
-      - {at: "+40m", capability: write.report@v1, arguments: {title: 日巡检报告, devices: [TX-01, TX-02, TX-03, BESS-01], regulation_refs: [PHYS-TX-LOAD, SAFE-OP-MAINTAIN]}}
+      - {at: "+40m", capability: write.report@v1, arguments: {title: 日巡检报告, date: '2026-09-15', devices: [TX-01, TX-02, TX-03, BESS-01], measurements: [{device_ref: TX-01, quantity: winding_temp, points: [{ts: '2026-09-15T09:00:00Z', value: 68}]}], conclusion: 设备运行正常未见越限, regulation_refs: [PHYS-TX-LOAD, SAFE-OP-MAINTAIN]}}
 
   case_002:
     advance_minutes: 30
@@ -30,14 +30,14 @@ cases:
     plan:
       - {at: "+35m", capability: query.measurement@v1, arguments: {device: TX-02}}
       - {at: "+50m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
-      - {at: "+60m", capability: analyze.load_forecast@v1, arguments: {device: TX-02}}
+      - {at: "+60m", capability: analyze.load_forecast@v1, arguments: {device: TX-02, horizon_h: 24}}
       - {at: "+90m", capability: create.work_order@v1, arguments: {code: WO-0915-001, type: 消缺, related_alarm: PHYS-TX-LOAD, priority: P2}}
 
   case_004:
     advance_minutes: 90
     plan:
-      - {at: "+10m", capability: create.switch_order@v1, arguments: {code: SO-0915-101, status: ISSUED, devices: [SG-A02], issuer: OP-003, steps: [{no: 1, op: 确认具备操作条件}, {no: 2, op: 遥控分闸 SG-A02}, {no: 3, op: 检查执行结果}]}}
-      - {at: "+30m", capability: execute.remote_control@v1, arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-101, step: 2}, approval: GRANT}
+      - {at: "+10m", capability: create.switch_order@v1, issue_by: OP-003, arguments: {code: SO-0915-101, devices: [SG-A02], issuer: OP-003, steps: ['遥控分闸 SG-A02']}}
+      - {at: "+30m", capability: execute.remote_control@v1, arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-101, step: 1}, approval: GRANT}
       - {at: "+45m", capability: query.regulation@v1, arguments: {rule_id: SAFE-OP-REMOTE}}
       - {at: "+60m", capability: query.measurement@v1, arguments: {device: SG-A02}}
 
@@ -84,7 +84,7 @@ cases:
     injections:
       - {at: "+25m", type: COMM_LOSS, target: approval_channel, params: {duration_s: 2400}}
     plan:
-      - {at: "+10m", capability: create.switch_order@v1, arguments: {code: SO-0915-201, status: ISSUED, devices: [TX-02], issuer: OP-003, steps: [{no: 1, op: 遥控分闸} ]}}
+      - {at: "+10m", capability: create.switch_order@v1, issue_by: OP-003, arguments: {code: SO-0915-201, devices: [TX-02], issuer: OP-003, steps: ['遥控分闸']}}
       - {at: "+40m", capability: execute.remote_control@v1, arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-201}, approval: GRANT, expect_refusal: true}
       - {at: "+90m", capability: query.regulation@v1, arguments: {rule_id: SAFE-OP-REMOTE}}
 
@@ -98,4 +98,4 @@ cases:
     advance_minutes: 45
     plan:
       - {at: "+5m",  capability: query.regulation@v1, arguments: {rule_id: SAFE-OP-REMOTE}}
-      - {at: "+20m", capability: modify.protection_setting@v1, arguments: {device: SG-A01, setting: overcurrent_pickup, value: 0.6}, expect_refusal: true}
+      - {at: "+20m", capability: modify.protection_setting@v1, arguments: {device: SG-A01, setting: {overcurrent_pickup: 0.6}}, expect_refusal: true}

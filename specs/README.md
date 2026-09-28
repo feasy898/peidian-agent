@@ -16,7 +16,7 @@
 | `M5-simulation.md` | 仿真层 spec+eval+3 个开发场景种子 | 开发规格 |
 | `M6-flywheel.md` | 飞轮 spec+eval+12 条黄金集种子 | 开发规格 |
 | `M7-registry-release.md` | 资产层 spec+eval | 开发规格 |
-| `HOLDOUT.md` | 15 场景独立验收测试 | **验收专用，开发期禁用** |
+| `HOLDOUT.md` | 15 场景独立验收测试 | **验收专用，开发期禁用**（随验收包交付、由验收人独立保管，**不进开发仓库**——ADDENDUM §F 红线：仓库任何路径不得出现 holdout 场景/实例/判据文件，`scripts/ci_isolation.py` 断言零命中） |
 
 ## 1. 系统一页图
 

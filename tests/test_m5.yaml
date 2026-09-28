@@ -4,7 +4,13 @@
 # 另含 4 条补强/DoD 用例：EVAL-M5-05-P4/P5（COMM_LOSS/DEVICE_TRIP 补全
 # SPEC-M5-05 五类注入覆盖）、EVAL-M5-DEV-P（DoD §6：三个开发场景一键跑，
 # 含 dev-02b 操作票+ASK→GRANT→分闸链断言）、EVAL-M5-PERF-P（DoD §6：
-# 100×24h 仿真步 <30s）。合计 16 条。schema 见 tests/EVAL-SCHEMA.md；
+# 100×24h 仿真步 <30s）。合计 16 条。
+# 另含 4 条安全规程负向用例（00§1.4 R-安全规程在 M5 判据层的落地面，
+# 独立评审缺口修复）：EVAL-M5-SAFE1-N（SAFE-ISSUE-HUMAN：agent 不得签发）、
+# EVAL-M5-SAFE2-N（SAFE-ORDER-SEQ：不得跳步）、EVAL-M5-SAFE3-N
+# （SAFE-SINGLE-OP：一票一执行流）、EVAL-M5-SAFE4-N（桩链预置票签发人
+# 角色校验：非持证签发人只登记 DRAFT，两票制随后拒绝遥控）。合计 20 条。
+# schema 见 tests/EVAL-SCHEMA.md；
 # 执行器注册于 src/m5_simulation/eval_plugin.py（全部断言数据取自本文件
 # params/expect）。spec_hash 口径（01§6）：spec_ref 列表按序拼接文件字节的 sha256。
 suite: m5
@@ -50,7 +56,7 @@ cases:
     form: negative_rejection
     executor: m5.no_wallclock_pricing
     params:
-      scan_dirs: [src]
+      scan_dirs: [src, tools, scripts]   # 业务代码全口径（SPEC-M5-02/README§4：src+tools+scripts）
       exclude:
         - m5_simulation/clock.py      # WALL/MONOTONIC 只读源的唯一实现位（SPEC-M5-02）
         - m5_simulation/eval_plugin.py  # 扫描器自身（含被检词面）
@@ -289,6 +295,111 @@ cases:
           expect_state:
             - {path: breakers.SG-A02, expect: OPEN}
             - {path: switch_orders.SO-0915-002.status, expect: COMPLETED}
+
+  # ================= 00§1.4 R-安全规程 · M5 判据层负向（独立评审缺口修复） =================
+  - id: EVAL-M5-SAFE1-N
+    spec: SPEC-M5-03（00§1.4 R-安全规程：SAFE-ISSUE-HUMAN）
+    title: agent 请求登记 status=ISSUED 操作票 → FAILED/SAFE_ISSUE_HUMAN（签发不属于任何 agent 动作集）
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: issue_human
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      create_args:
+        capability: create.switch_order@v1
+        args: {code: SO-EVAL-901, steps: ["断开 SG-A02"], devices: [SG-A02],
+               issuer: OP-003, status: ISSUED}
+      draft_followup:
+        capability: create.switch_order@v1
+        args: {code: SO-EVAL-901, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-001}
+    expect:
+      status: FAILED
+      error_code: SAFE_ISSUE_HUMAN
+      order_absent: true
+      followup_status: SUCCEEDED
+      followup_order_status: DRAFT
+
+  - id: EVAL-M5-SAFE2-N
+    spec: SPEC-M5-03（00§1.4 R-安全规程：SAFE-ORDER-SEQ）
+    title: 遥控步骤跳步 → FAILED/SAFE_ORDER_SEQ；按声明顺序执行逐步放行，全部步骤完成才 COMPLETED
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: order_seq
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      order:
+        code: SO-EVAL-902
+        status: ISSUED
+        steps: ["断开 SG-A02", "检查 SG-A02", "合闸恢复 SG-A02"]
+        devices: [SG-A02]
+        issuer: OP-003
+      remote_steps:
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-902, step: 2}
+          expect: {status: FAILED, error_code: SAFE_ORDER_SEQ, breaker_state: CLOSED, order_status: ISSUED}
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-902, step: 1}
+          expect: {status: SUCCEEDED, breaker_state: OPEN, order_status: ISSUED}
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-902, step: 3}
+          expect: {status: FAILED, error_code: SAFE_ORDER_SEQ, breaker_state: OPEN, order_status: ISSUED}
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-902, step: 2}
+          expect: {status: SUCCEEDED, breaker_state: OPEN, order_status: ISSUED}
+        - args: {device: SG-A02, operation: CLOSE, switch_order: SO-EVAL-902, step: 3}
+          expect: {status: SUCCEEDED, breaker_state: CLOSED, order_status: COMPLETED}
+    expect: {}
+
+  - id: EVAL-M5-SAFE3-N
+    spec: SPEC-M5-03（00§1.4 R-安全规程：SAFE-SINGLE-OP）
+    title: 操作票已有执行流在执行 → FAILED/SAFE_SINGLE_OP（一票同一时刻仅一个执行流，互斥）
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: single_op
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      order:
+        code: SO-EVAL-903
+        status: ISSUED
+        steps: ["断开 SG-A02"]
+        devices: [SG-A02]
+        issuer: OP-003
+      hold_executing: true          # 预置并发执行流持票（互斥前提）
+      remote_steps:
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-903, step: 1}
+          expect: {status: FAILED, error_code: SAFE_SINGLE_OP, breaker_state: CLOSED, order_status: ISSUED}
+    expect: {}
+
+  - id: EVAL-M5-SAFE4-N
+    spec: SPEC-M5-03（00§1.4 R-安全规程：SAFE-ISSUE-HUMAN × SAFE-TWO-TICKET）
+    title: 桩链计划票票面签发人非持证签发人（OP-001 值班员）→ 仅登记 DRAFT+合规事件，GRANT 后遥控仍被两票制拒绝
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: scenario_issue_role
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      at: "+10m"
+      settle_s: 2700
+      timeout_s: 600
+      behavior_script:
+        - {at: "+20m", act: GRANT}
+      events:
+        - at: "+10m"
+          type: action.request
+          subject: SG-A02
+          params:
+            capability: execute.remote_control@v1
+            purpose: 票面签发人不是持证签发人（应登记 DRAFT 并拒绝遥控）
+            args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-904, issuer: OP-001}
+            user: OP-001
+    expect:
+      order_status: DRAFT
+      compliance_event: true
+      action_completed_status: FAILED
+      breaker_state: CLOSED
 
   # ================= DoD §6 性能门槛 =================
   - id: EVAL-M5-PERF-P

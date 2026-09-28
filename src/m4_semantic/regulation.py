@@ -14,11 +14,13 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable, Mapping
+from pathlib import Path
+from typing import Any, Callable, Iterable, Mapping
 
 from .loader import LoadedOntology, load_ontology
 
-__all__ = ["RegulationIndex", "retrieve_rule", "search_regulations", "rules_for_scope"]
+__all__ = ["RegulationIndex", "retrieve_rule", "search_regulations", "rules_for_scope",
+           "rule_id_checker"]
 
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
@@ -139,6 +141,19 @@ class RegulationIndex:
 def retrieve_rule(rule_id: str, loaded: LoadedOntology | None = None) -> dict:
     """规则 ID → 条款 + 判据结构。"""
     return RegulationIndex(loaded or load_ontology()).retrieve(rule_id)
+
+
+def rule_id_checker(repo_root: Path | str | None = None,
+                    loaded: LoadedOntology | None = None) -> Callable[[Iterable[str]], list]:
+    """M4→M2 联动钩子（SPEC-M4-05 / ADDENDUM §B）。
+
+    返回 ``unknown_rule_ids`` 绑定函数，注入 ``InformationLayer(rule_id_checker=…)``
+    后，report.daily@v1 等 schema 校验即对 regulation_refs 做规则 ID 存在性核对
+    （不存在 → REJECTED，而非仅形态校验）。
+    """
+    index = RegulationIndex(loaded if loaded is not None
+                            else load_ontology(repo_root=repo_root))
+    return index.unknown_rule_ids
 
 
 def search_regulations(query: str, limit: int = 5,
