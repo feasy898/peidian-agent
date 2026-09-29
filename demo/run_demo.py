@@ -836,6 +836,48 @@ FLOWS = {"f1": flow_f1, "f2": flow_f2, "f3": flow_f3, "f4": flow_f4, "f5": flow_
 # ===========================================================================
 # CLI
 # ===========================================================================
+_TRUTHY = {"true", "1", "yes", "on"}
+_FALSY = {"false", "0", "no", "off"}
+
+
+def _normalize_auto(argv: list[str] | None) -> list[str]:
+    """把 ``--auto <布尔值>`` 带值写法归一为 flag 形式（2026-09-30 收口补丁）。
+
+    外部脚本/门禁拼参时会把布尔值字符串化成 ``--auto true`` / ``--auto=1`` 一类，
+    argparse(store_true) 对此报「unrecognized arguments」退出码 2 且 stdout 为空，
+    难以排查。此处只做 token 级归一：真值吞掉、假值连同 flag 一并去除、
+    非法值原样保留交给 argparse 照常报错（保持大声失败语义）。
+    原有全部合法调用（``--auto`` 裸 flag / 位置参数流名）不受影响。
+    """
+    if argv is None:
+        argv = sys.argv[1:]
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        low = tok.lower()
+        if low == "--auto":
+            if i + 1 < len(argv) and argv[i + 1].strip().lower() in _TRUTHY:
+                out.append("--auto")
+                i += 1  # 吞掉显式真值
+            elif i + 1 < len(argv) and argv[i + 1].strip().lower() in _FALSY:
+                i += 1  # --auto false → 视为未开启自动模式
+            else:
+                out.append("--auto")
+        elif low.startswith("--auto="):
+            rhs = tok.split("=", 1)[1].strip().lower()
+            if rhs in _TRUTHY:
+                out.append("--auto")
+            elif rhs in _FALSY:
+                pass  # 显式假值 → 不开启
+            else:
+                out.append(tok)  # 非法值留给 argparse 报错
+        else:
+            out.append(tok)
+        i += 1
+    return out
+
+
 def main(argv: list | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -852,7 +894,7 @@ def main(argv: list | None = None) -> int:
                         help=argparse.SUPPRESS)  # 兼容 `run_demo.py f1` 裸写法
     parser.add_argument("--auto", action="store_true",
                         help="无人工输入连续播放（彩排/录制）；缺省逐步暂停等回车")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(_normalize_auto(argv))
     flow = args.flow or args.flow_pos
     if flow is None:
         parser.print_help()
