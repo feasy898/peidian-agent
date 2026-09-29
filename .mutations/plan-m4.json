@@ -1,0 +1,58 @@
+[
+  {
+    "id": "m4-hop-limit-raise",
+    "redline": true,
+    "target": "src/m4_semantic/graph.py",
+    "find": "MAX_HOPS = 3",
+    "replace": "MAX_HOPS = 99",
+    "description": "SPEC-M4-05：三跳上限常数放宽到 99——EVAL-M4-05-N1 四跳拒绝应杀"
+  },
+  {
+    "id": "m4-hop-declared-gate-off",
+    "redline": true,
+    "target": "src/m4_semantic/graph.py",
+    "find": "            if declared_hops > MAX_HOPS:",
+    "replace": "            if False and declared_hops > MAX_HOPS:",
+    "description": "SPEC-M4-05：声明跳数闸（两道闸之一）失效——EVAL-M4-05-N1 应杀"
+  },
+  {
+    "id": "m4-registry-align-off",
+    "redline": true,
+    "target": "src/m4_semantic/loader.py",
+    "find": "        if missing or extra:\n            raise RegistryAlignmentError(",
+    "replace": "        if False and (missing or extra):\n            raise RegistryAlignmentError(",
+    "description": "SPEC-M4-01：动作表↔注册表对齐断言（加载拒绝）失效——EVAL-M4-01-N1 应杀"
+  },
+  {
+    "id": "m4-version-drift-off",
+    "redline": true,
+    "target": "src/m4_semantic/loader.py",
+    "find": "    if version is not None and str(version) != computed:",
+    "replace": "    if False and version is not None and str(version) != computed:",
+    "description": "SPEC-M4-03：本体版本漂移拒绝加载失效——EVAL-M4-03-N1 应杀"
+  },
+  {
+    "id": "m4-instance-validate-off",
+    "redline": true,
+    "target": "src/m4_semantic/loader.py",
+    "find": "    if problems:\n        raise InstanceLoadError(f\"实例 {name!r} 校验失败（拒绝加载）: \" + \"；\".join(problems))",
+    "replace": "    if False and problems:\n        raise InstanceLoadError(f\"实例 {name!r} 校验失败（拒绝加载）: \" + \"；\".join(problems))",
+    "description": "SPEC-M4-02：园区实例校验拒绝（缺引用实体/枚举封闭）失效——EVAL-M4-02-N2 应杀"
+  },
+  {
+    "id": "m4-ambiguity-margin-shrink",
+    "redline": false,
+    "target": "src/m4_semantic/resolver.py",
+    "find": "        self.margin = float(scores.get(\"unambiguous_margin\", 0.3))",
+    "replace": "        self.margin = float(scores.get(\"unambiguous_margin\", 0.05))",
+    "description": "SPEC-M4-04：歧义不擅断阈值收窄（0.3→0.05 弱读法直判）——EVAL-M4-04-N1 期望 all_ambiguous 应杀"
+  },
+  {
+    "id": "m4-vocab-crosscheck-off",
+    "redline": false,
+    "target": "src/m4_semantic/loader.py",
+    "find": "        if yaml_values != code_values:",
+    "replace": "        if False and yaml_values != code_values:",
+    "description": "SPEC-M4-01：enums 与 contracts 受控词表双向同源断言失效——探测 EVAL 是否覆盖（疑似盲区）"
+  }
+]

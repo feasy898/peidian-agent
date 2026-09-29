@@ -1,0 +1,66 @@
+[
+  {
+    "id": "m3-immutable-deny-line-drop",
+    "redline": true,
+    "target": "src/m3_action/registry.py",
+    "find": "    \"modify.asset_history\",\n    \"bypass.approval\",\n})",
+    "replace": "    \"modify.asset_history\",\n})",
+    "description": "SPEC-M3-05/红线2+4：不可改 DENY 清单删行（bypass.approval 移出硬编码第一重表达）——双重表达断言与清单钉死应杀"
+  },
+  {
+    "id": "m3-permanent-ask-rename",
+    "redline": true,
+    "target": "src/m3_action/registry.py",
+    "find": "PERMANENT_ASK_ACTIONS = frozenset({\"execute.remote_control\"})",
+    "replace": "PERMANENT_ASK_ACTIONS = frozenset({\"execute.remote_control_unlocked\"})",
+    "description": "SPEC-M3-05/红线3：PERMANENT_ASK 清单改名（execute.remote_control 移出硬编码）——双重表达断言应杀"
+  },
+  {
+    "id": "m3-router-eval-gate-off",
+    "redline": true,
+    "target": "src/m3_action/router.py",
+    "find": "        if self.evaluation:\n            raise RouterModeError(\n                _REAL_FORBIDDEN_IN_EVAL,",
+    "replace": "        if False and self.evaluation:\n            raise RouterModeError(\n                _REAL_FORBIDDEN_IN_EVAL,",
+    "description": "SPEC-M3-11：评估上下文强制 SIMULATION 第一重门禁失效——EVAL-M3-11-P 期望 REAL_FORBIDDEN_IN_EVAL 应杀"
+  },
+  {
+    "id": "m3-approver-role-check-off",
+    "redline": true,
+    "target": "src/m3_action/gateway.py",
+    "find": "        approver_role = self.actor_roles.get(str(approver))\n        if approver_role != \"审批人\":",
+    "replace": "        approver_role = self.actor_roles.get(str(approver))\n        if False and approver_role != \"审批人\":",
+    "description": "SPEC-M3-08：审批权 fail-closed 关闭（未登记人员可决断）——EVAL-M3-08-N 期望 APPROVER_NOT_AUTHORIZED 应杀"
+  },
+  {
+    "id": "m3-switch-order-enum-widen",
+    "redline": true,
+    "target": "tools/create__switch_order.py",
+    "find": "        \"status\": {\"type\": \"string\", \"enum\": [\"DRAFT\"],",
+    "replace": "        \"status\": {\"type\": \"string\", \"enum\": [\"DRAFT\", \"ISSUED\"],",
+    "description": "SPEC-M3-13/SAFE-ISSUE-HUMAN：create.switch_order status 枚举放回 ISSUED——EVAL-M3-13-N 期望 SCHEMA_INVALID 应杀"
+  },
+  {
+    "id": "m3-observer-selfreport-pass",
+    "redline": true,
+    "target": "src/m3_action/observer.py",
+    "find": "        if exec_status == \"SUCCEEDED\" and not verify_ok:",
+    "replace": "        if exec_status == \"SUCCEEDED\" and not verify_ok and False:",
+    "description": "SPEC-M3-10/红线7 邻接：自报成功不再降级 OBSERVATION_MISMATCH——EVAL-M3-10-P 期望 FAILED 应杀"
+  },
+  {
+    "id": "m3-tighten-allow-deny-edge-drop",
+    "redline": false,
+    "target": "src/m3_action/policy_engine.py",
+    "find": "    (PolicyDecision.ALLOW, PolicyDecision.DENY),\n",
+    "replace": "",
+    "description": "SPEC-M3-06：单向收紧合法集删 ALLOW→DENY 边——负向矩阵 persona 收紧应被拒（EVAL-M3-15-P/EVAL-M3-06-P 应杀）"
+  },
+  {
+    "id": "m3-unknown-action-allow",
+    "redline": true,
+    "target": "src/m3_action/policy_engine.py",
+    "find": "                decision=PolicyDecision.DENY, base=PolicyDecision.DENY,",
+    "replace": "                decision=PolicyDecision.ALLOW, base=PolicyDecision.DENY,",
+    "description": "SPEC-M3-04/红线1：动作不在授权规则表内改判 ALLOW（第二道防线）——探测 EVAL 是否覆盖"
+  }
+]

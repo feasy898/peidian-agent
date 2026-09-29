@@ -1,0 +1,66 @@
+[
+  {
+    "id": "m6-holdout-marker-invisible",
+    "redline": true,
+    "target": "src/m6_flywheel/golden_set.py",
+    "find": "    return HOLDOUT_MARKER in (excluded or [])",
+    "replace": "    return False",
+    "description": "SPEC-M6-02/红线8：holdout 来源标记判定失效——EVAL-M6-02-N 双重拦截应杀"
+  },
+  {
+    "id": "m6-holdout-load-allow",
+    "redline": true,
+    "target": "src/m6_flywheel/golden_set.py",
+    "find": "    if offenders:\n        raise GoldenSetError(\n            \"holdout 来源条目禁止进入开发黄金集目录",
+    "replace": "    if False and offenders:\n        raise GoldenSetError(\n            \"holdout 来源条目禁止进入开发黄金集目录",
+    "description": "SPEC-M6-02：装载期 holdout 条目整目录拒绝失效——EVAL-M6-02-P golden_isolation 应杀"
+  },
+  {
+    "id": "m6-holdout-addcase-allow",
+    "redline": true,
+    "target": "src/m6_flywheel/golden_set.py",
+    "find": "    if \"holdout\" in base.resolve().as_posix() or is_holdout_marked(case):",
+    "replace": "    if False and (\"holdout\" in base.resolve().as_posix() or is_holdout_marked(case)):",
+    "description": "SPEC-M6-02：开发写入通道 add_golden_case holdout 拒绝失效——探测 EVAL 是否覆盖"
+  },
+  {
+    "id": "m6-release-flip-allow",
+    "redline": true,
+    "target": "src/m6_flywheel/evaluator.py",
+    "find": "        raise ReleaseMutationRefusedError(f\"拒绝修改 release {release_id!r} 状态 →\"",
+    "replace": "        if False: raise ReleaseMutationRefusedError(f\"拒绝修改 release {release_id!r} 状态 →\"",
+    "description": "SPEC-M6-06：调优侧直改 release 状态永远拒绝解除——EVAL-M6-06-N 应杀"
+  },
+  {
+    "id": "m6-attest-signature-off",
+    "redline": true,
+    "target": "src/m6_flywheel/attest.py",
+    "find": "    if signature != recomputed:",
+    "replace": "    if False and signature != recomputed:",
+    "description": "SPEC-M6-08：attestation 签名重算比对失效——EVAL-M6-08-N/M7 消费侧应杀（注意 M7 digest 双保险）"
+  },
+  {
+    "id": "m6-skillize-threshold-off",
+    "redline": false,
+    "target": "src/m6_flywheel/skillize.py",
+    "find": "    if len(distinct_tasks) < MIN_OCCURRENCES:",
+    "replace": "    if False and len(distinct_tasks) < MIN_OCCURRENCES:",
+    "description": "SPEC-M6-05：受控自进化 >=3 实例门槛失效——EVAL-M6-05-N 应杀"
+  },
+  {
+    "id": "m6-ab-adopt-weaken",
+    "redline": false,
+    "target": "src/m6_flywheel/badcase.py",
+    "find": "        if candidate_case_passed and candidate_total >= current_total:",
+    "replace": "        if candidate_case_passed or candidate_total >= current_total:",
+    "description": "SPEC-M6-04：A/B 采纳条件与放宽（and 改 or）——EVAL-M6-04-N 期望 REJECTED 应杀"
+  },
+  {
+    "id": "m6-trajectory-trace-accept",
+    "redline": false,
+    "target": "src/m6_flywheel/trajectory.py",
+    "find": "            if not event_trace:",
+    "replace": "            if not event_trace and False:",
+    "description": "SPEC-M6-01：事件缺 trace_id 拒绝口径失效——EVAL-M6-01-N 应杀"
+  }
+]
