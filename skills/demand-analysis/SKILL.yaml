@@ -1,0 +1,77 @@
+# skills/demand-analysis/SKILL.yaml · SkillAsset 0.1.0（01 §2.7 SkillDescriptor 形）
+# 来源：2026-09-30 汇报前夜新增——应现场观众明确提出的需求：
+#   「最大需量分析——除分析用户是否超需，也要分析园区整体需量规律，为是否做容需切换提供数据支撑」。
+# 本文件与 SKILL.md 同为本技能的行为规格（tests/test_m8.yaml 的 spec_ref）；
+# spec_hash 口径（01§6）：两文件按序拼接字节的 sha256。
+# entry.script_ref 为确定性脚本入口（无模型调用，固定 seed 可重放）。
+skill_id: skill.demand-analysis
+version: 0.1.0
+capability_domain: TRADE
+disclosure:
+  level0: 最大需量分析
+  level1: 园区月度需量规律统计（月最大需量与发生时刻 / Top5 高峰日 / 峰段电量占比 / 负荷率）与
+    容需切换测算（按需量 vs 按容量基本电费对比、临界点、建议），结论按 PHYS-DEMAND
+    判据口径联动预警/越限并引用规则 ID。
+  level2_ref: skills/demand-analysis/SKILL.md
+entry:
+  script_ref: skills/demand-analysis/calc_demand.py
+  checklist: 需量分析清单（数据源权威性 / 口径声明 / 判据引用 / 电价参数标注演示默认值）
+parameters:
+  demand_price_yuan_per_kw_month:
+    value: 48
+    unit: 元/kW·月
+    note: 演示参数，按当地目录电价替换（按需量计费的基本电价）
+  capacity_price_yuan_per_kw_month:
+    value: 32
+    unit: 元/kW·月
+    note: 演示参数，按当地目录电价替换（按容量计费的基本电价）
+  synth:
+    seed: 20260901            # 固定随机种子：同参重放逐字节一致
+    days: 30                  # 2026-09 全月
+    interval_min: 15          # 需量计量粒度（15min 滑窗口径的单元）
+    day_factor_range: [0.86, 1.00]   # 日尺度负荷水平差异（工作日/周末波动）
+    jitter_amplitude: 0.03    # 15min 级扰动幅度，与 M5 MODEL_DEFAULTS.noise_amplitude 同口径
+evidence_policy: >-
+  结论必须给出数据源（ontology/seed.yaml 权威字段：合同容量 / 台账月最大需量 / 日形状 / 电价时段表）
+  与判据规则 ID（PHYS-DEMAND，阈值读自 regulations/REG-TECH.yaml）；电价两档参数必须标注
+  「演示参数，按当地目录电价替换」；合成序列必须声明口径（M5 interpolate_shape 15 分钟插值 ×
+  日因子 × 固定 seed 扰动，标定月峰 = 台账值）。
+owner: demo-20260930
+status: REVIEW
+spec_clauses: # 本技能行为规格条款（tests/test_m8.yaml 的 spec: 引用目标）
+  - id: SPEC-M8-01
+    title: 需量统计正确性
+    clause: >-
+      月度 15 分钟负荷序列按日形状（M5 interpolate_shape 线性插值）× 日因子 × 固定 seed 扰动合成，
+      并等比标定使月最大需量 = 台账 demand_*.peak_kw；统计项：月最大需量与发生时刻、Top5 高峰日、
+      峰段电量占比（峰段窗口取电价时段表 type=PEAK）、负荷率（平均负荷/月最大需量）。
+  - id: SPEC-M8-02
+    title: 临界点数学
+    clause: >-
+      按需量计费基本电费 = 月最大需量 × 需量电价；按容量计费基本电费 = 合同容量 × 容量电价；
+      两档电价为显式参数（演示默认 48/32 元/kW·月，标注「演示参数，按当地目录电价替换」）；
+      临界点 MD* = 合同容量 × 容量电价 / 需量电价，月最大需量低于 MD* 时按需量计费划算、
+      高于 MD* 时按容量计费划算；输出对比表与月/年节省额。
+  - id: SPEC-M8-03
+    title: 判据引用
+    clause: >-
+      demand_ratio = 月最大需量 / 合同容量，分级阈值读自 regulations/REG-TECH.yaml PHYS-DEMAND
+      （ratio>1.00 → P2 预警、ratio>1.05 → P0 越限），换算为 kW 预警线/越限线；
+      任意需量值的分级结论必须引用规则 ID PHYS-DEMAND。
+  - id: SPEC-M8-04
+    title: 参数敏感性
+    clause: >-
+      电价参数显式可替换，对比结论、临界点、建议必须随参数数据驱动变化（不允许硬编码结论）。
+  - id: SPEC-M8-05
+    title: 确定性重放
+    clause: 固定 seed、同参数两次运行输出逐字节一致（JSON 序列化相等）。
+  - id: SPEC-M8-06
+    title: 输出 schema
+    clause: >-
+      结果对象键封闭：park / series_stats / billing / criteria / recommendation，
+      各子结构与标量类型见 SKILL.md §输出结构；未知键视为 schema 破坏。
+  - id: SPEC-M8-07
+    title: 无效参数拒绝
+    clause: >-
+      需量电价 ≤ 0（临界点公式分母）、容量电价 < 0、非正合同容量/台账需量/天数等非法参数
+      必须以 ValueError 拒绝并给出中文原因，不得带病出数。
