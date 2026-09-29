@@ -262,8 +262,13 @@ def _detail_lines(r, env) -> list:
         out.append(f"操作票 {code} 状态={status}"
                    f"（DRAFT=草稿；签发须持证签发人，SAFE-ISSUE-HUMAN）")
     elif key == "execute.remote_control":
-        out.append(f"{arg.get('device')} {arg.get('operation')}"
-                   f"（操作票 {arg.get('switch_order')} 第 {arg.get('step', '-')} 步）")
+        if str(res.get("status")) == "SUCCEEDED":
+            out.append(f"遥控执行：{arg.get('device')} {arg.get('operation')}"
+                       f"（操作票 {arg.get('switch_order')} 第 {arg.get('step', '-')} 步）")
+        else:  # FAILED/DENIED：只是「申请过」，闸没动——防止误读成已分闸
+            out.append(f"遥控申请：{arg.get('device')} {arg.get('operation')}"
+                       f"（所凭操作票 {arg.get('switch_order')} 第 {arg.get('step', '-')} 步）"
+                       f"→ 未执行")
         if obs.get("breaker_state"):
             out.append(f"环境回读：{obs.get('device')} breaker={obs.get('breaker_state')}"
                        f"（ts={obs.get('ts')}）")
@@ -271,6 +276,11 @@ def _detail_lines(r, env) -> list:
         note = obs.get("note")
         if note is None:
             robj = res.get("observation")
+            if isinstance(robj, str):  # 观测可能是 JSON 串——解出 note 再上屏，不甩原始报文
+                try:
+                    robj = json.loads(robj)
+                except ValueError:
+                    pass
             note = robj.get("note") if isinstance(robj, dict) else robj
         out.append(str(note or ""))
     if err.get("message"):
@@ -291,8 +301,11 @@ def narrate_evidence(pacer: Console, run: dict, cap_key: str, title: str) -> Non
     intended = ev.get("intended") or {}
     slim_args = {k: v for k, v in (intended.get("arguments") or {}).items()
                  if k not in ("measurements",)}
+    purpose = str(intended.get("purpose") or "")
+    if purpose == "mock release 计划步":  # 替身计划的通用占位标签——上屏翻成口语
+        purpose = "演示计划步（离线脚本替身编排）"
     pacer.say(f"  intended（要干什么）  : {intended.get('capability')}"
-               f" · 目的「{intended.get('purpose')}」 · {_compact(slim_args)}")
+               f" · 目的「{purpose}」 · {_compact(slim_args)}")
     pacer.say(f"  issued（实际做了什么）: "
                f"{_compact(ev.get('issued')) if ev.get('issued') is not None else '（缺失！）'}")
     pacer.say(f"  observed（环境回读） : "
@@ -456,7 +469,7 @@ def flow_f2(pacer: Console) -> int:
     pacer.heavy("★ 两票制第二票 · 审批链（遥控缺省管控=ASK，永久）")
     pacer.say(f"  +30m execute.remote_control → WAITING_APPROVAL（挂起等审批，不执行）")
     pacer.say(f"  approval.requested ×{approvals.get('requested')} → approval.granted"
-              f" ×{approvals.get('granted')} · 审批人 {_who(env4, approver)}")
+              f" ×{approvals.get('granted')} · {_who(env4, approver)} 批了这一次")
     pacer.say("  GRANT 只放行本次（single_shot=True）——批的不是「以后都可以」，缺省 ASK 一个字不变。")
     pacer.heavy()
     pacer.beat()
@@ -464,7 +477,8 @@ def flow_f2(pacer: Console) -> int:
     pacer.heavy("★ 执行完毕：成功与否只认环境回读（observed ≠ 执行器自报）")
     pacer.say(f"  环境回读：SG-A02 breaker={getattr(sg, 'breaker_state', '?')}"
               f"——observed 取自环境状态回读，执行器谎报会被观测回传降级。")
-    pacer.say(f"  操作票终态：completed={orders.get('completed')} issued={orders.get('issued')}")
+    pacer.say(f"  操作票终态：已执行完毕（COMPLETED）={orders.get('completed')}"
+              f" · 已签发待执行（ISSUED）={orders.get('issued') or '无'}")
     pacer.say("  全程留痕：审批请求、签发事件、执行、回读——事件流可逐条回放，")
     pacer.say("  事后查得到「谁、何时、凭哪张票、按哪个步骤」。")
     pacer.heavy()
@@ -528,7 +542,7 @@ def flow_f3(pacer: Console) -> int:
     approver11 = str((granted11[-1].get("payload") or {}).get("approver")) if granted11 else "?"
     pacer.heavy("★ 高潮：审批人点了同意，执行照样失败")
     pacer.say(f"  approval.granted ×{approvals11.get('granted')}"
-              f"（审批人 {_who(env11, approver11)}）——人这一关过了；")
+              f"（{_who(env11, approver11)}）——人这一关过了；")
     pacer.say(f"  但票不在（SO-NONE-404 从未签发）→ 遥控指令到执行层直接"
               f" FAILED [NO_SWITCH_ORDER]。")
     rule11 = _rule_of(env11, "SAFE-TWO-TICKET")
