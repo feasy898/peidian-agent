@@ -815,6 +815,13 @@
   变异队列死锁未完成，按裁决以 `.mutations/plan-m7-single.json` 定向单变异动态验证
   补强（结果见 .mutations/results-m7-single.json），其余 8 变异以静态杀伤映射为证；
   全量动态验证待统一门禁（oracle 静默窗口）补跑。
+- **定向单变异动态验证结局（同日 18:34 干净窗实跑）**：`m7-approved-gate-off` →
+  **killed**（planned=1/valid=1/killed=1，redline_all_killed=true；eval 26/27，唯一失败
+  用例=EVAL-M7-07-N3——变异放行第 2 重门禁后，REJECTED→PUBLISHED 触发评审状态机
+  非法迁移异常，用例失败即杀；评审状态机表=第二道防线且由 EVAL-M7-TABLE-P 覆盖）；
+  还原校验 restored=true + hash_match=true（autocrlf 归一化）。提交后干净 oracle 复跑
+  **27/27 PASS**。全量 9 变异动态验证仍待统一门禁补跑（静态映射+基线+单变异动态
+  证据已足量支撑本轮缺口闭合）。
 
 ---
 
