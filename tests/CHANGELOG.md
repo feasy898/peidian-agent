@@ -1533,3 +1533,42 @@
   hash 对不变。
 - **门禁**：修复后统一门禁复跑 `python run_evals.py --module all`（本节登记时点实跑，
   结果与退出码见 ASSET-MANIFEST.md §7 复核修复轮记录）。
+
+---
+
+## 2026-09-30 · M9 套件新增（应急分级技能 skills/emergency-grading 雏形；汇报前夜 Q&A 弹药）
+
+- **背景**：观众提出「应急预警的分级分类：什么情况启动哪个级别的应急、哪个级别对应
+  哪些岗位哪些操作」。新增技能 `skills/emergency-grading/`（SKILL.yaml 描述子+数据驱动
+  映射表 / SKILL.md 行为规格 EG-SPEC-01..08 / grade.py 确定性判定脚本 + examples 样例），
+  不进演示主线。映射表覆盖 10 类事件（重瓦斯/差动跳闸、母线失压、火灾、重过载、通信
+  全中断、直流接地、电缆沟水浸、台风暴雨预警、轻瓦斯），四级 Ⅰ/Ⅱ/Ⅲ/Ⅳ × 响应时限 ×
+  四岗位（值班员/调度员/签发人/审批人）操作清单 × 升级/解除条件；与系统告警级别
+  P0-P3 对齐（P0→[Ⅰ,Ⅱ]、P1→[Ⅱ,Ⅲ]、P2→[Ⅲ,Ⅳ]、P3→[Ⅳ]，响应语义锚
+  `src/contracts/enums.py:50-55`），表内注明为示范规则、可整表替换园区备案预案
+  （grade.py 零硬编码，`--mapping` 指向替换表即换档）。
+- **套件**：`tests/test_m9.yaml` 8 例（P 6 / N 2）——01-P 分级正确性（basis 引用
+  告警 ID×rule_id）/ 02-P 多告警取最高级 / 03-P 时限与岗位输出 / 04-N 未知事件兜底
+  （MANUAL_REQUIRED、不猜级、上报人工判定）/ 05-P 确定性（3 轮渲染 + 2 次 CLI 双跑
+  逐字节一致）/ 06-P 数据驱动性（沙箱副本改 EMG-R09 条目 Ⅳ→Ⅱ，线上表 sha256 前后
+  不变，替换表落盘重载复算一致）/ 07-N 负向拒绝（缺 id、空 type、重复 id →
+  GradeInputError；映射事件类型二义 → MappingError）/ 08-P 混合场景（已知Ⅱ+未知并存，
+  升级/解除条件输出）。
+- **执行器插件**：`tests/m9_eval_extra.py`（EXECUTORS 4 个：m9.grade / m9.determinism /
+  m9.data_driven / m9.negative_input；沙箱 `runtime/m9_eval/<case>/`）。
+- **spec_hash → eval_hash**（01§6 口径；spec_ref = skills/emergency-grading/{SKILL.yaml,
+  SKILL.md} 按序拼接字节）：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m9.yaml | `a0aaf1fb86df73389d95fa6d6d217945ce5a5d32b01afb74fa02c76fa0d1c667` | `ec782db02250a48048ca228b1fa21b8e3d01b5916431fb82df93d39964275b32` |
+
+- **运行方式与门禁关系**：`run_evals.py` 的 MODULES 固定 m0..m7（核心资产只读，本夜不
+  改），m9 不进 `--module all` 门禁；套件经插件入口 `python tests/m9_eval_extra.py`
+  以同一 runner 路径执行（schema 校验 + spec_hash 重算比对 + 插件加载 + 逐用例执行），
+  本轮实跑 `EVALS-M9 mode=suite status=RAN cases=8/8 failed=0 skipped=0 result=PASS`
+  （exit 0）。
+- **门禁**：新增后统一门禁复跑 `python run_evals.py --module all` →
+  `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
+  result=PASS`（exit 0，本轮实跑）；`python scripts/ci_isolation.py` → 零命中
+  （新增 skills/ 与 tests/ 文件按 ISOLATION_PATTERN 实扫，exit 0）。

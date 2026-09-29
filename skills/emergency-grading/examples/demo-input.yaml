@@ -1,0 +1,17 @@
+# skills/emergency-grading/examples/demo-input.yaml · 演示样例输入（Q&A 用）
+# 场景：台风夜——1# 主变重瓦斯跳闸 + 电缆沟水浸 + 一条未登记的 SF6 气压异常告警。
+# 期望输出：建议 Ⅰ 级（多告警取最高级），basis 引用 ALM-8101×EMG-R01 与
+# ALM-8102×EMG-R08；SF6 告警进 manual_review（上报人工判定，不猜级）。
+alarms:
+  - id: ALM-8101
+    type: prot.gas_heavy_trip
+    device: TX-01
+    detail: 1#主变气体继电器重瓦斯动作，两侧断路器跳闸
+  - id: ALM-8102
+    type: cable_trench.flooding
+    device: TRENCH-A
+    detail: A 电缆沟水位传感器越限，2#排水泵未自动启动
+  - id: ALM-8103
+    type: sf6.pressure_abnormal
+    device: CB-110-2
+    detail: 110kV 2# 断路器 SF6 气压低报警（未登记事件类型示例）

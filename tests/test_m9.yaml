@@ -1,0 +1,246 @@
+# tests/test_m9.yaml
+# M9（应急分级技能 skills/emergency-grading）数据驱动 EVAL 套件 —— 新增（2026-09-30
+# 汇报前夜，观众需求「应急预警的分级分类」的技能雏形；不进演示主线，作 Q&A 弹药）。
+# 行为规格 = skills/emergency-grading/SKILL.md 的 EG-SPEC-01..08 条款 + SKILL.yaml
+# 映射表（数据驱动核心）。合计 8 例（P 6 / N 2）。
+# 执行器：tests/m9_eval_extra.py 4 个（m9.grade / m9.determinism / m9.data_driven /
+# m9.negative_input），断言全部取自本文件 params/expect，零案例特判；
+# 沙箱 runtime/m9_eval/<case>/ 独立可复跑（改表探针只写沙箱副本，线上 SKILL.yaml
+# 前后 sha256 由 m9.data_driven 断言不变）。
+# 运行方式：run_evals.py 的 MODULES 固定 m0..m7（文件只读，不纳入新模块），故本套件
+# 经插件入口 `python tests/m9_eval_extra.py` 以同一 runner 路径执行（schema 校验 +
+# spec_hash 重算比对 + 插件加载 + 逐用例执行）；`python run_evals.py --module all`
+# 门禁范围 m0..m7 不受影响。
+# spec_hash 口径（01§6；run_evals.py:819-825）：spec_ref 列表按序拼接文件字节的 sha256。
+suite: m9
+title: M9 应急分级技能（emergency-grading）EVAL（8 条）
+spec_ref:
+  - skills/emergency-grading/SKILL.yaml
+  - skills/emergency-grading/SKILL.md
+spec_hash: a0aaf1fb86df73389d95fa6d6d217945ce5a5d32b01afb74fa02c76fa0d1c667
+executors:
+  - module: tests.m9_eval_extra
+
+# ============================================================================
+# EG-SPEC-02 · 分级正确性：单一致命事件定级 + basis 引用告警 ID×条款
+# ============================================================================
+cases:
+  - id: EVAL-M9-01-P
+    spec: EG-SPEC-02
+    title: 重瓦斯+差动双跳闸 → Ⅰ 级（5min/P0），basis 逐条引用 ALM×EMG-R
+    form: policy_decision
+    executor: m9.grade
+    params:
+      alarms:
+        - {id: ALM-2201, type: prot.gas_heavy_trip, device: TX-01, detail: 1#主变重瓦斯动作跳闸}
+        - {id: ALM-2202, type: prot.diff_trip, device: TX-01, detail: 1#主变差动保护动作跳闸}
+    expect:
+      decision: AUTO_GRADED
+      suggested_level: "Ⅰ"
+      level_name: 特别重大应急
+      p_priority: P0
+      time_limit_minutes: 5
+      contributing_levels: ["Ⅰ"]
+      basis:
+        - {alarm_id: ALM-2201, rule_id: EMG-R01, level: "Ⅰ"}
+        - {alarm_id: ALM-2202, rule_id: EMG-R02, level: "Ⅰ"}
+      posts_expected: [值班员, 调度员, 签发人, 审批人]
+      post_ops_contain:
+        值班员: [SOE]
+        调度员: [禁止试送电]
+      escalate_contains: [取气样]
+      release_contains: [降为 Ⅲ]
+
+  # ========================================================================
+  # EG-SPEC-03 · 多告警取最高级（severity rank 最小者；同级并列按输入序）
+  # ========================================================================
+  - id: EVAL-M9-02-P
+    spec: EG-SPEC-03
+    title: 水浸Ⅲ+母线失压Ⅰ+直流接地Ⅲ → 取最高级 Ⅰ（5min），岗位合并四席
+    form: policy_decision
+    executor: m9.grade
+    params:
+      alarms:
+        - {id: ALM-3101, type: cable_trench.flooding, device: TRENCH-A, detail: 水位越限}
+        - {id: ALM-1101, type: bus.undervoltage, device: BUS-10kV-1, detail: 母线电压归零}
+        - {id: ALM-3201, type: dc.ground_fault, device: DC-220V, detail: 绝缘监察告警}
+    expect:
+      decision: AUTO_GRADED
+      suggested_level: "Ⅰ"
+      p_priority: P0
+      time_limit_minutes: 5
+      contributing_levels: ["Ⅰ", "Ⅲ"]
+      basis:
+        - {alarm_id: ALM-3101, rule_id: EMG-R08, level: "Ⅲ"}
+        - {alarm_id: ALM-1101, rule_id: EMG-R03, level: "Ⅰ"}
+        - {alarm_id: ALM-3201, rule_id: EMG-R07, level: "Ⅲ"}
+      posts_expected: [值班员, 调度员, 签发人, 审批人]
+      post_ops_contain:
+        值班员: [失压范围, 排水泵]
+        调度员: [拉路瞬停法]
+
+  # ========================================================================
+  # EG-SPEC-04 · 时限与岗位输出：Ⅱ 级事件四岗位齐全 + 升级/解除条件
+  # ========================================================================
+  - id: EVAL-M9-03-P
+    spec: EG-SPEC-04
+    title: 通信全中断 → Ⅱ 级（15min/P1），四岗位操作与时限齐全
+    form: policy_decision
+    executor: m9.grade
+    params:
+      alarms:
+        - {id: ALM-6101, type: comm.total_blackout, detail: 调度数据网+行政电话双通道全断}
+    expect:
+      decision: AUTO_GRADED
+      suggested_level: "Ⅱ"
+      level_name: 重大应急
+      p_priority: P1
+      time_limit_minutes: 15
+      contributing_levels: ["Ⅱ"]
+      basis:
+        - {alarm_id: ALM-6101, rule_id: EMG-R06, level: "Ⅱ"}
+      posts_expected: [值班员, 调度员, 签发人, 审批人]
+      post_ops_contain:
+        值班员: [备用通信, 转人工监视]
+        调度员: [冻结]
+        签发人: [电话录音]
+        审批人: [就地执行]
+      escalate_contains: [升 Ⅰ]
+      release_contains: [双通道恢复]
+
+  # ========================================================================
+  # EG-SPEC-05 · 未知事件兜底：上报人工判定，不猜级（负向）
+  # ========================================================================
+  - id: EVAL-M9-04-N
+    spec: EG-SPEC-05
+    title: 全部未知事件类型 → 不给任何级别猜测，移交人工判定
+    form: negative_rejection
+    executor: m9.grade
+    params:
+      alarms:
+        - {id: ALM-9001, type: sf6.pressure_abnormal, device: CB-110-2, detail: SF6 气压低}
+        - {id: ALM-9002, type: camera.offline, detail: 门禁摄像头离线}
+    expect:
+      decision: MANUAL_REQUIRED
+      suggested_level: null
+      level_name: null
+      p_priority: null
+      time_limit_minutes: null
+      contributing_levels: []
+      basis: []
+      posts_expected: [值班员]
+      post_ops_contain:
+        值班员: [人工判定]
+      escalate_contains: [移交人工]
+      manual_review_ids: [ALM-9001, ALM-9002]
+
+  # ========================================================================
+  # EG-SPEC-06 · 确定性：同输入+同映射 → 输出逐字节一致
+  # ========================================================================
+  - id: EVAL-M9-05-P
+    spec: EG-SPEC-06
+    title: 混合告警集（Ⅰ+Ⅳ+未知）多轮渲染与 CLI 双跑逐字节一致
+    form: idempotency
+    executor: m9.determinism
+    params:
+      runs: 3
+      alarms:
+        - {id: ALM-4101, type: fire.confirmed, detail: 配电室火情确认}
+        - {id: ALM-4201, type: wx.typhoon_rainstorm_alert, detail: 台风橙色预警}
+        - {id: ALM-9300, type: drone.zone_breach, detail: 未知类型示例}
+    expect:
+      contains: [suggested_level, EMG-R04, manual_review, 上报人工判定]
+
+  # ========================================================================
+  # EG-SPEC-07 · 数据驱动性：改映射表条目 → 行为随之变（沙箱副本，线上表零改动）
+  # ========================================================================
+  - id: EVAL-M9-06-P
+    spec: EG-SPEC-07
+    title: 台风预警条目 Ⅳ→Ⅱ 改表后，同输入判级/时限/P 级随之变化
+    form: state_transition
+    executor: m9.data_driven
+    params:
+      alarms:
+        - {id: ALM-4201, type: wx.typhoon_rainstorm_alert, detail: 台风橙色预警}
+      patch:
+        rule_id: EMG-R09
+        set: {level: "Ⅱ", time_limit_minutes: 15, p_priority: P1}
+    expect:
+      baseline: {suggested_level: "Ⅳ", level_name: 一般应急（预警/提示）, p_priority: P2, time_limit_minutes: 120}
+      patched: {suggested_level: "Ⅱ", level_name: 重大应急, p_priority: P1, time_limit_minutes: 15}
+
+  # ========================================================================
+  # EG-SPEC-08 · 输入与映射校验负向拒绝
+  # ========================================================================
+  - id: EVAL-M9-07-N
+    spec: EG-SPEC-08
+    title: 缺 id/空 type/重复 id/映射事件二义 → 全部拒绝且消息达口径
+    form: negative_rejection
+    executor: m9.negative_input
+    params:
+      probes:
+        - name: 缺id
+          alarms:
+            - {type: fire.confirmed}
+          error_contains: [缺非空字符串 id]
+        - name: 空type
+          alarms:
+            - {id: ALM-9701, type: ""}
+          error_contains: [缺非空字符串 type]
+        - name: 重复id
+          alarms:
+            - {id: ALM-9702, type: fire.confirmed}
+            - {id: ALM-9702, type: dc.ground_fault}
+          error_contains: [重复]
+        - name: 映射事件二义
+          kind: mapping
+          mapping:
+            emergency_grading:
+              mapping_id: bad-probe@eval
+              levels:
+                "Ⅰ": {rank: 1, name: 探针级, response_minutes: 5}
+              rules:
+                - rule_id: PROBE-X1
+                  feature: 探针规则一
+                  event_types: [probe.same_type]
+                  level: "Ⅰ"
+                  p_priority: P0
+                  time_limit_minutes: 5
+                  posts: {值班员: [探针操作]}
+                - rule_id: PROBE-X2
+                  feature: 探针规则二
+                  event_types: [probe.same_type]
+                  level: "Ⅰ"
+                  p_priority: P0
+                  time_limit_minutes: 5
+                  posts: {值班员: [探针操作]}
+          error_contains: [二义]
+    expect: {}
+
+  # ========================================================================
+  # EG-SPEC-04/05 · 混合场景：已知Ⅱ级+未知事件并存（升级/解除条件输出）
+  # ========================================================================
+  - id: EVAL-M9-08-P
+    spec: EG-SPEC-04
+    title: 重过载Ⅱ级+未知摄像头离线 → 自动定级Ⅱ且未知项移交人工
+    form: policy_decision
+    executor: m9.grade
+    params:
+      alarms:
+        - {id: ALM-5201, type: tx.severe_overload, device: TX-02, detail: 负载率 112%}
+        - {id: ALM-9501, type: camera.offline, detail: 门禁摄像头离线}
+    expect:
+      decision: AUTO_GRADED
+      suggested_level: "Ⅱ"
+      p_priority: P0
+      time_limit_minutes: 15
+      contributing_levels: ["Ⅱ"]
+      basis:
+        - {alarm_id: ALM-5201, rule_id: EMG-R05, level: "Ⅱ"}
+      posts_expected: [值班员, 调度员, 签发人, 审批人]
+      post_ops_contain:
+        值班员: [冷却器]
+        调度员: [拉路]
+      escalate_contains: [升 Ⅰ, 移交人工]
+      release_contains: [回落 ≤80%]
+      manual_review_ids: [ALM-9501]

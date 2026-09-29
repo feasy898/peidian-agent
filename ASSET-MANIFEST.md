@@ -49,6 +49,7 @@
 | `tests/test_m5.yaml` | 27 | `ffd71edc0031b09aa5f70773ac0defcf34a228ef60bd70ed87ad01f1aef5766a` | `641cab4d9261324dae2bdd23009f39ff07e7c139d755897d3d3e176bc7de4e5d`（复核修复轮重算，前版存照 CHANGELOG） |
 | `tests/test_m6.yaml` | 21 | `f847adec42e3d474894ef0757ce8a1798646eb223bb1777ea25d1ca9824ec72c` | `f90a3d34f23387a115dde173cc4601ff8b965941c7de6280b32773055d39ebce`（复核修复轮重算，前版存照 CHANGELOG） |
 | `tests/test_m7.yaml` | 27 | `7b366416f1cce8a29cccc594d252568423b43d7b323fc2c0cb27d786c3c765e5` | `e986db497cbf10d9c2bed9dd0cce7efed107801621d1fdc3f9acb9d418b2fd1c` |
+| `tests/test_m9.yaml` | 8 | `ec782db02250a48048ca228b1fa21b8e3d01b5916431fb82df93d39964275b32` | `a0aaf1fb86df73389d95fa6d6d217945ce5a5d32b01afb74fa02c76fa0d1c667`（2026-09-30 汇报前夜新增：应急分级技能雏形套件，spec_ref=skills/emergency-grading/{SKILL.yaml,SKILL.md}；不属冻结 8 套件口径） |
 
 配套判据资产：`tests/EVAL-SCHEMA.md` `bdb3214a9ea6115539b58d422a52a6f5043c90dcfb846370c2351291025cca06`、
 `tests/negative_matrix.yaml` `189636ca32e54e8c393ea7311b4c4395074ceeab952a8da38b8910cd32eccffc`、
@@ -56,6 +57,13 @@
 `tests/fixtures/`（frozen/m7 状态机、dev-sim-park/dev-graph 注入实例、mock_releases）与
 tests 侧补充执行器插件（`tests/m2_eval_extra.py`、`tests/m4_eval_extra.py`、`tests/m6_eval_extra.py`、
 `tests/m7_eval_extra.py`、`tests/fixtures/m3_eval_plugin.py`、`tests/fixtures/m5_eval_plugin.py`——均 tests/ 侧，零 oracle 改动）。
+
+> **m9 增行注记（2026-09-30）**：`tests/test_m9.yaml`（8 例）+ 插件 `tests/m9_eval_extra.py`
+> 为汇报前夜新增的应急分级技能雏形套件（skills/emergency-grading/），不属冻结 8 套件
+> 口径；`run_evals.py` 的 MODULES 固定 m0..m7（只读未改），m9 经
+> `python tests/m9_eval_extra.py` 以同一 runner 路径运行（本轮实跑 8/8 PASS exit 0，
+> spec_hash/eval_hash 登记对见 tests/CHANGELOG.md 2026-09-30 节）；统一门禁
+> `python run_evals.py --module all` 复跑 233/233 PASS 不受影响，ci_isolation 实扫零命中。
 
 ## 3. SPEC↔EVAL 映射完整性结论
 
