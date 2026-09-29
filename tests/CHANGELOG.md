@@ -1572,3 +1572,40 @@
   `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
   result=PASS`（exit 0，本轮实跑）；`python scripts/ci_isolation.py` → 零命中
   （新增 skills/ 与 tests/ 文件按 ISOLATION_PATTERN 实扫，exit 0）。
+
+---
+
+## 2026-09-30（二） · M8 登记（需量分析与容需切换技能套件，新增）
+
+- **模块**：M8（`tests/test_m8.yaml`，7 例 P6/N1——01-P 需量统计正确性 / 02-P 临界点数学 /
+  03-P 判据引用 / 04-P 参数敏感性 / 05-P 确定性重放 / 06-P 输出 schema / 07-N 无效参数拒绝）。
+  行为规格 = `skills/demand-analysis/SKILL.yaml` 的 SPEC-M8-01..07 条款 + SKILL.md 口径节
+  （技能资产即规格源；观众需求六要素逐项落例）。
+- **spec_ref**（按序拼接取 hash）：
+  - `skills/demand-analysis/SKILL.yaml`
+  - `skills/demand-analysis/SKILL.md`
+- **spec_hash → eval_hash**：
+
+  | suite | spec_hash (sha256) | eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m8.yaml | `4de1a3d9d760077535c183371c7fec3f51217e6cd90cd3f0e0412b12373f9f1c` | `7e2943ef98543b68416f305a435a3c51ed3a2390354470059b39bece6bc1a698` |
+
+- **执行器**：`tests/m8_eval_extra.py`（tests 侧插件，6 个：m8.stats / m8.billing /
+  m8.criteria / m8.determinism / m8.schema / m8.negative；断言全部取自用例
+  params/expect，零案例特判；沙箱 `runtime/m8_eval/`，CLI 重放探针只写沙箱）。
+  关键断言锚点：月峰=台账标定 1720.0kW@2026-09-16T17:00Z（FLAT 段）、Top5 峰值序
+  [1720.0, 1716.981, 1712.041, 1711.861, 1709.076]、峰段占比 25.8%/负荷率 63.0% 落区间、
+  按需 82560 vs 按容 64000、临界点 1333.33kW（MD<1333.33 按需划算，实测 1200→demand /
+  1333.33→capacity / 1400→capacity）、PHYS-DEMAND 七点分级 [NORMAL,NORMAL,P2,P2,P2,P0,P0]
+  与 regulations/REG-TECH.yaml 原文阈值交叉比对、换价变体 40/30→临界 1500（容划算）与
+  30/40→临界 2666.67（需划算）建议语反转、API 三轮+CLI 双跑逐字节一致且换 seed 分化、
+  四段键封闭+类型、四探针 ValueError 拒绝。
+- **运行方式与门禁关系**：`run_evals.py` 的 MODULES 固定 m0..m7（核心资产只读，本夜不改，
+  与 M9 套件同口径），m8 不进 `--module all` 门禁；套件经插件入口
+  `python tests/m8_eval_extra.py` 以同一 runner 路径执行（schema 校验 + spec_hash 重算
+  比对 + 插件加载 + 逐用例执行），本轮实跑
+  `EVALS-M8 mode=suite status=RAN cases=7/7 failed=0 skipped=0 result=PASS`（exit 0）。
+- **门禁**：新增后统一门禁复跑 `python run_evals.py --module all` →
+  `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
+  result=PASS`（exit 0，本轮实跑）；`python scripts/ci_isolation.py` → 零命中（新增
+  skills/demand-analysis/ 与 tests/ 两件按 ISOLATION_PATTERN 实扫，exit 0）。
