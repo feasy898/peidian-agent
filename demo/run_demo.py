@@ -13,7 +13,8 @@ mock 的只是「模型替身」的步骤脚本（releases/rel-0001/evaluation/c
     python demo/run_demo.py --flow f2           # F2 过载处置全链（case_003 + case_004）
     python demo/run_demo.py --flow f3           # F3 红线三连拒（case_011 + case_012 + 网关直测）
     python demo/run_demo.py --flow f4           # F4 电价边界 + 诚实降级（demo-f4-tariff + case_009）
-    python demo/run_demo.py --flow all          # F1→F4 + 收尾回归，顺序全跑
+    python demo/run_demo.py --flow f5           # F5 需量分析与容需切换（可选加演，不并入 all）
+    python demo/run_demo.py --flow all          # F1→F4 + 收尾回归，顺序全跑（f5 独立加演）
     python demo/run_demo.py --flow all --auto   # 无人工输入连续播放（彩排/录制口径）
     python demo/run_demo.py regression          # 兼容旧式裸位置参数写法
 
@@ -694,6 +695,114 @@ def flow_f4(pacer: Console) -> int:
 
 
 # ===========================================================================
+# F5 需量分析与容需切换（可选加演：skills/demand-analysis，今晚新增）
+# ===========================================================================
+def _load_demand_skill():
+    """skills/demand-analysis/calc_demand.py 确定性脚本（同仓库技能资产，只读调用）。"""
+    skill_dir = str(REPO / "skills" / "demand-analysis")
+    if skill_dir not in sys.path:
+        sys.path.insert(0, skill_dir)
+    import calc_demand  # noqa: PLC0415 - 技能脚本按路径懒加载，避免影响 f1-f4 导入面
+
+    return calc_demand
+
+
+def flow_f5(pacer: Console) -> int:
+    calc = _load_demand_skill()
+    result = calc.run_analysis()
+    park = result["park"]
+    stats = result["series_stats"]
+    bill = result["billing"]
+    crit = result["criteria"]
+
+    pacer.rule("【F5】最大需量分析与容需切换测算（可选加演 · skills/demand-analysis · 今晚新增）"
+               "· 计划 2 分钟")
+    pacer.say("  ◈ 为什么有这一流：会前有位专家提了明确需求——「最大需量分析，除分析用户")
+    pacer.say("     是否超需，也要分析园区整体需量规律，为是否做容需切换提供数据支撑」。")
+    pacer.say("     今晚把它做成了可演示、可评测的技能资产（skills/demand-analysis，M8 套件护航）。")
+    pacer.beat()
+
+    pacer.say("  ◈ 数据与口径（全部只读权威源，不另行发挥）")
+    pacer.say(f"     台账 ontology/seed.yaml：园区 {park['id']} · 合同容量"
+              f" {park['contract_capacity_kw']:.0f} kW · {park['demand_month']} 台账月峰"
+              f" {park['ledger_peak_kw']:.0f} kW · 电价表 {park['tariff']}")
+    pacer.say(f"     合成：{park['synthesis']['method']}")
+    pacer.say(f"     seed={result['meta']['seed']} 固定可重放；{park['synthesis']['calibration']}"
+              f"（{park['synthesis']['calibration_peak_kw']:.0f} kW）——不冒充实测历史。")
+    pacer.beat()
+
+    pacer.say(f"\n  ▶ 园区整体需量规律（{stats['points']} 个 15 分钟点，需量计量口径）")
+    pacer.say(f"  月最大需量 {stats['month_peak_kw']:.1f} kW，发生在 {stats['month_peak_at']}"
+              f"（{stats['month_peak_period']} 段——最大需量不出在峰段，而在晚峰前的爬坡平台）")
+    pacer.say("  Top5 高峰日（按日内最大 15 分钟需量）：")
+    for t in stats["top5_days"]:
+        pacer.say(f"    {t['date']}   {t['peak_kw']:7.1f} kW   @ {t['peak_at']}")
+    pacer.say(f"  峰段电量占比 {stats['peak_energy_ratio']:.1%}"
+              f"（窗口 {'、'.join(stats['peak_windows'])}，出自电价时段表）"
+              f" · 平 {stats['period_energy_ratio'].get('FLAT', 0):.1%}"
+              f" · 谷 {stats['period_energy_ratio'].get('VALLEY', 0):.1%}")
+    pacer.say(f"  负荷率 {stats['load_factor']:.1%}（平均 {stats['mean_kw']:.0f} kW / 月峰"
+              f" {stats['month_peak_kw']:.0f} kW）· 全月电量 {stats['energy_kwh']:,.0f} kWh")
+    pacer.beat()
+
+    pacer.heavy("★ 容需切换测算（基本电费两档对比——这就是「数据支撑」）")
+    pacer.say(f"  {'计费方式':<4}  计费基数(kW)  单价(元/kW·月)  月基本电费(元)")
+    pacer.say(f"  按需量  {stats['month_peak_kw']:>10.0f}  {bill['demand_price_yuan_per_kw_month']:>12.0f}"
+              f"  {bill['demand_billing_yuan']:>14,.0f}")
+    pacer.say(f"  按容量  {park['contract_capacity_kw']:>10.0f}  {bill['capacity_price_yuan_per_kw_month']:>12.0f}"
+              f"  {bill['capacity_billing_yuan']:>14,.0f}")
+    pacer.say(f"  临界点 = 合同容量×容量电价÷需量电价 = {park['contract_capacity_kw']:.0f}×"
+              f"{bill['capacity_price_yuan_per_kw_month']:.0f}÷"
+              f"{bill['demand_price_yuan_per_kw_month']:.0f} = {bill['threshold_kw']:.2f} kW")
+    pacer.say(f"  → 月最大需量低于 {bill['threshold_kw']:.2f} kW 按需量计费划算；高于则按容量划算。")
+    pacer.say(f"  当前月峰 {stats['month_peak_kw']:.0f} kW 在临界点"
+              f"{'之上' if stats['month_peak_kw'] > bill['threshold_kw'] else '之下'}："
+              f"{'按容量计费' if bill['cheaper'] == 'capacity' else '按需量计费'}更省"
+              f"（月省 {bill['saving_yuan_per_month']:,.0f} 元 / 年省"
+              f" {bill['saving_yuan_per_year']:,.0f} 元）")
+    pacer.say(f"  ⚠ 电价参数：{bill['param_note']}——临界点随当地目录电价重算，结论数据驱动。")
+    pacer.heavy()
+    pacer.beat()
+
+    pacer.heavy("★ 判据联动（超需不超需，规程说了算）")
+    pacer.say("")
+    pacer.say(f"  {crit['conclusion']}")
+    whatif = [2050.0, 2150.0]
+    judged = [calc.judge_demand(kw, park["contract_capacity_kw"],
+                                calc.load_demand_thresholds(REPO)) for kw in whatif]
+    pacer.say("  假设检验（同一判据函数，阈值仍出自规程库）：月峰 2050 kW →"
+              f" {judged[0]['level']} {judged[0]['label']}（ratio={judged[0]['demand_ratio']}）；"
+              f"2150 kW → {judged[1]['level']} {judged[1]['label']}"
+              f"（ratio={judged[1]['demand_ratio']}）")
+    pacer.heavy()
+    pacer.beat()
+
+    pacer.say("  ◈ 建议")
+    pacer.say(f"  {result['recommendation']}")
+    pacer.beat()
+
+    replay = calc.run_analysis()
+    checks = [
+        ("月峰=台账标定", stats["month_peak_kw"] == park["ledger_peak_kw"]),
+        ("容需结论=按容量更省", bill["cheaper"] == "capacity"),
+        ("结论引用 PHYS-DEMAND", crit["rule_ids"] == ["PHYS-DEMAND"]
+         and "PHYS-DEMAND" in crit["conclusion"]),
+        ("确定性重放一致", replay == result),
+    ]
+    pacer.say("  —— 判据核验（f5 自检）——")
+    for name, ok in checks:
+        pacer.say(f"  [判据 {'PASS' if ok else 'FAIL'}] {name}")
+    takeaways(pacer, [
+        "观众点的题当场成资产：需量规律（月峰/Top5/峰段占比/负荷率）+ 容需切换临界点，一个脚本出全套数。",
+        "阈值在规程库（PHYS-DEMAND：>1.0 预警、>1.05 越限），电价是显式参数——换当地目录电价重算即得本地结论。",
+        f"本期口径：月峰 {stats['month_peak_kw']:.0f} kW 距预警线余量"
+        f" {crit['margin_to_warn_kw']:.0f} kW；容需两档月差 {bill['saving_yuan_per_month']:,.0f} 元，值得按月复盘。",
+        "同 seed 逐字节可重放（重跑即验），已纳入 EVAL M8 套件护航。",
+    ])
+    return 0 if all(ok for _, ok in checks) else 1
+
+
+# ===========================================================================
 # 收尾回归：12 条开发黄金集 × rel-0001
 # ===========================================================================
 def flow_regression(pacer: Console) -> int:
@@ -720,7 +829,7 @@ def flow_regression(pacer: Console) -> int:
     return 0 if not report.get("failures") else 1
 
 
-FLOWS = {"f1": flow_f1, "f2": flow_f2, "f3": flow_f3, "f4": flow_f4,
+FLOWS = {"f1": flow_f1, "f2": flow_f2, "f3": flow_f3, "f4": flow_f4, "f5": flow_f5,
          "regression": flow_regression}
 
 
@@ -733,12 +842,12 @@ def main(argv: list | None = None) -> int:
             stream.reconfigure(encoding="utf-8")
         except (AttributeError, ValueError):
             pass
-    choices = ["f1", "f2", "f3", "f4", "regression", "all"]
+    choices = ["f1", "f2", "f3", "f4", "f5", "regression", "all"]
     parser = argparse.ArgumentParser(
         prog="demo/run_demo.py",
         description="园区配电运维智能体 · 实机演示器（离线 mock，逐条实现 DEMO-DESIGN F 流）")
     parser.add_argument("--flow", choices=choices, default=None,
-                        help="演示流：f1|f2|f3|f4|regression|all")
+                        help="演示流：f1|f2|f3|f4|f5|regression|all（f5 可选加演，不并入 all）")
     parser.add_argument("flow_pos", nargs="?", choices=choices, default=None,
                         help=argparse.SUPPRESS)  # 兼容 `run_demo.py f1` 裸写法
     parser.add_argument("--auto", action="store_true",
