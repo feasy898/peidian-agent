@@ -344,7 +344,7 @@ def flow_f1(pacer: Console) -> int:
     pacer.rule("【F1】正常闭环：日巡检三轮对话 → 报告 PUBLISHED（case_001）· 计划 3 分钟")
     release = _release()
     pacer.say("  ◈ 案例背景")
-    pacer.say("     园区：PARK-001（A/B 两配电房：TX-01/02/03 三台 1600kVA 变压器、")
+    pacer.say("     园区：PARK-001（A/B 两配电房：TX-01/02 各 1600kVA、TX-03 1000kVA、")
     pacer.say("     10kV/0.4kV 母线、储能 BESS-01、电容 CB-A——台账见 ontology/seed.yaml）")
     pacer.say("     当值：2026-09-15 白班 · 值班员张工(OP-001)")
     pacer.say("     「大脑」=离线脚本替身（releases/rel-0001/evaluation/cases.yaml）；")
