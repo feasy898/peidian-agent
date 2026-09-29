@@ -8,7 +8,7 @@
 > **编排**：开场 1 分钟 → F1（3 分钟）→ F2（5 分钟，全场高潮）→ F3（3 分钟）→ F4（2.5 分钟）
 > → 收尾 0.5 分钟 ≈ 15 分钟顶格；现场按 14 分钟掌控，留提问缓冲。
 > 所有命令**离线可跑**（mock 模型替身 + 仿真环境，无网络依赖）。命令执行本身是秒级
-> （全趟实测 15–55 秒，首次冷启动偏慢属正常）；分钟数是**讲解节奏**，讲到哪行鼠标指到哪行。
+> （全趟实测 20–40 秒，首次冷启动偏慢属正常）；分钟数是**讲解节奏**，讲到哪行鼠标指到哪行。
 
 ---
 
@@ -16,7 +16,7 @@
 
 ```bash
 cd peidian-agent
-python demo/run_demo.py --flow all --auto         # 四流 + 回归一次全绿（约 15–55 秒）
+python demo/run_demo.py --flow all --auto         # 四流 + 回归一次全绿（约 20–40 秒）
 ```
 
 - [ ] 退出无 Traceback，末行 `全部判据通过，退出码 0`；
@@ -127,7 +127,7 @@ python demo/run_demo.py --flow all --auto         # 四流 + 回归一次全绿�
      ↳ `approval.granted ×1（审批人·赵总(OP-004)）——人这一关过了；`
   2. 「但是票不在，SO-NONE-404 这张票从来没签发过——遥控指令到执行层**直接失败**。请看两个证据：申请未执行，开关位置还是合。」
      ↳ `[08:50] ! 值班员·张工(OP-001) 遥控操作 execute.remote_control@v1 SG-A02 → FAILED [NO_SWITCH_ORDER]`
-     ↳ `遥控申请：SG-A02 OPEN（所凭操作票 SO-NONE-404 第 - 步）→ 未执行`
+     ↳ `遥控申请：SG-A02 OPEN（所凭操作票 SO-NONE-404，未声明步骤）→ 未执行`
      ↳ `环境回读：SG-A02 breaker=CLOSED（ts=2026-09-15T09:00:00Z）`
      ↳ `网关回执：遥控缺少已签发操作票: 'SO-NONE-404'（SAFE-TWO-TICKET 红线）`
   3. 「**票是执行层的物理前置，不是口头约定**——跟现场『票不全不操作』一个逻辑。人批了都没用。」
@@ -214,7 +214,10 @@ python demo/run_demo.py --flow all --auto         # 四流 + 回归一次全绿�
 
 - `python demo/run_demo.py --flow all --auto` 连跑 2 次：`transcript-run1.txt` / `transcript-run2.txt`
   逐字节一致（diff 空）；仓库根目录以 `python peidian-agent/demo/run_demo.py --flow all --auto`
-  直跑同验通过（任意 cwd 可跑）。
+  直跑同验通过（任意 cwd 可跑，输出与 run2 逐字节一致）。
 - 定稿 transcript 取 run2 → `transcript-auto.txt`。
-- 时长（windev-01，2026-09-29）：全趟约 15 秒（热缓存）/ 首趟约 46 秒（冷启动）；
+- 时长（windev-01，2026-09-29 彩排实测）：全趟热跑约 20–22 秒（run1 21.4s / run2 20.0s /
+  仓库根直跑 21.6s；当日最早一趟冷启动 31.3s）；
   单流秒级——分钟数均为讲解节奏，非命令耗时。
+- 本轮修复一处上屏占位符：拒绝 1 的遥控申请行「第 - 步」→「未声明步骤」（`demo/run_demo.py`
+  `_step_text`），讲解词与 `transcript-auto.txt` 已同步。

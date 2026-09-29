@@ -190,6 +190,12 @@ def _compact(value, limit: int = 118) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
+def _step_text(arg: dict) -> str:
+    """票步骤标签：有步骤声明给「第 N 步」，没有就直说「未声明步骤」（不甩占位符）。"""
+    step = arg.get("step")
+    return f"第 {step} 步" if step not in (None, "") else "未声明步骤"
+
+
 # ===========================================================================
 # 叙事渲染：计划步 → 「[业务时间] 角色 动作 → 结果（关键数值/状态/规程 ID）」
 # ===========================================================================
@@ -264,10 +270,10 @@ def _detail_lines(r, env) -> list:
     elif key == "execute.remote_control":
         if str(res.get("status")) == "SUCCEEDED":
             out.append(f"遥控执行：{arg.get('device')} {arg.get('operation')}"
-                       f"（操作票 {arg.get('switch_order')} 第 {arg.get('step', '-')} 步）")
+                       f"（操作票 {arg.get('switch_order')} {_step_text(arg)}）")
         else:  # FAILED/DENIED：只是「申请过」，闸没动——防止误读成已分闸
             out.append(f"遥控申请：{arg.get('device')} {arg.get('operation')}"
-                       f"（所凭操作票 {arg.get('switch_order')} 第 {arg.get('step', '-')} 步）"
+                       f"（所凭操作票 {arg.get('switch_order')}，{_step_text(arg)}）"
                        f"→ 未执行")
         if obs.get("breaker_state"):
             out.append(f"环境回读：{obs.get('device')} breaker={obs.get('breaker_state')}"

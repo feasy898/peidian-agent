@@ -3,7 +3,7 @@
 【F1】正常闭环：日巡检三轮对话 → 报告 PUBLISHED（case_001）· 计划 3 分钟
 ────────────────────────────────────────────────────────────────────────────
   ◈ 案例背景
-     园区：PARK-001（A/B 两配电房：TX-01/02/03 三台 1600kVA 变压器、
+     园区：PARK-001（A/B 两配电房：TX-01/02 各 1600kVA、TX-03 1000kVA、
      10kV/0.4kV 母线、储能 BESS-01、电容 CB-A——台账见 ontology/seed.yaml）
      当值：2026-09-15 白班 · 值班员张工(OP-001)
      「大脑」=离线脚本替身（releases/rel-0001/evaluation/cases.yaml）；
@@ -150,7 +150,7 @@
         规则 SAFE-TWO-TICKET《两票制》（regulations/ 规程库）
         条款：任何遥控操作前必须存在状态=已签发的 SwitchOrder（两票制）。
   [08:50] ! 值班员·张工(OP-001) 遥控操作 execute.remote_control@v1 SG-A02 → FAILED [NO_SWITCH_ORDER]
-        遥控申请：SG-A02 OPEN（所凭操作票 SO-NONE-404 第 - 步）→ 未执行
+        遥控申请：SG-A02 OPEN（所凭操作票 SO-NONE-404，未声明步骤）→ 未执行
         环境回读：SG-A02 breaker=CLOSED（ts=2026-09-15T09:00:00Z）
         网关回执：遥控缺少已签发操作票: 'SO-NONE-404'（SAFE-TWO-TICKET 红线）
 ════════════════════════════════════════════════════════════════════════════
