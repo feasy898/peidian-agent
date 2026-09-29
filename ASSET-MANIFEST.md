@@ -8,7 +8,7 @@
 > （`sha256` 对文件字节计算，autocrlf 工作区原样字节）。
 > 本文件不自列 hash（自引用无意义）；`specs-v2/README.md` §0.1 的占位由本文件承接。
 
-## 1. 规格资产 · specs-v2/ 全部文件 sha256（19 件）
+## 1. 规格资产 · specs-v2/ 全部文件 sha256（20 件）
 
 | 文件 | sha256 |
 | --- | --- |
@@ -24,6 +24,7 @@
 | `specs-v2/M7-registry-release.md` | `9fe6dce406fc2583ea8cfd86e0b5809398ede1df2b6277d8098fce58eee782a2` |
 | `specs-v2/DEVIATIONS-draft.md` | `b3a536b4c5a9949e943d0a9e8cb31d82c4a1dcc5f312a24977c16b296d8a61b1` |
 | `specs-v2/DEVIATIONS.md` | `db61a97e774150a5eb28f0ce570c33f6ad2cee31d5d7cacb2a14a10911bc3b1f` |
+| `specs-v2/ADDENDUM.md` | `a05bb6b17ea5fc2d2d6eed5ce6d0d06588893b1677d326953b7261aad8e9cb72`（2026-09-30 增补行：v1 §A-§F 按 oracle 转正，D-67..D-71 + §F 侧 D-44；spec_ref 重算再登记为后续动作，见其「登记与后续」节） |
 | `specs-v2/deviations/M1.md` | `d3b7e2d1967e63e9aa162db8ffa40a4fdcb53cdc4dd588101dfa7715e846d996` |
 | `specs-v2/deviations/M2.md` | `6d772531bbc829e889eb6db6f5dbab5d8731beb4597f5e0a598b965cdc633234` |
 | `specs-v2/deviations/M3.md` | `3d1879483700da776ff0fec04ca788ca04cd902ec210000aceaccea3eef84e5e` |
@@ -32,8 +33,9 @@
 | `specs-v2/deviations/M6.md` | `815083d73af3a645e2beb135a20298e699ca0b1eaf3f5246349364378f00d846` |
 | `specs-v2/deviations/M7.md` | `be540247a9f25ad0e1ebde495c72e6bf3fdfd6cc664143ea408708165e09699c` |
 
-> `specs-v2/ADDENDUM.md` 未产出（D-67..D-71 处置条款已分散落 00/01 v2 与模块 spec；
-> 见 `specs-v2/DEVIATIONS.md` §KNOWN-DEFECT 与未决项第 4 条）。
+> `specs-v2/ADDENDUM.md` 已产出（2026-09-30 增补：D-67..D-71 处置条款仍以 00/01 v2 与
+> 模块 spec 为权威正文，本件为 §A-§F 逐节转正 + 证据锚点汇集；`specs-v2/DEVIATIONS.md`
+> §KNOWN-DEFECT 与未决项第 4 条前半句自此消解，spec_hash 重算再登记仍待后续）。
 
 ## 2. eval 资产 · tests/test_m*.yaml sha256（8 套件，233 用例）
 
@@ -57,7 +59,7 @@ tests 侧补充执行器插件（`tests/m2_eval_extra.py`、`tests/m4_eval_extra
 
 ## 3. SPEC↔EVAL 映射完整性结论
 
-**结论：完整（映射成立），含一项已登记的待决缺口（specs-v2/ADDENDUM.md 未产出）。**
+**结论：完整（映射成立），含一项已登记的待决后续（specs-v2/ADDENDUM.md 已于 2026-09-30 产出并登记 §1；受影响套件 spec_hash 重算再登记待做）。**
 
 - **逐条款覆盖**（冻结会话脚本复核）：M1 15/15、M2 14/14、M3 16/16、M4 9/9、M6 8/8 条款由套件
   `spec:` 字段直接覆盖；M5 14/15 直指 + SPEC-M5-14 经声明共享映射（EVAL-M5-08-P/09-P 的
@@ -76,9 +78,11 @@ tests 侧补充执行器插件（`tests/m2_eval_extra.py`、`tests/m4_eval_extra
   与 rel-0001 登记值及 oracle 函数三方一致）。另一实现面注记：`scenarios/dev-*.yaml`、
   EVAL 执行器插件与 runner 属资产给定量（tests 侧可按 `tests/EVAL-SCHEMA.md` §4 契约与
   用例 params/expect 重建等效件，非逐字节复刻）。
-- **待决缺口**：`specs-v2/ADDENDUM.md` 未产出；受影响套件（m1/m4/m5/m6）spec_ref 暂引
+- **待决后续**（2026-09-30 行级回写）：`specs-v2/ADDENDUM.md` 已产出（§1 已登记 sha256）；
+  受影响套件（m1/m4/m5/m6）spec_ref 仍引
   `specs/ADDENDUM.md` v1 原文（m3 整体保持 v1 四文件口径、m0 为 v1 基线对——均登记在案且
-  runner 校验一致），其落盘后须按 01 v2 §6 重算 spec_hash 并再登记。
+  runner 校验一致），按 01 v2 §6 重算 spec_hash 并再登记为后续动作（该轮落盘时零 tests/
+  套件改动，门禁按现行登记对全绿）。
 
 ## 4. 变异杀灭率汇总（scripts/mutation_test.py，52 变异 × 7 模块）
 

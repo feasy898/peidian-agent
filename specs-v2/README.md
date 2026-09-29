@@ -15,7 +15,7 @@
 | `README.md` | 本文件：v2 交付物索引 + eval 资产索引 + 资产清单占位 | 索引 | ✅ 本阶段产出 |
 | `01-contracts.md` | 模块划分+冻结契约 v2.0（12 数据结构+API+28 事件+5 状态机+Eval 协议+契约变更流程），`src/contracts/` 为代码化权威，CONTRACT_VERSION=1.1 | 接口权威源 | ✅ 本阶段产出 |
 | `00-ontology.md` | 本体四要素 v2.0（含 actions.yaml policy_locked 列、REG-OP 全部 5 规则 ID、PHYS-TX-TEMP、aliases.yaml 实体解析数据、seed.yaml 实例与加载协议） | 语义权威源 | ✅ 本阶段产出 |
-| `ADDENDUM.md` | v1 附录（§A-§F）按 oracle 落地形态复核转正 | 附录 | ⏳ 由 ADDENDUM 偏差工程师按 D-67..D-71 生成 |
+| `ADDENDUM.md` | v1 附录（§A-§F）按 oracle 落地形态复核转正（v2 · 由 oracle 反提，证据锚点到文件:行；D-67..D-71 + §F 侧 D-44 逐节转正；spec_ref 重算再登记为后续动作，见其「登记与后续」节） | 附录 | ✅ 已产出（2026-09-30） |
 | `M1-agent-core.md` | 执行内核 spec v2 | 开发规格（反提） | ✅ 已产出（SPEC-M1-01..15；配套 `deviations/M1.md`） |
 | `M2-information.md` | 信息层 spec v2 | 开发规格（反提） | ✅ 已产出（SPEC-M2-01..14；配套 `deviations/M2.md`） |
 | `M3-action-gateway.md` | 行动层 spec v2 | 开发规格（反提） | ✅ 已产出（SPEC-M3-01..16；配套 `deviations/M3.md`） |
