@@ -1,0 +1,10 @@
+[
+  {
+    "id": "m6-holdout-addcase-allow",
+    "redline": true,
+    "target": "src/m6_flywheel/golden_set.py",
+    "find": "    if \"holdout\" in base.resolve().as_posix() or is_holdout_marked(case):",
+    "replace": "    if False and (\"holdout\" in base.resolve().as_posix() or is_holdout_marked(case)):",
+    "description": "SPEC-M6-02：开发写入通道 add_golden_case holdout 拒绝失效——探测 EVAL 是否覆盖"
+  }
+]

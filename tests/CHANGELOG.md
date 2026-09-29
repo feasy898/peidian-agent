@@ -1469,3 +1469,26 @@
      oracle 路径 `git status` 干净复核）。并发变异测试期间的 skipped_dirty /
      index.lock 中断均经重试循环与当场还原处置（过程日志
      `.mutations/run-m6-attempt*.log`）。
+
+---
+
+## 2026-09-29 · 资产冻结收口（M5 全量变异权威重跑 + 统一门禁复跑 + 冻结台账）
+
+- **M5 全量变异权威重跑（上文 M5 变异缺口修复节所预约的统一门禁复跑，已执行）**：
+  `python scripts/mutation_test.py --module m5 --plan .mutations/plan-m5.json --baseline`
+  （仓库根、干净 oracle 窗口、无并发变异）→ 基线 `cases=27/27 failed=0 result=PASS`
+  exit 0；**planned=7 valid=7 killed=7 survivors=0 redline_all_killed=true**（7/7 全部
+  executed kill、restored=true、hash_match=true，轮后 oracle 树复核干净）。权威结果
+  `.mutations/results-m5.json`（覆盖此前 skipped_dirty 版）；`.mutations/plan-m5-recheck.json`
+  单变异计划完成历史使命，两份存照（first-run/recheck）保留。至此 7 模块 52 变异
+  权威终局：51 条行为变异全杀、1 条无效变异（m4-ambiguity-margin-shrink，plan-m4.json
+  disposition=invalid）、红线全模块 true——汇总见 `ASSET-MANIFEST.md` §4。
+- **统一门禁复跑（冻结门禁）**：`python run_evals.py --module all` →
+  `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
+  result=PASS`（exit 0；runner 按 run_evals.py:819-825 口径重算 8 套件 spec_hash 与
+  声明值一致）。8 套件 eval_hash 与本台账最新登记对逐位一致（冻结会话逐文件实测）。
+- **冻结产出**：`specs-v2/DEVIATIONS.md`（D-01..D-71 全量偏差汇总表，含 disposition 与
+  条款号索引；正式处置以 deviations/M1..M7.md 为准）、`ASSET-MANIFEST.md`（specs-v2/
+  19 件 + tests/test_m0..m7.yaml sha256、映射完整性结论、变异杀灭率汇总、oracle 未改动
+  声明——基线 commit `1fd8901`）、`specs/README.md` 顶部弃用指针一行（v1 原文未动）。
+  本条目为台账收口登记，无 spec/eval 内容变更（spec_hash/eval_hash 登记对不变）。

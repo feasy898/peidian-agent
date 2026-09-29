@@ -45,7 +45,9 @@
     "target": "src/m4_semantic/resolver.py",
     "find": "        self.margin = float(scores.get(\"unambiguous_margin\", 0.3))",
     "replace": "        self.margin = float(scores.get(\"unambiguous_margin\", 0.05))",
-    "description": "SPEC-M4-04：歧义不擅断阈值收窄（0.3→0.05 弱读法直判）——EVAL-M4-04-N1 期望 all_ambiguous 应杀"
+    "description": "SPEC-M4-04：歧义不擅断阈值收窄（0.3→0.05 弱读法直判）——EVAL-M4-04-N1 期望 all_ambiguous 应杀",
+    "disposition": "invalid",
+    "invalid_reason": "无效变异（死缺省，行为不可达）：resolver.py:100 的 scores 取值分支为「aliases.yaml 无嵌套 scores 键时回退到顶层映射」，而 ontology/aliases.yaml:28 顶层提供 unambiguous_margin: 0.3（loader.py:736-739 按同一顶层形态校验），scores.get 的缺省值分支在仓库数据下不可达——变异 0.3→0.05 无行为效果，EVAL 全绿是正确结论而非覆盖缺口。真实阈值守护已由 EVAL-M4-04-N1 承担（数据文件 0.3 生效面：'3 号变压器' 0.6 对 0.5 分差 0.1<0.3 判歧义）。2026-09-29 变异缺口修复轮标注。"
   },
   {
     "id": "m4-vocab-crosscheck-off",

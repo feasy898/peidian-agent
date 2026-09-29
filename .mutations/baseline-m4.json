@@ -1,0 +1,7 @@
+{
+  "module": "m4",
+  "exit_code": 0,
+  "timed_out": false,
+  "summary": "EVALS mode=m4 isolation=OK modules=1/1 pending=0 cases=17/17 failed=0 skipped=0 result=PASS",
+  "generated_at": "2026-09-29T09:36:14Z"
+}

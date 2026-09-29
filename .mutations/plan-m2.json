@@ -5,7 +5,8 @@
     "target": "src/m2_information/context_builder.py",
     "find": "NEVER_TRIM_TYPES: frozenset[str] = frozenset({\"SYSTEM_POLICY\"})",
     "replace": "NEVER_TRIM_TYPES: frozenset[str] = frozenset()",
-    "description": "SPEC-M2-03/红线：policy 永不裁剪解除（SYSTEM_POLICY 可被裁）——EVAL-M2-03-N 期望拒绝编译+PAUSED 应杀"
+    "description": "SPEC-M2-03/红线：policy 永不裁剪解除（SYSTEM_POLICY 可被裁）——EVAL-M2-03-N 期望拒绝编译+PAUSED 应杀",
+    "invalid_first_run_note": "【首跑无效注记 2026-09-29】首轮变异 harness 误以工作区根路径调用工具（D:\\workspace\\xunfei4\\scripts\\mutation_test.py 不存在，实际工具在 peidian-agent/scripts/mutation_test.py），工具从未执行、survivors 报「结果文件缺失/工具失败」——该轮两条 survivor 均为运行无效产物，非真实覆盖缺口；同日在仓库根以正确路径重跑（--baseline），权威结果见 .mutations/results-m2.json 与 tests/CHANGELOG.md 同日修订节。"
   },
   {
     "id": "m2-knowledge-mutate-allow",
@@ -13,7 +14,8 @@
     "target": "src/m2_information/memory.py",
     "find": "        raise error",
     "replace": "        return None",
-    "description": "SPEC-M2-12/红线：Knowledge mutate 一律拒绝解除——EVAL-M2-12-N2 期望只读拒绝+审计应杀"
+    "description": "SPEC-M2-12/红线：Knowledge mutate 一律拒绝解除——EVAL-M2-12-N2 期望只读拒绝+审计应杀",
+    "invalid_first_run_note": "【首跑无效注记 2026-09-29】首轮变异 harness 误以工作区根路径调用工具（D:\\workspace\\xunfei4\\scripts\\mutation_test.py 不存在，实际工具在 peidian-agent/scripts/mutation_test.py），工具从未执行、survivors 报「结果文件缺失/工具失败」——该轮两条 survivor 均为运行无效产物，非真实覆盖缺口；同日在仓库根以正确路径重跑（--baseline），权威结果见 .mutations/results-m2.json 与 tests/CHANGELOG.md 同日修订节。"
   },
   {
     "id": "m2-crosswrite-allow",
@@ -21,7 +23,8 @@
     "target": "src/m2_information/workspace.py",
     "find": "        raise error",
     "replace": "        return",
-    "description": "SPEC-M2-09：跨任务写一律拒绝解除——EVAL-M2-09-N 期望拒绝+DENY 审计应杀"
+    "description": "SPEC-M2-09：跨任务写一律拒绝解除——EVAL-M2-09-N 期望拒绝+DENY 审计应杀",
+    "invalid_first_run_note": "【首跑无效注记 2026-09-29】首轮变异 harness 误以工作区根路径调用工具（D:\\workspace\\xunfei4\\scripts\\mutation_test.py 不存在，实际工具在 peidian-agent/scripts/mutation_test.py），工具从未执行、survivors 报「结果文件缺失/工具失败」——该轮两条 survivor 均为运行无效产物，非真实覆盖缺口；同日在仓库根以正确路径重跑（--baseline），权威结果见 .mutations/results-m2.json 与 tests/CHANGELOG.md 同日修订节。"
   },
   {
     "id": "m2-rule-id-existence-off",
@@ -29,7 +32,8 @@
     "target": "src/m2_information/artifact.py",
     "find": "    if refs_ok and rule_id_checker is not None:",
     "replace": "    if False and refs_ok and rule_id_checker is not None:",
-    "description": "SPEC-M2-10/D-68：规程规则 ID 存在性联动解除——EVAL-M2-10-N2 期望未知规则 ID 拒绝应杀"
+    "description": "SPEC-M2-10/D-68：规程规则 ID 存在性联动解除——EVAL-M2-10-N2 期望未知规则 ID 拒绝应杀",
+    "invalid_first_run_note": "【首跑无效注记 2026-09-29】首轮变异 harness 误以工作区根路径调用工具（D:\\workspace\\xunfei4\\scripts\\mutation_test.py 不存在，实际工具在 peidian-agent/scripts/mutation_test.py），工具从未执行、survivors 报「结果文件缺失/工具失败」——该轮两条 survivor 均为运行无效产物，非真实覆盖缺口；同日在仓库根以正确路径重跑（--baseline），权威结果见 .mutations/results-m2.json 与 tests/CHANGELOG.md 同日修订节。"
   },
   {
     "id": "m2-knowledge-register-open",
@@ -37,7 +41,8 @@
     "target": "src/m2_information/memory.py",
     "find": "        if not str(review.get(\"reviewer\") or \"\").strip() or \\\n",
     "replace": "        if False and not str(review.get(\"reviewer\") or \"\").strip() and \\\n",
-    "description": "SPEC-M2-12：Knowledge 注册 M7 评审通道必填（reviewer/review_ref）解除——探测 EVAL 是否覆盖"
+    "description": "SPEC-M2-12：Knowledge 注册 M7 评审通道必填（reviewer/review_ref）解除——探测 EVAL 是否覆盖",
+    "invalid_first_run_note": "【首跑无效注记 2026-09-29】首轮变异 harness 误以工作区根路径调用工具（D:\\workspace\\xunfei4\\scripts\\mutation_test.py 不存在，实际工具在 peidian-agent/scripts/mutation_test.py），工具从未执行、survivors 报「结果文件缺失/工具失败」——该轮两条 survivor 均为运行无效产物，非真实覆盖缺口；同日在仓库根以正确路径重跑（--baseline），权威结果见 .mutations/results-m2.json 与 tests/CHANGELOG.md 同日修订节。"
   },
   {
     "id": "m2-optimistic-lock-off",
@@ -45,6 +50,7 @@
     "target": "src/m2_information/state_store.py",
     "find": "            if row[\"version\"] != expected_version:",
     "replace": "            if False and row[\"version\"] != expected_version:",
-    "description": "SPEC-M2-07：put_task 乐观锁版本冲突校验解除——探测 EVAL 是否覆盖（疑似盲区）"
+    "description": "SPEC-M2-07：put_task 乐观锁版本冲突校验解除——探测 EVAL 是否覆盖（疑似盲区）",
+    "invalid_first_run_note": "【首跑无效注记 2026-09-29】首轮变异 harness 误以工作区根路径调用工具（D:\\workspace\\xunfei4\\scripts\\mutation_test.py 不存在，实际工具在 peidian-agent/scripts/mutation_test.py），工具从未执行、survivors 报「结果文件缺失/工具失败」——该轮两条 survivor 均为运行无效产物，非真实覆盖缺口；同日在仓库根以正确路径重跑（--baseline），权威结果见 .mutations/results-m2.json 与 tests/CHANGELOG.md 同日修订节。"
   }
 ]

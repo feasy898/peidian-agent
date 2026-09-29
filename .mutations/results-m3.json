@@ -2,14 +2,9 @@
   "module": "m3",
   "planned": 8,
   "valid": 8,
-  "killed": 7,
-  "survivors": [
-    {
-      "id": "m3-unknown-action-allow",
-      "description": "SPEC-M3-04/红线1：动作不在授权规则表内改判 ALLOW（第二道防线）——探测 EVAL 是否覆盖"
-    }
-  ],
-  "redline_all_killed": false,
+  "killed": 8,
+  "survivors": [],
+  "redline_all_killed": true,
   "per_mutation": [
     {
       "id": "m3-immutable-deny-line-drop",
@@ -25,7 +20,7 @@
       "hash_match": true,
       "note": "",
       "find_variant": "CRLF",
-      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=27/29 failed=2 skipped=0 result=FAIL"
+      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=28/30 failed=2 skipped=0 result=FAIL"
     },
     {
       "id": "m3-permanent-ask-rename",
@@ -41,7 +36,7 @@
       "hash_match": true,
       "note": "",
       "find_variant": "LF",
-      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=27/29 failed=2 skipped=0 result=FAIL"
+      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=28/30 failed=2 skipped=0 result=FAIL"
     },
     {
       "id": "m3-router-eval-gate-off",
@@ -57,7 +52,7 @@
       "hash_match": true,
       "note": "",
       "find_variant": "CRLF",
-      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=28/29 failed=1 skipped=0 result=FAIL"
+      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=29/30 failed=1 skipped=0 result=FAIL"
     },
     {
       "id": "m3-approver-role-check-off",
@@ -73,7 +68,7 @@
       "hash_match": true,
       "note": "",
       "find_variant": "CRLF",
-      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=28/29 failed=1 skipped=0 result=FAIL"
+      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=29/30 failed=1 skipped=0 result=FAIL"
     },
     {
       "id": "m3-switch-order-enum-widen",
@@ -87,9 +82,9 @@
       "killed": true,
       "restored": true,
       "hash_match": true,
-      "note": "还原后 git 重写行尾（autocrlf；归一化内容一致）",
+      "note": "",
       "find_variant": "LF",
-      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=28/29 failed=1 skipped=0 result=FAIL"
+      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=29/30 failed=1 skipped=0 result=FAIL"
     },
     {
       "id": "m3-observer-selfreport-pass",
@@ -103,9 +98,9 @@
       "killed": true,
       "restored": true,
       "hash_match": true,
-      "note": "还原后 git 重写行尾（autocrlf；归一化内容一致）",
+      "note": "",
       "find_variant": "LF",
-      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=28/29 failed=1 skipped=0 result=FAIL"
+      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=29/30 failed=1 skipped=0 result=FAIL"
     },
     {
       "id": "m3-tighten-allow-deny-edge-drop",
@@ -119,25 +114,25 @@
       "killed": true,
       "restored": true,
       "hash_match": true,
-      "note": "还原后 git 重写行尾（autocrlf；归一化内容一致）",
-      "find_variant": "LF",
-      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=28/29 failed=1 skipped=0 result=FAIL"
+      "note": "",
+      "find_variant": "CRLF",
+      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=29/30 failed=1 skipped=0 result=FAIL"
     },
     {
       "id": "m3-unknown-action-allow",
       "redline": true,
       "target": "src/m3_action/policy_engine.py",
       "description": "SPEC-M3-04/红线1：动作不在授权规则表内改判 ALLOW（第二道防线）——探测 EVAL 是否覆盖",
-      "status": "survived",
+      "status": "killed",
       "find_count": 1,
-      "exit_code": 0,
+      "exit_code": 1,
       "timed_out": false,
-      "killed": false,
+      "killed": true,
       "restored": true,
       "hash_match": true,
       "note": "",
       "find_variant": "LF",
-      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=29/29 failed=0 skipped=0 result=PASS"
+      "eval_summary": "EVALS mode=m3 isolation=OK modules=1/1 pending=0 cases=29/30 failed=1 skipped=0 result=FAIL"
     }
   ]
 }
