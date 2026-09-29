@@ -30,12 +30,15 @@
 
 ```bash
 cd peidian-agent                                  # 仓库根
-python demo/run_demo.py all                       # 四流 + 回归一次全过（彩排口径，约 10 秒）
+python demo/run_demo.py --flow all --auto         # 四流 + 回归一次全过（彩排口径）
 ```
 
 预期：五段全部输出、无 Traceback，回归段 `pass_rate=1.0`（本方案编写当日实测：
 `GOLDEN release=rel-0001 golden=dev mode=SIMULATION pass_rate=1.0 score_100=97.67 failed=0 result=PASS`）。
-另确认：笔记本飞行模式/拔网线后重跑 `python demo/run_demo.py f2` 仍成功（离线口径现场背书）。
+时长实测（windev-01，2026-09-29，`--flow all --auto`）：40–55 秒/全趟，其中回归段约 43 秒、
+单流（f1–f4）约 12–17 秒——比早先「约 10 秒」的估计慢（M2 事件流/轨迹落盘在本机文件系统较慢），
+不影响现场单流节奏，会前按此口径预留彩排时间即可。
+另确认：笔记本飞行模式/拔网线后重跑 `python demo/run_demo.py --flow f2` 仍成功（离线口径现场背书）。
 投影建议：终端字体 ≥ 20pt，深底浅字；`demo/_sandbox/` 为运行沙箱，可随时整目录删除。
 
 ---
