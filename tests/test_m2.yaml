@@ -22,7 +22,7 @@ spec_ref:
   - specs-v2/M2-information.md
   - specs-v2/00-ontology.md
   - specs-v2/01-contracts.md
-spec_hash: 7f2096f2a8e3b9c9838d72bbf5a0248a479576efca28d3de803b46ad8160e154
+spec_hash: 8804ebce740f13259912dbfd1edbd0f35e657c50a160b0cedcf4a7b5a515feaa
 executors:
   - module: m2_information.eval_plugin
   - module: tests.m2_eval_extra

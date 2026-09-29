@@ -30,7 +30,7 @@ spec_ref:
   - specs-v2/00-ontology.md
   - specs-v2/01-contracts.md
   - specs/ADDENDUM.md
-spec_hash: 4596d50fbf4575cb483b5a6a28933da34e83772d57a66760d2e9863afa360d61
+spec_hash: f90a3d34f23387a115dde173cc4601ff8b965941c7de6280b32773055d39ebce
 executors:
   - module: m6_flywheel.eval_plugin
   - module: m7_registry.eval_plugin

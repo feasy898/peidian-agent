@@ -1492,3 +1492,44 @@
   19 件 + tests/test_m0..m7.yaml sha256、映射完整性结论、变异杀灭率汇总、oracle 未改动
   声明——基线 commit `1fd8901`）、`specs/README.md` 顶部弃用指针一行（v1 原文未动）。
   本条目为台账收口登记，无 spec/eval 内容变更（spec_hash/eval_hash 登记对不变）。
+
+---
+
+## 2026-09-29 · 独立复核修复（v2 索引/计数/指针文档卫生 + SPEC-M6-02⑦ 公式钉死；m1/m2/m5/m6 spec_hash 重算登记）
+
+- **触发**：独立复核（冻结后）指出 5 项——①specs-v2/README.md 交付物表 M1..M6 与
+  deviations 七件状态列仍标 ⏳（实际全部已产出）、ASSET-MANIFEST.md 标「占位」（实际已
+  生成）、m7 记 16→26（实际 27）、基线门禁记 180/180（v1 期旧数，实际 233）、spec_ref
+  口径写「各套件仍指 v1」（与 m2/m5/m7 实际 specs-v2 指向矛盾）；②M5/M3/M2/M1 规格内
+  用例计数未随末轮变异补缺回写（M5 26→27、M3 29/25→30、M2 27→30、M1 交付物 20→30）
+  及 tests/test_m5.yaml 头注 26；③M5 SPEC-M5-13 证据指针「tests/CHANGELOG.md ADDENDUM
+  §C」悬空（该文件无 §C 章节；代码事实经复核为真）；④隔离字面口径：specs-v2 树命中 7 行
+  （全部为隔离条款自述/与 v1 同源的 holdout 设计描述，golden/scenarios/src/tests 四树零
+  命中，ci_isolation 扫描面本就排除 specs/，隔离意图未破）——照实登记 ASSET-MANIFEST §8，
+  是否显式裁剪 00 v2 §5 holdout 参数描述待 owner 裁决；⑤SPEC-M6-02⑦ golden_set_version
+  公式未指明排序单元与拼接分隔符。
+- **修复**（零 oracle 改动）：①README.md 五处状态/数字/口径改为实况（ADDENDUM.md 行保持
+  ⏳——仍未产出）；②四处计数与 test_m5.yaml 头注回写实况（套件用例数不变：总数仍 233）；
+  ③指针改为代码锚点（`src/contracts/enums.py:224-225`、`price_clock.py:75-97,143-161`）+
+  处置登记位（deviations/M5.md D-69 行、DEVIATIONS.md ADDENDUM 节）；⑤SPEC-M6-02⑦ 按
+  `golden_set.py:248-255` 钉死精确定义（排序单元=`"<文件名>:<文件字节 sha256 十六进制>"`、
+  竖线 `"|"` 拼接、sha256 前 16 位、前缀目录名）——冻结会话按该定义对 `golden/dev` 重算得
+  `dev-f7e4e295e43be004`，与 `releases/rel-0001/release.yaml` 登记值及 oracle 函数输出三方
+  逐位一致。
+- **spec_hash → eval_hash**（01 v2 §6 协议；上述修订使 M1/M2/M5/M6 规格 spec_ref 字节变化，
+  四套件 spec_hash 重算、套件文件 spec_hash 字段同步回写、eval_hash 随文件字节更新；本轮
+  纯文档/头注修订，条款语义与用例断言零变化，总数 233 不变）：
+
+  | suite | 新 spec_hash (sha256) | 新 eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m1.yaml | `0b5be472b45c879f3675be791358d04a618d21dbd172c876ef3032dd0123cac0` | `e7ab5eb5bfc565dfd0f2ba576197499f0307a093baef6d5a202ec99b1b2e1eda` |
+  | test_m2.yaml | `8804ebce740f13259912dbfd1edbd0f35e657c50a160b0cedcf4a7b5a515feaa` | `487d754ce6bf36200e744f5b07a336a6b01cdd652a3bd4834ce59cc5f0cea8cb` |
+  | test_m5.yaml | `641cab4d9261324dae2bdd23009f39ff07e7c139d755897d3d3e176bc7de4e5d` | `ffd71edc0031b09aa5f70773ac0defcf34a228ef60bd70ed87ad01f1aef5766a` |
+  | test_m6.yaml | `f90a3d34f23387a115dde173cc4601ff8b965941c7de6280b32773055d39ebce` | `f847adec42e3d474894ef0757ce8a1798646eb223bb1777ea25d1ca9824ec72c` |
+
+  前版登记对存照：m1 `e34bf325…`→`8a09c9e6…`；m2 `7f2096f2…`→`9a755cb0…`；m5
+  `46051061…`→`31d55310…`；m6 `4596d50f…`→`2ed3637d…`（均为本文件上文各节登记值）。
+  m3（spec_ref=v1 四文件，本轮只改 specs-v2/M3 文档计数，不入 hash）/m0/m4/m7 套件
+  hash 对不变。
+- **门禁**：修复后统一门禁复跑 `python run_evals.py --module all`（本节登记时点实跑，
+  结果与退出码见 ASSET-MANIFEST.md §7 复核修复轮记录）。

@@ -12,15 +12,15 @@
 
 | 文件 | sha256 |
 | --- | --- |
-| `specs-v2/README.md` | `c30d4c37f3156b360e493c7182aefdcaa094cb6c8d0ca5a9d7a52d4f75aad25d` |
+| `specs-v2/README.md` | `371ffbf2cde6483824440c7e3edcb94a4255f102182d7e99d39cd3581c95c4e1` |
 | `specs-v2/00-ontology.md` | `4d97a7656530309f689406e3b07c9abcf070c04a240323b8edec31099f98b89f` |
 | `specs-v2/01-contracts.md` | `03ea0e12f6950e90ef276782fd8648a6d4c15b37c66f159b0d1f936064cb52e2` |
-| `specs-v2/M1-agent-core.md` | `150566ac149f484bb58219368156267b23f7b70192e76fb319ad4df2ac632d2e` |
-| `specs-v2/M2-information.md` | `899a42cdc173859c463c35b1cbe7b32a3b7200f04fdfdb08c8ac756199fdaa45` |
-| `specs-v2/M3-action-gateway.md` | `d5653e40a57ff7c562bdcaeaeb6e8678b4d80624e5a5030cb09a4362874cb516` |
+| `specs-v2/M1-agent-core.md` | `04e561060348b47eeddded5dd7bb1cb5462a6e5acd50a1b4102059f7139513d4` |
+| `specs-v2/M2-information.md` | `1cc8dfa82ed164a9f58b7f9a8c53d0470facdfd7f60b38a3c3798f69b485efe7` |
+| `specs-v2/M3-action-gateway.md` | `294a1346e9b35499e97024c34d281ee2a5bbd2e8a6ecb60de6eb593d1b790c80` |
 | `specs-v2/M4-semantic-ontology.md` | `83e15234d4cfbbc34488b3aafedfd292171e6b9332232456a21e7b83c0127cbb` |
-| `specs-v2/M5-simulation.md` | `b0be2a03fb1b866d834ff85be259e6be0395913b1f2ef4c01dbe6c8a07c0a216` |
-| `specs-v2/M6-flywheel.md` | `f0dde751f270c8a581ca698819ecd2556e4dcdfc6a94b55923d53b55555ae974` |
+| `specs-v2/M5-simulation.md` | `3e8b63ddb2b5ff5a2b7f7331a1cecf341ce149a2cdeab50eaee5eaddb052dedb` |
+| `specs-v2/M6-flywheel.md` | `ca7cd46fad831bd82a7184068457c1221628643f39c150c4aa8d447e9fc72213` |
 | `specs-v2/M7-registry-release.md` | `9fe6dce406fc2583ea8cfd86e0b5809398ede1df2b6277d8098fce58eee782a2` |
 | `specs-v2/DEVIATIONS-draft.md` | `b3a536b4c5a9949e943d0a9e8cb31d82c4a1dcc5f312a24977c16b296d8a61b1` |
 | `specs-v2/DEVIATIONS.md` | `db61a97e774150a5eb28f0ce570c33f6ad2cee31d5d7cacb2a14a10911bc3b1f` |
@@ -40,17 +40,17 @@
 | 套件 | 用例数 | eval_hash（=文件 sha256，与 tests/CHANGELOG.md 最新登记对一致） | 最新登记 spec_hash（runner 重算比对通过） |
 | --- | --- | --- | --- |
 | `tests/test_m0.yaml` | 49 | `41ebfbf8959bdab0e02df0a4964b3ba4714d3edddc1c1ea4f032d7790a042bf2` | `ddb3b0a38cc193ce3e7a4cfc3d0b4906d6c3e3f87f93331bded3758a05e5be04`（v1 基线对，S0 契约层） |
-| `tests/test_m1.yaml` | 30 | `8a09c9e6a1bfb4dd16a99c35dbe2c833ad5c7a16b6455614090810c23675940d` | `e34bf32589ee73f255084c4995732343a51ab82078cc68105dbf4f4783958434` |
-| `tests/test_m2.yaml` | 30 | `9a755cb06b63c2f3c3fab7649d37af4cf64ee4d742e9de6cc129ae04fb239d81` | `7f2096f2a8e3b9c9838d72bbf5a0248a479576efca28d3de803b46ad8160e154` |
+| `tests/test_m1.yaml` | 30 | `e7ab5eb5bfc565dfd0f2ba576197499f0307a093baef6d5a202ec99b1b2e1eda` | `0b5be472b45c879f3675be791358d04a618d21dbd172c876ef3032dd0123cac0`（复核修复轮重算，前版存照 CHANGELOG） |
+| `tests/test_m2.yaml` | 30 | `487d754ce6bf36200e744f5b07a336a6b01cdd652a3bd4834ce59cc5f0cea8cb` | `8804ebce740f13259912dbfd1edbd0f35e657c50a160b0cedcf4a7b5a515feaa`（复核修复轮重算，前版存照 CHANGELOG） |
 | `tests/test_m3.yaml` | 30 | `d3c53375dfe964a369f64aad4115de7921e9554e9b42b4bfef3c48cc93e0d8a7` | `91b5cab10ea229719052f1b9498ea75eeb17d539ebf94734f76885c40a4eaa8c`（spec_ref=v1 四文件口径） |
 | `tests/test_m4.yaml` | 19 | `ab448986d22cb1a07422e47367c0b1949e02f4856a53130a2eb665a1a3bd12d2` | `299018e7353da3663941e572dd85ced127686ab72b6edc63bbd0fdef27f44884` |
-| `tests/test_m5.yaml` | 27 | `31d55310f34a244b8bbda3f6a0840be2837bfbea260d9dfdafa4906da6e462da` | `46051061b7a9be9153833488015dc5bf0db672d7d413698c062477a9acc64a33` |
-| `tests/test_m6.yaml` | 21 | `2ed3637d407562a491c67d780de702de29d834ee1608bd201a7a8b26afaff769` | `4596d50fbf4575cb483b5a6a28933da34e83772d57a66760d2e9863afa360d61` |
+| `tests/test_m5.yaml` | 27 | `ffd71edc0031b09aa5f70773ac0defcf34a228ef60bd70ed87ad01f1aef5766a` | `641cab4d9261324dae2bdd23009f39ff07e7c139d755897d3d3e176bc7de4e5d`（复核修复轮重算，前版存照 CHANGELOG） |
+| `tests/test_m6.yaml` | 21 | `f847adec42e3d474894ef0757ce8a1798646eb223bb1777ea25d1ca9824ec72c` | `f90a3d34f23387a115dde173cc4601ff8b965941c7de6280b32773055d39ebce`（复核修复轮重算，前版存照 CHANGELOG） |
 | `tests/test_m7.yaml` | 27 | `7b366416f1cce8a29cccc594d252568423b43d7b323fc2c0cb27d786c3c765e5` | `e986db497cbf10d9c2bed9dd0cce7efed107801621d1fdc3f9acb9d418b2fd1c` |
 
 配套判据资产：`tests/EVAL-SCHEMA.md` `bdb3214a9ea6115539b58d422a52a6f5043c90dcfb846370c2351291025cca06`、
 `tests/negative_matrix.yaml` `189636ca32e54e8c393ea7311b4c4395074ceeab952a8da38b8910cd32eccffc`、
-`tests/CHANGELOG.md`（hash 对台账，含本冻结收口条目，终版 `4b4f022b74130c34de326622ef893e8122a7b8c340627b47fa8826bf94b8399b`）、
+`tests/CHANGELOG.md`（hash 对台账，含冻结收口与独立复核修复两轮登记，终版 `5b23b9d38ccaefebc29b982e09d535556bcd25a330ac0a1d63d64e1909152ebd`）、
 `tests/fixtures/`（frozen/m7 状态机、dev-sim-park/dev-graph 注入实例、mock_releases）与
 tests 侧补充执行器插件（`tests/m2_eval_extra.py`、`tests/m4_eval_extra.py`、`tests/m6_eval_extra.py`、
 `tests/m7_eval_extra.py`、`tests/fixtures/m3_eval_plugin.py`、`tests/fixtures/m5_eval_plugin.py`——均 tests/ 侧，零 oracle 改动）。
@@ -63,11 +63,19 @@ tests 侧补充执行器插件（`tests/m2_eval_extra.py`、`tests/m4_eval_extra
   `spec:` 字段直接覆盖；M5 14/15 直指 + SPEC-M5-14 经声明共享映射（EVAL-M5-08-P/09-P 的
   dev-sim-park 注入，`M5-simulation.md:346`）；M7 15/17 直指 + SPEC-M7-13/17 经 §4.2 声明共享映射
   （`M7-registry-release.md:522,526`）。套件对 v2 条款**零未定义引用**。
-- **hash 对完整性**（冻结会话实测）：8 个套件文件 sha256 与 `tests/CHANGELOG.md` 最新登记
-  eval_hash **逐位一致（8/8）**；`python run_evals.py --module all` → `EVALS mode=all
-  isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0 result=PASS`（exit 0），
-  runner 按 `run_evals.py:819-825` 口径重算各套件 spec_hash 并比对声明值，PASS 即全部一致。
+- **hash 对完整性**（冻结会话实测，复核修复轮后仍成立）：8 个套件文件 sha256 与
+  `tests/CHANGELOG.md` 最新登记 eval_hash **逐位一致（8/8）**；`python run_evals.py --module all`
+  全绿（复核修复轮记录见 §7/§8，runner 按 `run_evals.py:819-825` 口径重算各套件 spec_hash
+  并比对声明值，PASS 即全部一致）。复核修复轮（文档卫生修订）使 m1/m2/m5/m6 四套件
+  spec_hash/eval_hash 更新并已按 01 v2 §6 重新登记（前版对存照 CHANGELOG 同日节）；
+  用例总数 233 与断言零变化。
   v1 基线对均已存照（m0/v1 四文件口径各见 CHANGELOG 对应条目）。
+- **实现者口径补全（复核发现⑤）**：SPEC-M6-02⑦ `golden_set_version` 已按
+  `golden_set.py:248-255` 钉死精确定义（排序单元=`"<文件名>:<文件字节 sha256>"`、`"|"`
+  拼接、sha256 前 16 位、前缀目录名；对 `golden/dev` 重算=`dev-f7e4e295e43be004`，
+  与 rel-0001 登记值及 oracle 函数三方一致）。另一实现面注记：`scenarios/dev-*.yaml`、
+  EVAL 执行器插件与 runner 属资产给定量（tests 侧可按 `tests/EVAL-SCHEMA.md` §4 契约与
+  用例 params/expect 重建等效件，非逐字节复刻）。
 - **待决缺口**：`specs-v2/ADDENDUM.md` 未产出；受影响套件（m1/m4/m5/m6）spec_ref 暂引
   `specs/ADDENDUM.md` v1 原文（m3 整体保持 v1 四文件口径、m0 为 v1 基线对——均登记在案且
   runner 校验一致），其落盘后须按 01 v2 §6 重算 spec_hash 并再登记。
@@ -138,7 +146,26 @@ M5-02-N2、M6-02-N2/08-N2、M7-07-N3）全部随套件重生成登记 spec_hash�
 
 | 命令（仓库根） | 输出 |
 | --- | --- |
-| `python run_evals.py --module all` | `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0 result=PASS`（exit 0） |
+| `python run_evals.py --module all` | `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0 result=PASS`（exit 0；冻结收口轮与 §8 复核修复轮各实跑一次，后者为最终登记值） |
 | `python scripts/mutation_test.py --module m5 --plan .mutations/plan-m5.json --baseline` | 基线 27/27 PASS exit 0；`planned=7 valid=7 killed=7 survivors=0 redline_all_killed=true`（stdout 末行 JSON 与 `.mutations/results-m5.json` 一致）；轮后 oracle 干净 |
 | `git status --porcelain -- src/ tools/ ontology/ regulations/ golden/ scenarios/ releases/ scripts/ run_evals.py` | 空（oracle 干净） |
 | `git diff 1fd8901 --stat -- <同上 oracle 路径>` | 空（相对冻结基线零差异） |
+
+## 8. 独立复核修复登记（冻结后第一轮，2026-09-29）
+
+独立复核指出 5 项，全部处置完毕（零 oracle 改动；登记对重算见 §2/§3 与
+tests/CHANGELOG.md「独立复核修复」节）：
+
+| # | 发现 | 处置 |
+| --- | --- | --- |
+| 1（medium） | specs-v2/README.md 索引与冻结实况不一致：M1..M6 与 deviations 七件状态 ⏳（实际已产出）、ASSET-MANIFEST 标「占位」、m7 记 16→26（实际 27）、门禁记 180/180（v1 期旧数）、spec_ref 口径写「各套件仍指 v1」 | **已修**：README §0 交付物表六行改 ✅（ADDENDUM.md 行保持 ⏳——仍未产出）、§0.1 改「已生成」、m7→27、基线→233/233（并标注 180 为作废旧数）、§1 注记改分层口径（m0/m3 仍 v1；m2/m7 specs-v2 三件；m1/m4/m5/m6 specs-v2+00/01，ADDENDUM 暂引 v1 原文） |
+| 2（low） | M5（26→27）、M3（29/25→30）、M2（27→30）、M1（交付物 20→30）规格内用例计数未随末轮变异补缺回写；tests/test_m5.yaml 头注 26 | **已修**：四处规格计数与 test_m5.yaml 头注回写实况（套件用例数与断言零变化，总数仍 233） |
+| 3（low） | M5 SPEC-M5-13 证据指针「tests/CHANGELOG.md ADDENDUM §C」悬空（该文件无 §C 节；代码事实为真） | **已修**：指针改为代码锚点（`src/contracts/enums.py:224-225`、`price_clock.py:75-97,143-161`）+ 处置登记位（deviations/M5.md D-69 行、DEVIATIONS.md ADDENDUM 节） |
+| 4（low） | 隔离字面口径：specs-v2 树命中 7 行（00-ontology.md:318-319,322、deviations/M5.md:19、DEVIATIONS-draft.md:224、M5-simulation.md:128），全部为隔离条款自述或与 v1 同源的 holdout 设计描述（PARK-002/TARIFF-2026B 拓扑参数逐字继承 v1 specs/00-ontology.md:230，v1 验收已放行）；golden/ scenarios/ src/ tests/ 四树零命中；scripts/ci_isolation.py 扫描面本就排除 specs/ | **照实登记（真隔离面完好，非泄漏）**：`ci_isolation` 门禁不受影响（扫描面 [src,tools,scripts]）。是否显式裁剪 00 v2 §5 的 holdout 参数描述、或在复核口径中将 specs-v2 声明为豁免树——**待 owner 裁决**，本轮不擅改 |
+| 5（low） | SPEC-M6-02⑦ golden_set_version 公式未指明排序单元与分隔符（跨实现不可复算）；场景文件/执行器插件为给定量非逐字节规格面 | **已修⑤(1)**：公式按 `golden_set.py:248-255` 钉死进 M6-flywheel.md §3（排序单元/`"|"` 分隔/前 16 位/目录名前缀；重算 `dev-f7e4e295e43be004` 与 rel-0001 登记、oracle 函数三方一致）。⑤(2) 作为实现面注记登记于 §3 |
+
+- 本轮 spec 内容修订（README/M1/M2/M3/M5/M6 六文件）使 m1/m2/m5/m6 套件 spec_hash 重算、
+  eval_hash 随文件字节更新，均按 01 v2 §6 重新登记（前版对存照 CHANGELOG）；m0/m3/m4/m7
+  套件 hash 对不变。修复后统一门禁复跑 `python run_evals.py --module all` →
+  `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
+  result=PASS`（exit 0，本轮实跑）。

@@ -328,7 +328,7 @@ runtime/                  # 运行期审计件（gitignore 域）
 
 ---
 
-## 4. Eval（`tests/test_m3.yaml` · 按本 spec v2 重生成，现行 29 用例）
+## 4. Eval（`tests/test_m3.yaml` · 按本 spec v2 重生成，现行 30 用例）
 
 套件数据驱动，执行器插件两模块：`m3_action.eval_plugin`（m3.execute 网关场景驱动 / m3.registry
 注册表一致性 / m3.negative_matrix 只读矩阵）+ `tests.fixtures.m3_eval_plugin`（m3.determinism /
@@ -381,7 +381,7 @@ eval_hash `d3c53375…` = 变异缺口修复后 tests/test_m3.yaml 的 sha256（
 ## 6. 交付物
 
 `src/m3_action/`（13 文件，见 §2）+ `tools/` 16 个动作适配器与 `_base.py`（SIMULATION 路由实作=委托
-M5 `simulate()`；REAL 仅 mock 签名）+ `tests/test_m3.yaml`（25 用例）+ 负向测试矩阵
+M5 `simulate()`；REAL 仅 mock 签名）+ `tests/test_m3.yaml`（30 用例）+ 负向测试矩阵
 `tests/negative_matrix.yaml`（6 写类动作只读矩阵）+ EVAL 执行器插件 `src/m3_action/eval_plugin.py`；
 运行期审计件形态：`runtime/m3_action/{idempotency,approvals}.jsonl`、`runtime/events/task-<task_id>.jsonl`。
 [v2Δ: v1 交付物清单缺 eval_plugin.py 与运行期审计件口径，按 oracle 实际目录补全]

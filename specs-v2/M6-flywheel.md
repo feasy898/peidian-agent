@@ -145,8 +145,14 @@ DEFAULT+12 案例 + `MANIFEST.yaml` 逐文件 sha256）+ `tests/test_m6.yaml`（
    配套文件 sha256 一致；⑤目录内不得有未登记未知文件（aux 白名单除外）。问题
    非空时 `python -m m6_flywheel.golden_set verify golden/dev` exit 1（独立可执行）。
    〔`golden_set.py:176-229,313-333`〕
-7. 版本号口径：`golden_set_version = <目录名>-<sha256(sorted("file:sha256"))[:16]>`
-   ——案例文件任一字节变化即翻转（A/B 同黄金集硬校验与评估报告均引用）。
+7. 版本号口径：`golden_set_version(dir) = "<目录名>-<摘要前 16 位>"`，精确算法定义
+   （`golden_set.py:248-255`）：对目录内每个案例文件（`list_case_files` 拾取的
+   `case_*.yaml`）取排序单元字符串 `"<文件名>:<该文件字节 sha256 十六进制>"`（文件名不含
+   目录，如 `case_001.yaml`）；全部单元按 Unicode 字符串 `sorted()` 排序后以 `"|"`
+   （单竖线、无首尾分隔符）拼接为 UTF-8 字节串取 sha256，十六进制摘要**前 16 位**为版本
+   摘要，前缀目录名（`golden/dev` → `dev-…`；现行登记值
+   `dev-f7e4e295e43be004`，冻结会话按本定义重算与 `releases/rel-0001/release.yaml` 逐位一致）。
+   案例文件任一字节变化即翻转（A/B 同黄金集硬校验与评估报告均引用）。
    〔`golden_set.py:248-255`〕
 8. 冻结 API：`add_golden_case(case) -> CaseId`——契约校验 → 写
    `case_<case_id>.yaml` → 重建 manifest → 落 `golden.case_added` 事件（producer=M6，

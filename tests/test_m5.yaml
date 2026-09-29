@@ -3,11 +3,12 @@
 #
 # v2 重生成（2026-09-29，资产工程阶段）：依据 specs-v2/M5-simulation.md（SPEC-M5-01..15）
 # 机械重生成，整体替换 v1 套件（v1 12 条表内用例由 specs/M5-simulation.md §5 生成，
-# 后扩至 20 条；本版 26 条）。执行器与 fixtures 约定不变（13 个执行器注册于
-# src/m5_simulation/eval_plugin.py EXECUTORS；断言数据全部取自本文件 params/expect，
-# 零案例特判）。spec_ref 自 v2 起指向 specs-v2（M6 先例同款；ADDENDUM v2 未交付前
-# 仍引 specs/ADDENDUM.md v1 原文，D-70 实例协议依赖），v1→v2 的 spec_hash→eval_hash 对
-# 登记于 tests/CHANGELOG.md（01 v2 §6 协议）。
+# 后扩至 20 条；本版 27 条 = 重生成 26 + 变异补缺 EVAL-M5-02-N2，登记见 tests/CHANGELOG.md
+# 2026-09-29「M5 EVAL 变异缺口修复」节）。执行器与 fixtures 约定不变（13 个执行器注册于
+# src/m5_simulation/eval_plugin.py EXECUTORS + tests/fixtures/m5_eval_plugin.py 1 个；断言数据
+# 全部取自本文件 params/expect，零案例特判）。spec_ref 自 v2 起指向 specs-v2（M6 先例同款；
+# ADDENDUM v2 未交付前仍引 specs/ADDENDUM.md v1 原文，D-70 实例协议依赖），v1→v2 的
+# spec_hash→eval_hash 对登记于 tests/CHANGELOG.md（01 v2 §6 协议）。
 #
 # 条款映射（v2 SPEC-M5-01..15，双向表见 specs-v2/M5-simulation.md §5）：
 #   01 确定性/种子/审计列  → 01-P（dev-01）、01-P2（dev-02b 桩链重放，D-42）、01-P3（性能）
@@ -45,7 +46,7 @@ spec_ref:
   - specs-v2/00-ontology.md
   - specs-v2/01-contracts.md
   - specs/ADDENDUM.md
-spec_hash: 46051061b7a9be9153833488015dc5bf0db672d7d413698c062477a9acc64a33
+spec_hash: 641cab4d9261324dae2bdd23009f39ff07e7c139d755897d3d3e176bc7de4e5d
 executors:
   - module: m5_simulation.eval_plugin
   - module: tests.fixtures.m5_eval_plugin

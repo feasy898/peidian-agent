@@ -7,7 +7,8 @@
 > **v2 重生成说明（资产工程阶段）**：本文件由 v1（`specs/M2-information.md`）按
 > **oracle（唯一事实源）** 重生成——oracle = 现行实现全体（M2 侧 = `src/m2_information/` 全部
 > 14 个文件 + `src/contracts/` 相关结构 + `tests/test_m2.yaml` 23 用例；v2 EVAL 已按本文件
-> 条款整体重生成为 27 条，见 §4 与 `tests/CHANGELOG.md` 2026-09-29 节）。
+> 条款整体重生成 27 条并经变异补缺 +3（EVAL-M2-07-N2/12-N3/09-N2）= 现行 30 条，
+> 见 §4 与 `tests/CHANGELOG.md` 2026-09-29 节）。
 > 每条 SPEC 给出**行为陈述 + oracle 证据（文件:行）**；与 v1 的差异以行内标记
 > `[v2Δ: 偏差依据 evidence]` 标注，未标记部分与 v1 语义一致。
 > oracle 健康复核（本会话实跑，2026-09-29）：`python run_evals.py --module m2` →
@@ -405,7 +406,8 @@ fixtures 引用存在、spec_hash 声明值与重算一致，见 `tests/CHANGELO
 ## 6. 交付物
 
 - `src/m2_information/`（14 件，含 `FORMATS.md` 存储格式文档与 `eval_plugin.py` 执行器插件）。
-- `tests/test_m2.yaml`（27 条数据驱动用例，2026-09-29 起按本文件 v2 条款整体重生成；
-  spec_ref 指向 specs-v2 三件（00/01/M2），spec_hash→eval_hash 登记对见 `tests/CHANGELOG.md`
-  2026-09-29 节；历史 22/23 条阶段的登记与"合计 22 条"旧头注说明留档同文件）。
+- `tests/test_m2.yaml`（30 条数据驱动用例，2026-09-29 起按本文件 v2 条款整体重生成 27 条
+  并经变异补缺 +3（07-N2/12-N3/09-N2）至现行 30 条；spec_ref 指向 specs-v2 三件（00/01/M2），
+  spec_hash→eval_hash 登记对见 `tests/CHANGELOG.md` 2026-09-29 节；
+  历史 22/23/27 条阶段的登记与"合计 22 条"旧头注说明留档同文件）。
 - `tests/fixtures/frozen_state_machines.yaml`（task/artifact 迁移表冻结基准；S0 套件共用）。

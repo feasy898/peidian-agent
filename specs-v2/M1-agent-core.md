@@ -464,7 +464,9 @@ m1_core/
 ## 6. 交付物
 
 - `src/m1_core/` 全部源码（13 文件，见 §2 组件树）；
-- `tests/test_m1.yaml`：20 条数据驱动 EVAL（v1 §4 表 14 条机械生成 + 6 条表外补强）；
+- `tests/test_m1.yaml`：30 条数据驱动 EVAL（v2 重生成 30 条 = 正例 17/负例 13；v1 阶段 20 条
+  = §4 表 14 条机械生成 + 6 条表外补强，登记对照见 `tests/CHANGELOG.md` 2026-09-29
+  「M1 EVAL v2 重生成」节）；
 - `src/m1_core/eval_plugin.py`：7 执行器插件（EVAL-SCHEMA §4 插件契约）；
 - `tests/fixtures/frozen_state_machines.yaml`（machines.task 双写基准，S0 fixture、M1 消费）；
 - `tests/CHANGELOG.md` M1 登记 3 条：首条登记（spec_hash `c8a2cd2b…`→eval_hash

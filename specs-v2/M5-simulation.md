@@ -31,7 +31,7 @@
 > | （v1 无） | **SPEC-M5-13** | 电价时钟与月度需量（ADDENDUM §C 落地，D-69 交叉） |
 > | （v1 无） | **SPEC-M5-14** | Park 实例按名加载与 EVAL 实例注入（D-43；D-70 交叉） |
 > | （v1 无） | **SPEC-M5-15** | SAFE 三规约 M5 判据层执行位（D-46） |
-> | §5 Eval 表（12 条） | **§5**（v2 重生成 26 条 = 正例 17/负例 9） | v1 20 条逐条核对后保留改名；禁止类条款补负例；条款↔用例双向表见 §5 |
+> | §5 Eval 表（12 条） | **§5**（v2 重生成 26 条 + 变异补缺 1 条 = 27 条 = 正例 17/负例 10） | v1 20 条逐条核对后保留改名；禁止类条款补负例；条款↔用例双向表见 §5 |
 > | §6 DoD / §7 交付物 | **§6 / §7** | 按 oracle 更新（dev-02b 继承恢复 D-45；fixtures 入交付物） |
 
 ---
@@ -279,7 +279,8 @@ EVAL 实例 `tests/fixtures/dev-sim-park.yaml`（+ M4 共用 `dev-graph.yaml`）
   `demand.month_rolled{from_month,to_month,frozen_peak_kw}` 再重置峰值**（142-161）；
   `demand_ratio`=月峰值/合同容量（136-140），注入告警引擎评估（`scenario.py:459-463`）。
   [v2Δ D-69 交叉: ADDENDUM §C 两事件落地核对（主题归属契约层 01 v2 §4，events/price_clock.py 为
-  M5 侧落地）；tests/CHANGELOG.md ADDENDUM §C]
+  M5 侧落地）；代码锚点 `src/contracts/enums.py:224-225`、`src/m5_simulation/price_clock.py:75-97,143-161`；
+  处置登记 `specs-v2/deviations/M5.md` D-69 行与 `specs-v2/DEVIATIONS.md` ADDENDUM 节]
   证据：EVAL-M5-02-P。
 
 - **SPEC-M5-14 Park 实例按名加载与 EVAL 实例注入**：`load_scenario` 按
@@ -316,11 +317,12 @@ EVAL 实例 `tests/fixtures/dev-sim-park.yaml`（+ M4 共用 `dev-graph.yaml`）
   FAILED/`SAFE_SINGLE_OP`，执行结束/异常均释放（try/finally；169-172,189-200）。
   证据：EVAL-M5-15-N1 / 15-N2 / 15-N3 / 15-N4（正例合规链见 EVAL-M5-10-P dev-02b）。
 
-## 5. Eval（`tests/test_m5.yaml`，v2 重生成 26 条）
+## 5. Eval（`tests/test_m5.yaml`，v2 重生成 26 条 + 变异补缺 1 条 = 27 条）
 
-执行器注册于 `src/m5_simulation/eval_plugin.py`（`EXECUTORS` 13 个，全部断言数据取自用例
-params/expect，零案例特判；`eval_plugin.py:1032-1046`）。v2 套件由本文件（SPEC-M5-01..15）
-机械重生成：**26 条 = 正例 17 / 负例 9**；v1 20 条逐条核对其断言正是 v2 条款后保留改名
+执行器注册于 `src/m5_simulation/eval_plugin.py`（`EXECUTORS` 13 个 + tests 侧插件
+`tests/fixtures/m5_eval_plugin.py` 1 个，全部断言数据取自用例
+params/expect，零案例特判）。v2 套件由本文件（SPEC-M5-01..15）
+机械重生成：**26 条 + EVAL-M5-02-N2（变异补缺，SPEC-M5-02 无 hub 边界）= 27 条 = 正例 17 / 负例 10**；v1 20 条逐条核对其断言正是 v2 条款后保留改名
 （§5.2 对照列）；禁止类条款（02 禁墙钟判价、03 未注册/DENY 动作禁止执行、11 无票遥控
 必须拒、15 三规约）全部有负例。spec_ref 自 v2 起指向 specs-v2（ADDENDUM v2 未交付前
 仍引 v1 原文，D-70 实例协议依赖）；v1→v2 的 spec_hash→eval_hash 对登记于
@@ -389,8 +391,9 @@ params/expect，零案例特判；`eval_plugin.py:1032-1046`）。v2 套件由�
 
 - EVAL 全绿：v1 套件基线（2026-09-29 实跑 `python run_evals.py --module m5` →
   `EVALS mode=m5 isolation=OK modules=1/1 pending=0 cases=20/20 failed=0 skipped=0 result=PASS`）；
-  v2 重生成套件（26 条）已通过静态自检（YAML/schema/执行器注册/引用存在/spec_hash 一致，
-  见 §5 尾注与 `tests/CHANGELOG.md` 2026-09-29 登记），统一门禁按资产工程流程另行执行；
+  v2 套件（27 条 = 重生成 26 + 变异补缺 EVAL-M5-02-N2）已通过静态自检（YAML/schema/执行器注册/引用存在/spec_hash 一致，
+  见 §5 尾注与 `tests/CHANGELOG.md` 2026-09-29 登记），统一门禁已执行（资产冻结会话
+  `python run_evals.py --module all` → cases=233/233 failed=0 result=PASS，exit 0）；
 - 100×24h 仿真步（15min 步长）< 30s 完成（EVAL-M5-01-P3，深拷贝隔离逐日跑）；
 - `scenarios/dev-*.yaml` 三个开发场景可一键跑（与黄金集 runner 集成，EVAL-M5-10-P）。
 
