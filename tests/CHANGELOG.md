@@ -822,6 +822,18 @@
   还原校验 restored=true + hash_match=true（autocrlf 归一化）。提交后干净 oracle 复跑
   **27/27 PASS**。全量 9 变异动态验证仍待统一门禁补跑（静态映射+基线+单变异动态
   证据已足量支撑本轮缺口闭合）。
+- **全量 9 变异动态验证完成（同日 18:43-18:48 干净窗，两轮拼接）**：①full 轮
+  （plan-m7.json）5/5 可执行变异全杀——approved-gate-off（26/27，唯一失败=07-N3）、
+  ontology-drift-off（26/27→11-N）、floating-allow（26/27→03-N）、six-elements-empty-ok
+  （26/27→08-N，CRLF 变体命中）、release-table-edited（25/27→TABLE-P diff+12-N 行为
+  探针）；前 4 个变异（均指 publish.py/release.py）被中途恢复的兄弟队列撞上
+  skipped_dirty。②remaining 轮（plan-m7-remaining.json，仅含该 4 变异）干净窗 4/4
+  全杀——writeonce-file-off（24/27→12-N+12-P 补写探针）、republish-off（25/27→12-N）、
+  manifest-hash-off（26/27→REL-P 篡改检测）、golden-digest-off（26/27→09-N）；
+  redline_all_killed=true。两轮拼接=**9/9 动态杀灭、零 survivor、零 invalid**；全部
+  变异还原校验通过（restored+hash_match），轮后干净 oracle 复跑 **27/27 PASS**。
+  结果存档：.mutations/results-m7-full.json、.mutations/results-m7-remaining.json
+  （results-m7.json 为最后一次运行的工具固定输出名）。
 
 ---
 
@@ -1227,13 +1239,23 @@
 
   hash 刷新原因：§5 映射表与证据行同步属 spec_ref 字节变化，spec_hash 随之刷新；
   oracle（src/ 等）零改动。
-- **复核（截至本条目补记的实况，如实登记）**：补强后基线 27/27 PASS exit 0（含 02-N2）；
-  全计划复跑首试 7 变异全部 `skipped_dirty`——并行模块工程师的受控变异正在改动 oracle 树
-  （先后观测到 `src/m3_action/gateway.py`、`src/m2_information/context_builder.py` 未提交改动，
-  非本模块产物，工具按 oracle 干净口径保守跳过）。02-N2 对 survivor 的钉死判定：变异使
-  `clock("BUSINESS", None)` 由抛 ValueError 变为返回墙钟兜底读数，02-N2 断言"无 hub 业务时钟
-  必须拒绝"必转 FAILED（用例级语义已对照变异静态核对）；**7/7 全杀的正式确认待 oracle 树
-  恢复干净后复跑（统一门禁随全量跑批执行，结果以届时 `.mutations/results-m5.json` 为权威）**。
+- **复核（已执行证据链，截至本条目终版补记）**：
+  1. **survivor 已杀（执行确认）**：`python scripts/mutation_test.py --module m5
+     --plan .mutations/plan-m5-recheck.json`（单变异窗口实跑）→
+     `m5-business-nohub-wall-fallback` **killed**（exit 1；eval `cases=26/27 failed=1`
+     ——失败用例即新增的 EVAL-M5-02-N2；restored=true、hash_match=true）；
+     工具输出存照 `.mutations/results-m5.recheck.json`。
+  2. **另两变异在 27 例套件复确认 killed**：全计划窗口跑中 `m5-price-wallclock`（26/27
+     failed=1）与 `m5-two-ticket-off`（25/27 failed=2）killed 后窗口被并行写入关闭。
+  3. **其余 4 变异**（SAFE-ISSUE-HUMAN/ORDER-SEQ/SINGLE-OP/REG-TECH 装载）：26 例套件
+     executed kill 见存照 `.mutations/results-m5.first-run.json`（per_mutation 逐条
+     exit 1）；27 例套件对 26 例为纯增量（仅新增 02-N2 一例），killed 判定单调保持。
+  4. **正式汇总版 results-m5.json**：多次全计划复跑均因并行模块工程师的受控变异
+     改动 oracle 树而 `skipped_dirty`（先后观测 `src/m3_action/gateway.py`、
+     `src/m2_information/context_builder.py`、`src/m1_core/model_client.py` 未提交改动，
+     非本模块产物；结果文件被覆盖为 skipped 版）——**7/7 汇总确认随统一门禁在干净
+     oracle 树上复跑，以届时 `.mutations/results-m5.json` 为权威**；本轮全部 7 变异
+     均已有 executed kill 证据（6 条全计划/部分计划实跑 + survivor 单变异实跑）。
 
 ---
 
