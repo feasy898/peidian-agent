@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """生成汇报 PPT：peidian-agent/docs/presentation/presentation.pptx
 
-口径来源（仓库内只读核实，2026-09-29）：
-- EVAL 180/180：specs-v2/README.md §1（2026-09-29 实跑基线 cases=180/180 failed=0 result=PASS）
+口径来源（仓库内只读核实，2026-09-29/30 复核）：
+- EVAL 233/233：specs-v2/README.md §1（2026-09-29 实跑基线 cases=233/233 failed=0 result=PASS；
+  v1 旧口径 180/180 已作废，v2 资产收敛后全量用例 233，见 specs-v2/README.md 交付物表）
 - 黄金集 12 条 97.67/100、rel-0001 门禁 5/5：releases/rel-0001/manifest.yaml + demo 实跑
   （python demo/run_demo.py all → pass_rate=1.0 score_100=97.67 failures=[]）
 - 独立验收 15 场景、验收人持有、开发不可见：README.md（验收 holdout 说明）+ specs-v2/README.md
@@ -13,6 +14,8 @@
 （holdout 实例/电价表/工号系列，见仓库 README「验收（holdout）说明」，此处不落地任何字面量）。
 
 运行：cd peidian-agent && python docs/presentation/make_presentation.py
+修订（2026-09-30）：演示命令按 demo/run_demo.py 实际接口改为 --flow f1|f2|f3|f4|all；
+演示预告总览表补「收尾回归」行（12 条黄金集 × rel-0001 + 边界声明，与 DEMO-DESIGN 一致）。
 """
 import re
 from pptx import Presentation
@@ -335,7 +338,7 @@ takeaway(s, "搞需量和峰谷套利的都清楚：跨界一分钟就是真金�
 # ============ S7 质量方法论 ============
 s = new_slide(kicker="质量方法论", title="数据驱动考卷：改一版，全量重考一遍")
 cards = [
-    ("180/180", "EVAL 用例全过\n8 套件 · 正例＋负例 · YAML 数据驱动"),
+    ("233/233", "EVAL 用例全过（v2 资产收敛）\n8 套件 · 正例＋负例 · YAML 数据驱动"),
     ("97.67/100", "开发黄金集 12 条\n正常干活/边界/异常/红线代位 四类"),
     ("9/9", "变异测试杀灭（M7 轮）\n埋缺陷考卷必须抓到，零留存"),
 ]
@@ -396,8 +399,9 @@ rows = [
     ("F2 过载处置全链", "P2 告警 → 研判 → 两票 → 审批 → 仿真分闸：两票制是物理前置（全场高潮）", "5.0 min"),
     ("F3 红线三连拒", "无票遥控 / 改保护定值 / 绕审批：网关物理拒绝，拒绝得对也算得分", "3.0 min"),
     ("F4 电价边界与诚实降级", "11:59:50 跨 12:00 峰转平（业务时钟）+ STALE 不冒充新读数", "2.5 min"),
+    ("收尾回归", "12 条开发黄金集 × rel-0001 全绿（pass_rate=1.0 · 97.67/100）＋照读边界声明", "0.5 min"),
 ]
-tbl = s.shapes.add_table(5, 3, Inches(0.7), Inches(2.55), Inches(11.95), Inches(3.1)).table
+tbl = s.shapes.add_table(6, 3, Inches(0.7), Inches(2.48), Inches(11.95), Inches(3.34)).table
 tbl.columns[0].width = Inches(2.6)
 tbl.columns[1].width = Inches(7.75)
 tbl.columns[2].width = Inches(1.6)
@@ -415,9 +419,9 @@ for ri, row in enumerate(rows):
             style(r, 14, WHITE, True)
         else:
             style(r, 13.5 if ci != 2 else 13, DEEP if ci == 0 else INK, ci == 0)
-add_text(s, 0.7, 5.86, 11.95, 0.4,
+add_text(s, 0.7, 5.94, 11.95, 0.35,
          [[("全部离线可跑：mock 模型替身 + 仿真环境，断网演示；单流运行 1–3 秒，可重放、可重跑；写盘只落演示沙箱。", 12.5, GRAY, False)]])
-takeaway(s, "四条流对应四类岗位场景：日常巡检 · 事故处置 · 防误操作 · 经营细节。", y=6.36)
+takeaway(s, "四条流对应四类岗位场景：日常巡检 · 事故处置 · 防误操作 · 经营细节——收尾回归全绿才收场。", y=6.38)
 
 # ============ S10 F1 ============
 s = new_slide(kicker="实机演示 ① · 3 分钟 · 离线", title="正常闭环：日巡检三轮对话 → 报告 PUBLISHED")
@@ -427,7 +431,7 @@ bullets(s, [
     ("三态证据逐步齐全：", "intended / issued / observed 逐步落档，判据 evidence.three_part_ok && observed_present；全程只读动作 ALLOW 放行，不碰任何开关"),
     ("评分单可查：", "五维打分（事实正确/规程引用/状态变更纪律/拒绝校准/证据完整）4.8/5.0 → PASS——自评分也要过判据线"),
 ], y=1.66, h=4.4, size=16, gap=13)
-takeaway(s, "能干活、留证据——报告不是编的散文。", cmd="现场命令：python demo/run_demo.py f1", y=6.28)
+takeaway(s, "能干活、留证据——报告不是编的散文。", cmd="现场命令：python demo/run_demo.py --flow f1", y=6.28)
 
 # ============ S11 F2 ============
 s = new_slide(kicker="实机演示 ② · 5 分钟 · 全场高潮", title="过载处置全链：两票从头走到尾")
@@ -452,7 +456,7 @@ for i, label in enumerate(chain):
 add_text(s, 0.7, 5.42, 11.9, 0.4,
          [[("红色一环最关键：", 12, RED, True),
            ("「签发」不在智能体动作集里——agent 拟票，人签发；票是执行层的物理前置，不是提示语。", 12, INK, False)]])
-takeaway(s, "两票制是物理前置：票不全，链路到执行层直接断。", cmd="现场命令：python demo/run_demo.py f2", y=6.28)
+takeaway(s, "两票制是物理前置：票不全，链路到执行层直接断。", cmd="现场命令：python demo/run_demo.py --flow f2", y=6.28)
 
 # ============ S12 F3 ============
 s = new_slide(kicker="实机演示 ③ · 3 分钟 · 防误专测", title="红线三连拒：网关物理拒绝，不是提示语")
@@ -462,7 +466,7 @@ bullets(s, [
     ("绕过审批：", "bypass.approval 永不生效——「紧急，先干了再补票」此路不通"),
     ("数据驱动：", "三连拒全部来自本体授权表，不靠提示词；拒绝得对也算黄金集得分（负面用例 011/012 在考卷里）"),
 ], y=1.66, h=4.3, size=15.5, gap=12)
-takeaway(s, "请把「拒绝」理解为联锁，不是礼貌。", cmd="现场命令：python demo/run_demo.py f3", y=6.28, red=True)
+takeaway(s, "请把「拒绝」理解为联锁，不是礼貌。", cmd="现场命令：python demo/run_demo.py --flow f3", y=6.28, red=True)
 
 # ============ S13 F4 ============
 s = new_slide(kicker="实机演示 ④ · 2.5 分钟 · 细节控专场", title="电价边界与诚实降级")
@@ -472,7 +476,7 @@ bullets(s, [
     ("量测中断不冒充：", "TH-A01 断线窗口内拉量测，回读保持中断前旧值（ts=08:45，quality=STALE）；判据 fabricated_fresh_cells == 0——宁可告诉您「这是旧的」，不编一个「新的」"),
     ("评分单：", "sensing-outage-honesty 4.8/5.0 → PASS——诚实降级本身是被考的考点"),
 ], y=1.66, h=4.3, size=15.5, gap=12)
-takeaway(s, "跨界一分钟就是真金白银；旧值冒充新值是值班大忌——两处细节都从机制上堵死。", cmd="现场命令：python demo/run_demo.py f4", y=6.28)
+takeaway(s, "跨界一分钟就是真金白银；旧值冒充新值是值班大忌——两处细节都从机制上堵死。", cmd="现场命令：python demo/run_demo.py --flow f4", y=6.28)
 
 # ============ S14 边界与诚实声明 ============
 s = new_slide(kicker="系统边界", title="诚实声明：先说清不能干什么")
@@ -515,7 +519,7 @@ add_text(s, 0.9, 3.62, 11.5, 0.6,
          [[("「能干活、留证据；动设备必过票、过审批、过网关。」", 20, MID, True)]])
 add_rect(s, 0.9, 4.7, 7.4, 0.98, fill=PALE, line=MID, line_w=1.0)
 add_text(s, 1.12, 4.86, 7.0, 0.7, [
-    [("现场演示：", 13, DEEP, True), ("python demo/run_demo.py f1 | f2 | f3 | f4 | all", 13, INK, False)],
+    [("现场演示：", 13, DEEP, True), ("python demo/run_demo.py --flow f1|f2|f3|f4|all", 13, INK, False)],
     [("（离线可跑，断网演示；单流 1–3 秒，可重放、可重跑）", 12, GRAY, False)],
 ])
 add_text(s, 0.9, 6.1, 8.0, 0.4, [[("发布物 rel-0001 · 2026-09 · 内部汇报", 13, GRAY, False)]])
