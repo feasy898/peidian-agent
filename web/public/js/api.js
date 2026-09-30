@@ -5,7 +5,13 @@ const API = (() => {
     const opt = { method, headers: {} };
     if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
     const r = await fetch(url, opt);
-    if (!r.ok) { let e = {}; try { e = await r.json(); } catch (_) { /* noop */ } throw new Error(e.error || ('HTTP ' + r.status)); }
+    if (!r.ok) {
+      let e = {};
+      try { e = await r.json(); } catch (_) { /* noop */ }
+      const err = new Error(e.error || ('HTTP ' + r.status));
+      err.status = r.status; err.body = e;   // 422 拒绝等场景保留 reasons
+      throw err;
+    }
     return r.json();
   }
   return {

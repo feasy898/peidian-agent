@@ -58,15 +58,26 @@ else
   check "遥测数值非零" 1 "全部≈0"
 fi
 
-# 5) 故障注入 → FaultEvent schema
+# 5) 故障注入 → FaultEvent（桥就绪时走真实引擎；否则 mock。两形态均须过 schema）
 curl -sf -X POST "$BASE/api/fault" -H 'Content-Type: application/json' \
-  -d "{\"park\":\"$PARK\",\"text\":\"2 号变压器重瓦斯跳闸\"}" > /tmp/smoke_fault.json
+  -d "{\"park\":\"$PARK\",\"text\":\"TX-B01 短路\"}" > /tmp/smoke_fault.json
 check "POST /api/fault → FaultEvent（event_id/targets/telemetry_effects/agent.steps）" $(node -e '
 const j=require("/tmp/smoke_fault.json");
 const ok = j.event_id && Array.isArray(j.targets) && j.targets.length>0 &&
   Array.isArray(j.telemetry_effects) && j.agent && Array.isArray(j.agent.steps) && j.agent.steps.length>=5;
 process.exit(ok?0:1)' && echo 0 || echo 1) "schema 不符"
-node -e 'const j=require("/tmp/smoke_fault.json");console.log("  (fault:", j.event_id, j.type, j.severity, "targets="+j.targets.join(","), "steps="+j.agent.steps.length + ")")'
+# 5b) v0.2 投影：真实桥时 source=fault-engine 且 steps 携带 looked_at/found/why
+rc5b=0
+node -e '
+const j=require("/tmp/smoke_fault.json");
+if (j.source==="fault-engine") {
+  const ok = Array.isArray(j.events) && Array.isArray(j.actions) &&
+    j.agent.steps.some(s=>Array.isArray(s.looked_at) && s.looked_at.length>0 && s.why);
+  process.exit(ok?0:1);
+}
+process.exit(0);' || rc5b=1   # mock 形态无扩展字段，视为跳过
+check "v0.2 投影：steps[].looked_at/found/why 贯通（fault-engine 形态）" $rc5b "投影缺失"
+node -e 'const j=require("/tmp/smoke_fault.json");console.log("  (fault:", j.event_id, j.type, j.severity, "targets="+j.targets.join(","), "steps="+j.agent.steps.length, "source="+j.source + ")")'
 
 # 6) 故障后遥测受影响（注入 vs 清除后同 t 不同）
 curl -sf "$BASE/api/telemetry?park=$PARK&t=$T&points=4" -o /tmp/smoke_tel_fault.json
@@ -77,9 +88,9 @@ check "故障注入改变遥测（效应生效）" $(cmp -s /tmp/smoke_tel_fault
 # 7) 人工判分（错选 → verdict 字段存在）
 curl -sf -X POST "$BASE/api/human/attempt" -H 'Content-Type: application/json' \
   -d "{\"park\":\"$PARK\",\"targets\":[\"NOPE\"],\"started_at\":$(date +%s000)}" > /tmp/smoke_attempt.json
-# 注意：clear 后无活动事件应 404；重注一次再判
+# 注意：clear 后无活动事件应 404；重注一次再判（桥在线：用规则解析可识别文本）
 curl -sf -X POST "$BASE/api/fault" -H 'Content-Type: application/json' \
-  -d "{\"park\":\"$PARK\",\"text\":\"1 号线路断线\"}" >/dev/null
+  -d "{\"park\":\"$PARK\",\"text\":\"LN-01 断线\"}" >/dev/null
 curl -sf -X POST "$BASE/api/human/attempt" -H 'Content-Type: application/json' \
   -d "{\"park\":\"$PARK\",\"targets\":[\"SG-A01\"],\"started_at\":$(date +%s000)}" > /tmp/smoke_attempt.json
 check "POST /api/human/attempt → 判分字段" $(node -e '
@@ -89,45 +100,35 @@ curl -sf -X POST "$BASE/api/fault/clear" -H 'Content-Type: application/json' -d 
 
 say ""
 
-# ============ 第 2 节：桥管道 + 白名单（fault-events.md v0.2 §4/§1） ============
-say "== BRIDGE 管道（stub 桩验证 server.js spawn/回退链；桥本体归 worker-B 线4） =="
+# ============ 第 2 节：真实桥联调 + 白名单（fault-events.md v0.2.1 §4/§1） ============
+say "== BRIDGE 真实引擎联调（fault/bridge.py 默认探测；无凭据走规则解析离线兜底） =="
 kill $SRV 2>/dev/null; wait $SRV 2>/dev/null
-STUB=/tmp/pd_stub_bridge.$$.py
-cat > "$STUB" <<'PYEOF'
-import sys, json
-req = json.loads(sys.stdin.read())
-park = req.get("park", {})
-text = req.get("text", "")
-pid = park.get("park", {}).get("id", "?")
-nodes = [n["id"] for n in park.get("nodes", [])]
-tgt = nodes[:1] or ["X"]
-print(json.dumps({
-  "event_id": "FLT-STUB-0001", "ts": "2026-10-01T00:00:00Z", "park_id": pid,
-  "request_text": text, "type": "SHORT_CIRCUIT", "severity": "P0",
-  "targets": tgt, "telemetry_effects": [],
-  "agent": {"mode": "auto", "total_ms": 50, "steps": [
-    {"idx": 1, "title": "告警确认", "detail": "stub", "phase": "confirm",
-     "looked_at": nodes[:3], "found": {"k": "v"}, "why": "stub why", "conclusion": "stub done"}]},
-  "actions": [{"action_id": "ACT-S1", "op": "open", "target": tgt[0], "by": "agent",
-               "result": "ok", "reason": "stub isolate"}],
-  "events": [{"type": "fault.detected", "severity": "P0", "target": tgt[0]}],
-  "source": "stub"
-}, ensure_ascii=False))
-PYEOF
+if [ ! -f ../fault/bridge.py ] && [ ! -f "$(dirname "$PWD")/fault/bridge.py" ]; then
+  say "  (SKIP: fault/bridge.py 不存在——worker-B 桥未落位，本节降级为跳过)"
+fi
 
-PORT="$PORT" FAULT_BRIDGE_CMD="python3 $STUB" node server.js &
+# 2a) 默认探测桥：server 不设 env，自动 spawn fault/bridge.py
+PORT="$PORT" node server.js &
 SRV2=$!
 ok=1
-for i in $(seq 1 16); do curl -sf "$BASE/api/health" >/dev/null 2>&1 && { ok=0; break; }; sleep 0.5; done
+for i in $(seq 1 20); do curl -sf "$BASE/api/health" >/dev/null 2>&1 && { ok=0; break; }; sleep 0.5; done
 check "bridge 模式探活" $ok "health 不通"
 PARK2=$(curl -sf "$BASE/api/parks" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{console.log(JSON.parse(d).parks[0].id)})')
 curl -sf -X POST "$BASE/api/fault" -H 'Content-Type: application/json' \
-  -d "{\"park\":\"$PARK2\",\"text\":\"stub 注入测试\"}" > /tmp/smoke_bfault.json
-check "桥生效：source=stub 且 steps[].looked_at/actions[].by 齐全（v0.2 扩展字段贯通）" $(node -e '
+  -d "{\"park\":\"$PARK2\",\"text\":\"TX-B01 短路\"}" > /tmp/smoke_bfault.json
+check "真实桥生效：source=fault-engine + steps[].looked_at/found/why + engine.llm.used=false（离线兜底如实标注）" $(node -e '
 const j=require("/tmp/smoke_bfault.json");
-const ok = j.source==="stub" && Array.isArray(j.agent.steps[0].looked_at) &&
-  Array.isArray(j.actions) && j.actions[0].by==="agent" && Array.isArray(j.events);
-process.exit(ok?0:1)' && echo 0 || echo 1) "桥管道未生效或 schema 不符"
+const ok = j.source==="fault-engine" && j.engine && j.engine.llm && j.engine.llm.used===false &&
+  Array.isArray(j.agent.steps) && j.agent.steps.length>=5 &&
+  j.agent.steps.some(s=>Array.isArray(s.looked_at) && s.looked_at.length>0 && s.why) &&
+  Array.isArray(j.events) && Array.isArray(j.actions) && Array.isArray(j.telemetry_effects);
+process.exit(ok?0:1)' && echo 0 || echo 1) "真实桥未生效或 v0.2 投影缺失"
+node -e 'const j=require("/tmp/smoke_bfault.json");console.log("  (bridge:", j.event_id, j.type, "steps="+j.agent.steps.length, "actions="+j.actions.length, "marks="+j.events.map(e=>e.type).join("|") + ")")'
+# 2b) 拒绝传播：离线规则解析不识别的文本 → 422 + reasons（零信任，不静默 mock）
+rc=$(curl -s -o /tmp/smoke_rej.json -w '%{http_code}' -X POST "$BASE/api/fault" -H 'Content-Type: application/json' \
+  -d "{\"park\":\"$PARK2\",\"text\":\"2 号变压器重瓦斯跳闸\"}")
+check "拒绝传播：不可解析文本 → 422 + reasons（不静默兜底）" $([ "$rc" = "422" ] && node -e 'const j=require("/tmp/smoke_rej.json");process.exit(Array.isArray(j.reasons)&&j.reasons.length>0?0:1)' && echo 0 || echo 1) "code=$rc"
+curl -sf -X POST "$BASE/api/fault/clear" -H 'Content-Type: application/json' -d "{\"park\":\"$PARK2\"}" >/dev/null
 
 # 桥失败 → 回退 mock（回退链 bridge→mock）。先杀上一实例等端口释放，避免 EADDRINUSE 竞态
 kill $SRV2 2>/dev/null; wait $SRV2 2>/dev/null; sleep 0.6

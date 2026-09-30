@@ -9,8 +9,9 @@ const FAULTS = (() => {
   let hooks = {}; // { onFaultTargetsChanged(ids), getPickable(), clearPicks() } 由 app 注入
 
   const PRESETS = [
-    '2 号变压器重瓦斯跳闸', '10kV 母线短路，电压骤降', '1 号线路覆冰断线',
-    '光伏逆变器全部停运', '储能变流器过温告警', '充电桩群长时间过载',
+    'TX-B01 短路', 'TX-A01 过载', 'LN-01 断线', 'PV-01 光伏脱网',
+    '2 号变压器重瓦斯跳闸',       // 引擎侧规则解析不识别；LLM 凭据到位后可用，mock 回退亦可
+    '10kV 母线电压骤降',
   ];
 
   function init(parkId, h) {
@@ -50,7 +51,18 @@ const FAULTS = (() => {
         $('#fault-result').innerHTML = opsBlock(ev);
         refreshHumanPanel();
       }
-    } catch (e) { alert('注入失败：' + e.message); }
+    } catch (e) {
+      if (e.status === 422 && e.body && Array.isArray(e.body.reasons)) {
+        // 故障 DSL 白名单拒绝（零信任，不静默兜底）：如实展示理由
+        $('#fault-result').innerHTML = `<div class="card result-card wrong"><div class="card-body">
+          <div class="kicker">注入被拒绝（FaultDSL 白名单）</div>
+          <div style="margin-top:6px;font-size:12.8px">${e.body.reasons.map(esc).join('<br>')}</div>
+          ${e.body.llm && e.body.llm.used === false ? `<div class="muted" style="font-size:11.5px;margin-top:6px">LLM 通道：未启用（${esc(e.body.llm.reason || '')}）——当前为规则解析离线兜底，可用预设：元件ID + 短路/过载/断线/光伏脱网</div>` : ''}
+        </div></div>`;
+      } else {
+        alert('注入失败：' + e.message);
+      }
+    }
     btn.disabled = false;
   }
 

@@ -43,7 +43,7 @@ function bridgeArgv() {
   const py = fs.existsSync(repoPy) ? repoPy : (process.env.FAULT_BRIDGE_PYTHON || 'python3');
   return [py, path.join(__dirname, '..', 'fault', 'bridge.py')];
 }
-function callBridge(parkJson, text) {
+function callBridge(parkJson, text, agentEnabled) {
   return new Promise((resolve, reject) => {
     const argv = bridgeArgv();
     let child, out = '', err = '', settled = false;
@@ -51,34 +51,80 @@ function callBridge(parkJson, text) {
     catch (e) { return reject(e); }
     const timer = setTimeout(() => {
       try { child.kill('SIGKILL'); } catch (_) { /* noop */ }
-      reject(new Error(`bridge 超时 ${BRIDGE_TIMEOUT_MS}ms`));
+      const e = new Error(`bridge 超时 ${BRIDGE_TIMEOUT_MS}ms`); e.bridgeBroken = true; reject(e);
     }, BRIDGE_TIMEOUT_MS);
     const done = fn => { if (settled) return; settled = true; clearTimeout(timer); fn(); };
     child.stdout.on('data', c => { out += c; if (out.length > 10 * 1024 * 1024) child.kill('SIGKILL'); });
     child.stderr.on('data', c => { err += c; if (err.length > 64 * 1024) err = err.slice(-32768); });
-    child.on('error', e => done(() => reject(e)));
+    child.on('error', e => done(() => { e.bridgeBroken = true; reject(e); }));
     child.on('close', code => done(() => {
-      if (code !== 0) return reject(new Error(`bridge exit ${code}: ${err.trim().slice(-200)}`));
+      let parsed = null;
+      try { parsed = JSON.parse(out); } catch (_) { /* 非 JSON 走 exit 码分支 */ }
+      // 白名单拒绝（fault/bridge.py 约定 exit 3 + {ok:false,rejected:true}）：如实上抛，绝不静默 mock
+      if (parsed && parsed.ok === false && parsed.rejected) {
+        const e = new Error('fault_rejected'); e.rejected = true;
+        e.reasons = parsed.reasons || []; e.llm = parsed.llm; e.park_id = parsed.park_id;
+        return reject(e);
+      }
+      if (code !== 0) { const e = new Error(`bridge exit ${code}: ${err.trim().slice(-200)}`); e.bridgeBroken = true; return reject(e); }
       try {
-        const ev = JSON.parse(out);
-        if (!ev || typeof ev.event_id !== 'string' || !ev.agent) throw new Error('缺 event_id/agent');
-        return resolve(ev);
-      } catch (e) { reject(new Error('stdout 不可解析: ' + e.message)); }
+        if (!parsed) throw new Error('stdout 非 JSON');
+        return resolve(parsed);
+      } catch (e) { e.bridgeBroken = true; reject(e); }
     }));
     child.stdin.on('error', () => { /* EPIPE 交由 close 非零码处理 */ });
-    child.stdin.end(JSON.stringify({ park: parkJson, text }));
+    // 实际握手（fault/bridge.py）：mode=simulate 给全量事件流；stdin 一次性写入后关
+    child.stdin.end(JSON.stringify({
+      mode: 'simulate', park: parkJson, text,
+      agent_enabled: agentEnabled !== false, horizon_s: 6,
+    }));
   });
 }
-async function injectFault(parkJson, text) {
+/** 把桥的原始事件流投影为 FaultEvent v0.2（judge 裁决③：时间线双事件口径） */
+function projectBridgeEvent(res) {
+  const ev = res.fault_event;
+  if (!ev || typeof ev.event_id !== 'string' || !ev.agent || !Array.isArray(ev.agent.steps)) {
+    throw new Error('stdout 缺 fault_event/event_id/agent.steps');
+  }
+  const all = Array.isArray(res.events) ? res.events : [];
+  const byNo = new Map(all.filter(x => x.type === 'agent.step')
+    .map(x => [x.payload && x.payload.step_no, x.payload || {}]));
+  ev.agent.steps = ev.agent.steps.map(s => {
+    const raw = byNo.get(s.idx) || {};
+    return {
+      idx: s.idx, title: s.title || raw.title || '', detail: s.detail || '',
+      refs: s.refs || raw.looked_at || [],
+      phase: raw.phase, looked_at: raw.looked_at, found: raw.found,
+      why: raw.why, conclusion: raw.conclusion,
+    };
+  });
+  ev.agent.total_ms = ev.agent.total_ms || (ev.agent.steps.length * 700 + 800);
+  ev.actions = all.filter(x => x.type === 'action.executed' || x.type === 'action.rejected')
+    .map(x => ({ action_id: x.payload.action_id, op: x.payload.op, target: x.payload.target,
+                 by: x.payload.by, result: x.payload.result, note: x.payload.note,
+                 reason: x.payload.reason, ts: x.ts, rejected: x.type === 'action.rejected' }));
+  const MARKS = new Set(['fault.detected', 'control.passed', 'control.escalated',
+                         'anomaly.cleared', 'mode.agent_enabled', 'mode.agent_disabled']);
+  ev.events = all.filter(x => MARKS.has(x.type))
+    .map(x => ({ type: x.type, severity: (x.payload && x.payload.severity) || '',
+                 target: (x.payload && x.payload.target) || '', by: (x.payload && x.payload.by) || '',
+                 note: (x.payload && x.payload.note) || '', ts: x.ts }));
+  ev.source = 'fault-engine';
+  ev.engine = { llm: res.llm || null, summary: res.summary || null };
+  return ev;
+}
+async function injectFault(parkJson, text, agentEnabled) {
   if (bridgeConfigured()) {
     const t0 = Date.now();
     try {
-      const ev = await callBridge(parkJson, text);
-      if (!ev.source) ev.source = 'fault-engine';
+      const res = await callBridge(parkJson, text, agentEnabled);
+      const ev = projectBridgeEvent(res);
       store.adopt(parkJson.park.id, ev);
-      console.log('[fault] bridge ok', Date.now() - t0 + 'ms', 'source=' + ev.source);
+      console.log('[fault] bridge ok', Date.now() - t0 + 'ms', 'source=' + ev.source,
+                  'steps=' + ev.agent.steps.length, 'llm=' + (ev.engine.llm && ev.engine.llm.used));
       return ev;
     } catch (e) {
+      if (e.rejected) throw e;   // 白名单拒绝如实上抛（HTTP 422），不静默兜底
       console.error('[fault] bridge 失败，按链回退:', e.message);
     }
   }
@@ -158,21 +204,34 @@ async function api(req, res, url) {
   }
   if (url.pathname === '/api/fault' && req.method === 'POST') {
     const body = await readBody(req);
-    // 白名单（Mimosa advisory②）：park 必须匹配 ID 正则；body 键白名单，路径类键直接拒
+    // 白名单（Mimosa advisory②）：park 匹配 ID 正则；body 键封闭白名单（请求参数永不触达文件路径）
     if (typeof body.park !== 'string' || !PARK_ID_RE.test(body.park)) {
       return sendJSON(res, 400, { error: 'park 白名单校验失败（须匹配 ^PARK-[0-9]{3}$）' });
     }
-    for (const k of ['path', 'file', 'out', 'dir', 'sink']) {
-      if (k in body) return sendJSON(res, 400, { error: 'forbidden_key', key: k });
+    for (const k of Object.keys(body)) {
+      if (!['park', 'text', 'agent_enabled'].includes(k)) {
+        return sendJSON(res, 400, { error: 'forbidden_key', key: k });
+      }
     }
     if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 2000) {
       return sendJSON(res, 400, { error: 'text_required（1..2000 字符）' });
     }
+    if ('agent_enabled' in body && typeof body.agent_enabled !== 'boolean') {
+      return sendJSON(res, 400, { error: 'agent_enabled 须为布尔' });
+    }
     const j = PARKS.get(body.park);
     if (!j) return sendJSON(res, 404, { error: 'park_not_found' });
-    const ev = await injectFault(j, body.text);
-    console.log('[fault]', ev.event_id, ev.type, ev.severity, 'targets=', (ev.targets || []).join(','), 'source=' + ev.source);
-    return sendJSON(res, 200, ev);
+    try {
+      const ev = await injectFault(j, body.text, body.agent_enabled);
+      console.log('[fault]', ev.event_id, ev.type, ev.severity, 'targets=', (ev.targets || []).join(','), 'source=' + ev.source);
+      return sendJSON(res, 200, ev);
+    } catch (e) {
+      if (e.rejected) {
+        // 故障 DSL 白名单拒绝（零信任）：如实传回理由，HTTP 422
+        return sendJSON(res, 422, { error: 'fault_rejected', reasons: e.reasons, llm: e.llm, park_id: e.park_id });
+      }
+      throw e;
+    }
   }
   if (url.pathname === '/api/fault/clear' && req.method === 'POST') {
     const body = await readBody(req);

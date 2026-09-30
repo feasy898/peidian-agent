@@ -90,21 +90,23 @@ ParkDSL 语义：`CB`=CapacitorBank（可投切电容器组，state "ON"/"OFF"�
 - v0.1 消费方（只读 steps[].title/detail）完全不受影响；
 - mock 兜底继续产出 v0.1 形态（无扩展字段），前端按字段存在性渐进渲染。
 
-## 4. python↔node 桥握手（worker-B 线4 交付 `fault/bridge.py`；server.js 已备客户端）
+## 4. python↔node 桥握手（**v0.2.1 按实际交付 `fault/bridge.py` 修订**；server.js 已按此实现）
 
-- **进程模型**：一请求一进程。server.js spawn 桥命令，写 stdin 后等 stdout 关闭。
-- **命令解析**：env `FAULT_BRIDGE_CMD`（空格分词，如 `"python3.12 fault/bridge.py"`）；
-  未设 env 时 server 探测默认路径 `<repo>/fault/bridge.py` + 解释器
-  `<repo>/.venv/bin/python`（缺则 `python3`）；文件不存在 → 跳过桥。
-- **stdin**（UTF-8 JSON，一次性写入后关 stdin）：
-  `{"park": <parkdsl-web/1 全量 JSON 原样>, "text": "<用户输入>"}`
-- **stdout**：单个 FaultEvent v0.2 JSON（§3）。stderr=日志（服务端不解析）。
-- **退出码**：0=成功且 stdout 可解析；非 0 / JSON 解析失败 / 缺 `event_id` 或 `agent` /
-  超 20s → 服务端记日志并沿回退链降级：**bridge → FAULT_MODULE → mock**，页面不瘫。
-- **超时**：20s（env `FAULT_BRIDGE_TIMEOUT_MS` 可调）。
-- 桥内职责（worker-B）：按 §2 映射把 parkJson 经 `Topology.from_dict` 装载（adapter 在桥侧，
-  worker-A 导出格式零改动）、`nl_to_fault`/规则兜底解析 text、`engine.run` 推演、
-  抽取 steps/actions/events 组装 FaultEvent（`source:"fault-engine"`）。
+- **进程模型**：一请求一进程。server.js spawn 桥命令，stdin 一次性写入后关闭，收满 stdout。
+- **命令解析**：env `FAULT_BRIDGE_CMD`（空格分词）可覆盖；缺省探测 `<repo>/fault/bridge.py`，
+  解释器优先 `<repo>/.venv/bin/python`（缺则 env `FAULT_BRIDGE_PYTHON`/`python3`）。
+- **stdin**（UTF-8 JSON）：
+  `{"mode":"simulate", "park":<parkdsl-web/1 全量 JSON 原样>, "text":"<用户输入>", "agent_enabled":true, "horizon_s":6}`
+- **stdout**：`{"ok":true, "fault_event":<FaultEvent 基线>, "events":[<EventBus 原始事件流>],
+  "llm":{"used":bool,"reason":str}, "summary":{...}, "switches":{...}}`。
+- **拒绝语义（零信任，不静默兜底）**：白名单/校验拒绝 → 桥 exit 3 +
+  `{"ok":false,"rejected":true,"reasons":[...]}` → server.js 转 **HTTP 422** 透传 reasons（前端如实展示）。
+  其余桥故障（spawn 失败/非 JSON/超时 20s）→ 才沿回退链 **bridge → FAULT_MODULE → mock**。
+- **server.js 投影（judge 裁决③）**：把 `events[]` 中 `agent.step`（phase/looked_at/found/why/conclusion）
+  合并进 `fault_event.agent.steps`，`action.executed|rejected` → `actions[]`，control/fault 标记 →
+  `events[]`（§3），并置 `source:"fault-engine"`、`engine:{llm,summary}`。
+- 离线兜底：无 `HIGRESS_API_KEY` 时桥内规则解析器接管（关键词：短路/接地/闪络/相间、断线/断相、
+  过载/重载、光伏脱网/脱扣；目标建议用显式元件 ID）；LLM 凭据到位后同一入口自动走真实 LLM（线4 配额 ≤4）。
 
 ## 5. 前端时间线口径（judge 裁决③）
 
