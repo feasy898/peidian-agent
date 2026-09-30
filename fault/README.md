@@ -124,3 +124,22 @@ restore(倒闸转供,可选) → summary →(engine 复测)→ verify → 闭环
 - 复杂园区（worker-A 生成）若多主变/多联络，agent 转供按"最大投影负载率最小"
   贪心选择单台联络开关，不做全局优化；
 - 遥测 tick dt=0.5s（Engine 可调），事件 sim_s 为仿真秒。
+
+## 9. python↔node 桥与真实园区接入（线4-1，第 2 轮新增）
+
+- `park_adapter.py`：ParkDSL 导出 JSON（parkdsl-web/1）→ `Topology`。kind 映射按
+  judge 第 2 轮裁决；**CP=联络点（coupler→常开开关）**，CapacitorBank→capacitor 叶
+  （judge 表中 "capacitor↔CP" 疑笔误，已在 worklog 第 2 轮提请仲裁）。EVC 按负荷参与
+  潮流；BESS/CapacitorBank 潮流中性（未建充放模型，如实声明）。
+- `bridge.py`：CLI 桥（stdin JSON→stdout JSON）。`mode=inject` 纯解析；`mode=simulate`
+  全链路（NL→DSL→引擎→FaultEvent v0.1 + 完整事件流 + 开关终态 + 处置摘要）。拒绝
+  → `{"ok":false,"rejected":true,"reasons":[…]}` exit 3。环境无 `HIGRESS_API_KEY` 或
+  `FAULT_BRIDGE_FORCE_OFFLINE=1` → 规则解析兜底，`llm.used=false` 留证，页面不瘫。
+- `web_module.js`：node 挂点模块（`FAULT_MODULE=<repo>/fault/web_module.js`，
+  server.js 零改动）。`inject(parkJson,text)`=simulate(auto) 的 FaultEvent（含
+  agent.steps）；`simulate(parkJson,opts)` 供 v0.2 时间线取完整事件流。入口守卫：
+  park.id 白名单 `^[A-Z0-9][A-Z0-9-]{0,31}$`、text 1..500 字符、30s 超时、16MB 上限；
+  默认解释器 `<repo>/.venv/bin/python`（`PYTHON_BIN` 可覆盖；勿用 3.11）。
+- `run_matrix.py`：端到端矩阵（3 档园区×4 类故障×人机两态+拒绝探针），结果落盘
+  `examples/matrix-round2.{json,md}`。GPU 机实跑 25/25 PASS exit 0（2 格 N/A：
+  简单档无光伏）。

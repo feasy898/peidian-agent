@@ -137,10 +137,12 @@ class Engine:
                         "note": "agent 反应已关闭，交人工处置（操作面与 agent 同款）",
                     }, sim_s=self.sim_s)
             self._warn_checks()
-        # 动作后征兆未消除 → 如实升级（绝不假绿）
+        # 动作后征兆未消除 → 如实升级（绝不假绿）。PV_TRIP 例外：其语义是
+        # "已确认+转运维消缺"（ack 保持），不属方案失效，不发升级事件。
         keys_active = set(self.detector.active)
         for a in handled_now:
-            if a.key() in keys_active and a.status == "active":
+            if a.key() in keys_active and a.status == "active" \
+                    and a.hint != "PV_TRIP":
                 self.responder.on_stuck(a, self.sim_s)
                 self.stream.append("control", "control.escalated", {
                     "anomaly_id": a.anomaly_id, "hint": a.hint,

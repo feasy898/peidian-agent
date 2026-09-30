@@ -86,7 +86,9 @@ class Detector:
             ev["basis"] = f"电流 {ev['current_ratio']}pu > {TH_SC_CURRENT}pu 且下游电压塌陷"
             raise_anom("SHORT_CIRCUIT", eid, "P0", ev)
 
-        # ② 断线征兆：失电母线 + 供电通路开关全合 + 路径上最深"零流"边
+        # ② 断线征兆：失电母线 + 供电通路开关全合 + 路径上"电源侧第一零流边"
+        #    （浅者优先：断点=带电区与失电区的边界边；深遍会误选断点下游的
+        #    同为零流的主变/线路——整园失电时尤其如此，第 2 轮矩阵实证后修正）
         for bid in topo.ids():
             b = topo.get(bid)
             if b.kind != KIND_BUS:
@@ -100,13 +102,13 @@ class Detector:
                           if topo.kind_of(x) in (KIND_LINE, KIND_TX)
                           and float(sample.get(x, {}).get("current_ratio", 1.0)) < 0.05]
             if zero_edges:
-                zero_edges.sort(key=lambda x: (-len(topo.path_to_source(x)), x))
+                zero_edges.sort(key=lambda x: (len(topo.path_to_source(x)), x))
                 tgt = zero_edges[0]
                 raise_anom("LINE_BREAK", tgt, "P0", {
                     "dead_bus": bid,
                     "v_pu": sample[bid]["v_pu"],
                     "zero_flow_edge": tgt,
-                    "basis": f"{bid} 失电而供电通路开关全合，深度最大零流边为 {tgt}",
+                    "basis": f"{bid} 失电而供电通路开关全合，电源侧第一零流边为 {tgt}",
                 })
 
         # ③ 变压器过载（阈值 REG-TECH PHYS-TX-LOAD；短路电流信号下不误报——

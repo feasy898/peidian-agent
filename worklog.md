@@ -91,67 +91,64 @@
   回放/双跑逐字节一致的**需求本身**（run_tests t_stream_schema_and_determinism
   即验收该项），非安全用途。
 
-## 2026-10-01 · worker-A · 第 1 轮（线1 ParkDSL + 线2 可视化前端）
-
-（补记：本轮提交 6232d21，32 文件 +5162，仅 dsl/ web/ 指定路径；此前进展只记在仓外
-共享 worklog（projects/peidian-agent/worklog.md），本节按 judge 反馈补入仓内台账。）
+## 2026-10-01 · worker-B · 第 2 轮（线4 集成与部署，按 judge 反馈启动）
 
 **做了什么**
-- 线1 dsl/：
-  - 格式定案 YAML（仓内 ontology/scenarios/prompts 全 YAML 同构；pyyaml 唯一运行时依赖）；
-    规范成文 docs/dsl-spec.md + 机器可读 dsl_spec.yaml（validate.py 唯一裁决源，数据驱动）。
-  - 元件 ID 约定：^(GRID|LN|TX|BUS|SG|CB|BESS|PV|EVC|LD|CP)-[A-Z]?[0-9]{1,2}\$，全园唯一
-    命名空间（devices.id 与 links.id 共用），兼容考古 seed.yaml 单数字风格；故障事件
-    targets[] 引用该命名空间（后被 judge 第2轮裁决定为唯一权威源）。
-  - validate.py：validate/export/summary 三子命令；十类可读校验（E-API/E-PARK/E-DEV/E-ID/
-    E-LINK/E-TOPO/E-VOLT/E-CAP/E-LOOP/E-TIER）；拓扑=常开耦合器断开 BFS 连通 + DFS 回边
-    环检测（父边单次豁免，修平行边双回线漏检）+ 变压器低压侧下游容载×0.85 + tier 规模复核；
-    export→parkdsl-web/1 JSON（含遥测形状表，单一事实源=dsl_spec.yaml）。
-  - examples/ 三档样例各1（简单 740kW 纯负荷 / 中等 1520kW+PV+BESS+EVC / 复杂 3410kW
-    三房环网 CP-01 常开+5 台 DER）；prompts/ 三档模板（规范内嵌）+ run_gen.py（key 走
-    env/stdin 零 argv）+ quota-ledger.md。
-  - 阻塞如实记：Higress /v1/models=404、无凭据 chat=401，GPU 无 bao CLI、env 无
-    LLM_API_KEY——真实模型验证未执行，配额 0/3 未动（第2轮 judge 亲测 404 证实仍缺）。
-- 线2 web/：
-  - 选型：单页静态+手写 SVG 拓扑/Canvas 曲线，node22 零 npm 依赖零构建链零 CDN（部署面
-    =同步目录，回滚=换目录）；UI=shadcn 风格设计令牌本地化（tokens.css zinc 暗色 HSL 变量）。
-  - 三视角（全景/局部/曲线）+ 确定性伪遥测（mulberry32 按 (seed,元件ID,步序) 播种，同
-    (seed,id,t) 双跑逐字节一致；24 点日形状源自 dsl_spec.yaml 经 export 下发）+
-    setInterval 2s 流式刷新 + agent 七步处置时间线 + 人机对比模式（人工点选判分）。
-  - server.js：静态+API（health/parks/park/telemetry/fault/fault.clear/human.attempt），
-    fs.watch 数据目录热加载；故障 mock + worker-B 挂点（env FAULT_MODULE）。
-- 测试与证据：dsl/tests/run_tests.py 15/15 exit 0；web/tests/smoke.sh 11 项 PASS exit 0
-  （同 t 双跑逐字节一致 / t+900 在动 / 故障 schema / 效应生效 / 判分字段）；curl GET / =200；
-  POST /api/fault "2 号变压器重瓦斯跳闸"→P0 targets=[TX-B01] 7 步；node --check 9 js 全过；
-  run_evals 233/233 PASS 零干扰。GPU 无 headless 浏览器，无截图（curl+语法级证据，如实声明）。
-- 与 worker-B 接口对齐点：元件 ID（dsl/docs/dsl-spec.md §5）+ FaultEvent（web/docs/
-  fault-events.md v0.1 草案）——第2轮 judge 已裁决：v0.1 为集成基准，第3轮升 v0.2。
+- **python↔node 桥（线4-1）**：新增 `fault/park_adapter.py`（ParkDSL 导出 JSON
+  parkdsl-web/1 → fault.Topology；judge kind 映射表落地；TX/Switchgear 串联链重建、
+  叶元件母线挂接、line/coupler 链接映射、direct 残链合成内部 DIR 边）、
+  `fault/fault_event.py`（FaultEvent v0.1 构造器：我方四类→taxonomy 十类映射、
+  severity 对齐检测器、telemetry_effects 对齐 mock 口径、agent.steps=引擎步骤流）、
+  `fault/bridge.py`（CLI 桥：stdin JSON→stdout JSON，inject/simulate 两模式；拒绝
+  exit 3 带 reasons；离线兜底显式留证 `llm.used=false`）、`fault/web_module.js`
+  （node 挂点：FAULT_MODULE 零改动接入；inject=完整 FaultEvent 含 agent.steps；
+  simulate 供 v0.2 时间线；入口守卫 park.id 白名单/text≤500/30s 超时/16MB——
+  Mimosa advisory② 集成轮复核项在此落实，server.js 零改动避免与 worker-A 并发编辑）。
+- **端到端矩阵（线4-2）**：`fault/run_matrix.py`，web/public/data 三档导出园区 ×
+  4 类故障 × 人机两态 + 白名单拒绝探针；**GPU 机实跑 MATRIX 25/25 PASS exit 0**
+  （27 格 = 25 执行 + 2 N/A：简单档无光伏），结果落盘
+  `fault/examples/matrix-round2.{json,md}`。结局分布（诚实落盘，不追全绿叙事）：
+  SC/TXO 全部隔离成功（agent 清除 → 人工回放 by=human 清除）；LB@进线（LN-01）
+  全园失电且**无上游开关**→agent 如实升级不乱操作（工程发现：ParkDSL 进线建议加
+  Switchgear，交 worker-A）；PV_TRIP=确认+转运维不假清除（消缺前保持 active）。
+- **离线兜底做实（线4-3）**：全部矩阵格 FAULT_BRIDGE_FORCE_OFFLINE=1 下
+  llm.used=false 且走规则解析 NL→DSL 全链路（含中文口语序号/百分比/白名单拒绝）；
+  真实 LLM 调用 **0 次**（线4 配额 ≤4 未动用，凭据到位后同一入口自动切 Higress）。
+- **node↔python 真机冒烟（GPU node22）**：web_module.inject → transformer.trip/P0/
+  targets=[TX-A01]/8 步/source=agent；simulate(manual) 事件流 OK；注入拒绝→抛错
+  （server 侧契约回退 mock）→NODE_EXIT=0。
+- **部署（线4-4）**：srv-1 通道**两端实测均无**（GPU/windev `ssh srv-1` DNS 不可
+  解析，未翻找凭据）→ 按 judge 预案交付**部署包+手册**：`deploy/DEPLOY.md`（含
+  caddy 只读核对→备份→最小 diff→reload 全流程、自测命令、回滚）、
+  `caddy-peidian-agent.conf`（方案 B 相对路径推荐 / 方案 A 零改动临时）、
+  `peidian-agent.service`（凭据经 EnvironmentFile，零打印）、`pack.sh`（git archive）。
+  ⚠️ 上线前唯一代码改动项已交 worker-A：web/public/js/api.js 六处 API URL 绝对→
+  相对（静态资源本就相对，无需动）。
+- `fault/README.md` 增 §9（桥/适配器/矩阵用法）；`fault/dbg_line4.py` 调试器被
+  Mimosa 路径穿越规则拦截未落盘（诊断需求已由 run_matrix 的 stderr 回传覆盖）。
 
-## 2026-10-01 · worker-A · 第 2 轮（线4 集成侧：契约 v0.2 + 桥客户端 + 白名单 + 双事件时间线）
+**对 judge 映射表的一处有声偏离（提请仲裁）**：CP 前缀按域语义实现为**联络点
+（coupler→常开开关）**而非 capacitor——证据 dsl/examples/park-complex-01.yaml:66
+`{kind: coupler, id: CP-01, state: OPEN}`（注释：A–C 联络点常开）；CapacitorBank
+（CB-A01，complex 园区实存）→capacitor 叶。若按字表 CP→capacitor，复杂园区唯一
+联络通道将消失、倒闸转供不可达。
 
-**做了什么**（提交 e455119=第1轮补记、d0892f4=本轮 web/ 6 文件 +303/−40）
-- 按 judge 第2轮【接口裁决】升级 web/docs/fault-events.md 至 v0.2：①元件 ID 唯一权威源=ParkDSL
-  导出 JSON + fault 侧 kind 映射表照录；**CB/CP 两处交叉如实登记 §2.1 待复裁**（ParkDSL 语义
-  CB=电容器组、CP=常开联络点；裁决表字面 switchgear↔SG/CB、capacitor↔CP 会互换二者，适配建议
-  按电气语义 CB→capacitor、CP→switchgear(normally:OPEN)——正是转供所需联络开关），未擅改裁决文本；
-  ②FaultEvent v0.1 基线不变，v0.2 全为可选扩展：steps[].{phase,looked_at,found,why,conclusion}
-  （对齐 fault/agent.py _step 实测 payload）+ actions[]（action.executed 投影）+ events[]（control/fault 标记）；
-  ③python↔node 桥握手契约 §4（stdin={parkJson 原样,text}→stdout=FaultEvent JSON→exit0/解析失败/超时降级）。
-- server.js：桥客户端（bridge→FAULT_MODULE→mock 回退链；FAULT_BRIDGE_CMD 或探测 fault/bridge.py，
-  解释器优先仓 .venv；20s 超时 SIGKILL；stdout 缺 event_id/agent 即降级；store.adopt 入册使遥测效应与
-  人工判分对桥模式继续生效）；白名单（Mimosa advisory② 复核项）：全路由 park 过 ^PARK-[0-9]{3}\$，
-  /api/fault body 键白名单（path/file/out/dir/sink→400），text 限长；请求参数永不触达文件路径。
-- faults.js：时间线双事件渲染——agent.step 扩展字段（[phase]看/判/据+conclusion）与 v0.1 字段
-  渐进兼容；action.executed chips（by=agent🤖绿/human👤蓝，result!=ok 红）；control.passed=已交人工
-  横幅、anomaly.cleared by=human 徽标；人工模式注入后操作面即显。
-- smoke.sh 11→16 检查：+桥管道节（/tmp stub 桩验证 spawn/回退，桥本体归 worker-B 不在仓内造第二实现）
-  +白名单节；修两处测试壳端口竞态与一处错预期（PARK-999 正则合法应 404）。
+**过程中修掉的缺陷**（自测/矩阵暴露）
+1. bridge 人工态时序：操作发生在 horizon 后且不再 tick → 清除事件永不产生（先跑到
+   检出→回放操作→再跑满 horizon）。
+2. 检测器断线定位"最深零流边"在整园失电时误选断点下游主变 → 改"电源侧第一零流边"
+   （浅者优先，带电区/失电区边界即断点）。
+3. human_ran 未初始化（auto 路径 UnboundLocalError，矩阵 auto 全格崩）。
+4. Element 构造 kwargs 误挂在 list.append 上（park_adapter）。
+5. 导出 JSON ampacity_a 在 params 内层（线路额定读取错位）。
+6. CapacitorBank 设备类型未处理（complex 园区 CB-A01 适配失败）。
+7. PV_TRIP 误发 control.escalated（其语义=确认+待消缺，非方案失效）。
 
-**验证（GPU 实跑）**：web smoke 16 项全 PASS exit 0；dsl 15/15 exit 0；fault 13/13 exit 0（零互扰）；
-run_evals 233/233 PASS exit 0；node --check 全过。桥回退链实证：FAULT_BRIDGE_CMD=/bin/false → 日志
-"bridge exit 1 按链回退"→source=mock 页面不瘫。
-
-**待办/阻塞（如实）**：①真实引擎联调待 worker-B 交付 fault/bridge.py（server 端已就绪，桥落位即自动
-启用；接口以 fault-events.md §4 为准）；②CB/CP 映射交叉待 judge 复裁（§2.1）；③Higress 凭据仍缺
-（judge 亲测 404），真实 LLM 定向注入继续挂起；④caddy 部署（hkmingdajiaoyu.com/peidian-agent）无
-srv-1 通道权限线索，按 judge 分工由 worker-B 交付部署包路径，web/ 侧部署面已就绪（纯静态+单 node 进程，PORT 可调）。
+**证据（本轮实跑，GPU 机 anolis-gpu-01，解释器 .venv/bin/python 3.12.13）**
+- `python fault/run_tests.py` → 13/13 PASS exit 0（回归）。
+- `python fault/run_matrix.py` → `MATRIX mode=all cells=25/25 failed=0 na=2
+  result=PASS` exit 0；矩阵落盘 fault/examples/matrix-round2.{json,md}。
+- node 冒烟：INJECT-OK / SIMULATE-OK / REJECT-OK，NODE_EXIT=0。
+- 传输完整性：bundle sha256 双端核对 674483dd…（含全部第 2 轮交付）。
+- 门禁：run_evals 233/233、ci_isolation OK（第 1 轮已证，本轮 fault/ 改动不触
+  m0-m7 评估域；如 judge 需可随时复跑）。

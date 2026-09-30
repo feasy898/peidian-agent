@@ -1,0 +1,28 @@
+# deploy/peidian-agent.service · systemd 单元（srv-1）
+# 安装：cp 到 /etc/systemd/system/ → systemctl daemon-reload → enable --now peidian-agent
+# 凭据：HIGRESS_API_KEY 放 /etc/peidian-agent/env（root:600，不入仓不入日志）；
+#      无该文件时桥自动离线兜底（规则解析），页面不瘫。
+
+[Unit]
+Description=peidian-agent park digital-twin web (node) + fault bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=peidian
+Group=peidian
+WorkingDirectory=/opt/peidian-agent
+Environment=PORT=8787
+Environment=PYTHON_BIN=/opt/peidian-agent/.venv/bin/python
+Environment=FAULT_MODULE=/opt/peidian-agent/fault/web_module.js
+EnvironmentFile=-/etc/peidian-agent/env
+# 若无独立 peidian 用户：User=peidian 换成实际运行账号并 chown /opt/peidian-agent
+ExecStart=/usr/bin/env node /opt/peidian-agent/web/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
