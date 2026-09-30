@@ -33,6 +33,20 @@
    }
   },
   {
+   "id": "SG-A00",
+   "type": "Switchgear",
+   "label": "SG-A00",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力中心）",
+   "params": {
+    "id": "SG-A00",
+    "type": "Switchgear",
+    "rated_current_a": 630,
+    "state": "CLOSED",
+    "role": "incomer"
+   }
+  },
+  {
    "id": "BUS-A1",
    "type": "Bus",
    "label": "BUS-A1",
@@ -221,13 +235,21 @@
   {
    "id": "LN-01",
    "from": "GRID-01",
-   "to": "BUS-A1",
+   "to": "SG-A00",
    "kind": "line",
    "state": null,
    "params": {
     "length_km": 3.2,
     "ampacity_a": 400
    }
+  },
+  {
+   "id": null,
+   "from": "SG-A00",
+   "to": "BUS-A1",
+   "kind": "direct",
+   "state": null,
+   "params": {}
   },
   {
    "id": null,

@@ -20,6 +20,7 @@ substations:
   - id: SR-A
     name: A 配电房（动力中心）
     devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
       - {id: BUS-A1, type: Bus, voltage_level: 10kV}
       - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
       - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
@@ -39,7 +40,8 @@ substations:
       - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
 
 links:
-  - {from: GRID-01, to: BUS-A1, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
   - {from: BUS-A1, to: SG-A01, kind: direct}
   - {from: SG-A01, to: TX-A01, kind: direct}
   - {from: TX-A01, to: BUS-A2, kind: direct}
