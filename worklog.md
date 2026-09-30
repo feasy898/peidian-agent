@@ -126,3 +126,32 @@
   run_evals 233/233 PASS 零干扰。GPU 无 headless 浏览器，无截图（curl+语法级证据，如实声明）。
 - 与 worker-B 接口对齐点：元件 ID（dsl/docs/dsl-spec.md §5）+ FaultEvent（web/docs/
   fault-events.md v0.1 草案）——第2轮 judge 已裁决：v0.1 为集成基准，第3轮升 v0.2。
+
+## 2026-10-01 · worker-A · 第 2 轮（线4 集成侧：契约 v0.2 + 桥客户端 + 白名单 + 双事件时间线）
+
+**做了什么**（提交 e455119=第1轮补记、d0892f4=本轮 web/ 6 文件 +303/−40）
+- 按 judge 第2轮【接口裁决】升级 web/docs/fault-events.md 至 v0.2：①元件 ID 唯一权威源=ParkDSL
+  导出 JSON + fault 侧 kind 映射表照录；**CB/CP 两处交叉如实登记 §2.1 待复裁**（ParkDSL 语义
+  CB=电容器组、CP=常开联络点；裁决表字面 switchgear↔SG/CB、capacitor↔CP 会互换二者，适配建议
+  按电气语义 CB→capacitor、CP→switchgear(normally:OPEN)——正是转供所需联络开关），未擅改裁决文本；
+  ②FaultEvent v0.1 基线不变，v0.2 全为可选扩展：steps[].{phase,looked_at,found,why,conclusion}
+  （对齐 fault/agent.py _step 实测 payload）+ actions[]（action.executed 投影）+ events[]（control/fault 标记）；
+  ③python↔node 桥握手契约 §4（stdin={parkJson 原样,text}→stdout=FaultEvent JSON→exit0/解析失败/超时降级）。
+- server.js：桥客户端（bridge→FAULT_MODULE→mock 回退链；FAULT_BRIDGE_CMD 或探测 fault/bridge.py，
+  解释器优先仓 .venv；20s 超时 SIGKILL；stdout 缺 event_id/agent 即降级；store.adopt 入册使遥测效应与
+  人工判分对桥模式继续生效）；白名单（Mimosa advisory② 复核项）：全路由 park 过 ^PARK-[0-9]{3}\$，
+  /api/fault body 键白名单（path/file/out/dir/sink→400），text 限长；请求参数永不触达文件路径。
+- faults.js：时间线双事件渲染——agent.step 扩展字段（[phase]看/判/据+conclusion）与 v0.1 字段
+  渐进兼容；action.executed chips（by=agent🤖绿/human👤蓝，result!=ok 红）；control.passed=已交人工
+  横幅、anomaly.cleared by=human 徽标；人工模式注入后操作面即显。
+- smoke.sh 11→16 检查：+桥管道节（/tmp stub 桩验证 spawn/回退，桥本体归 worker-B 不在仓内造第二实现）
+  +白名单节；修两处测试壳端口竞态与一处错预期（PARK-999 正则合法应 404）。
+
+**验证（GPU 实跑）**：web smoke 16 项全 PASS exit 0；dsl 15/15 exit 0；fault 13/13 exit 0（零互扰）；
+run_evals 233/233 PASS exit 0；node --check 全过。桥回退链实证：FAULT_BRIDGE_CMD=/bin/false → 日志
+"bridge exit 1 按链回退"→source=mock 页面不瘫。
+
+**待办/阻塞（如实）**：①真实引擎联调待 worker-B 交付 fault/bridge.py（server 端已就绪，桥落位即自动
+启用；接口以 fault-events.md §4 为准）；②CB/CP 映射交叉待 judge 复裁（§2.1）；③Higress 凭据仍缺
+（judge 亲测 404），真实 LLM 定向注入继续挂起；④caddy 部署（hkmingdajiaoyu.com/peidian-agent）无
+srv-1 通道权限线索，按 judge 分工由 worker-B 交付部署包路径，web/ 侧部署面已就绪（纯静态+单 node 进程，PORT 可调）。
