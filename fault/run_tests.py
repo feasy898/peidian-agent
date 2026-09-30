@@ -221,6 +221,16 @@ def t_llm_zero_trust_guard():
         '"note":"模拟高负载"}', topo)
     assert spec.type == "TX_OVERLOAD" and spec.target == "TX-02"
     assert spec.params["overload_ratio"] == 1.3 and "LLM" in spec.note
+    # SSRF 加固：base_url 仅允许 http(s)（Mimosa advisory 处置）
+    from fault import HigressClient
+    for bad in ("file:///etc/passwd", "ftp://100.100.0.6", "http://", "gopher://x"):
+        try:
+            HigressClient(base_url=bad)
+            raise AssertionError(f"base_url 未拒: {bad}")
+        except ValueError:
+            pass
+    assert HigressClient(base_url="http://100.100.0.6:8080").base_url \
+        == "http://100.100.0.6:8080"
     # nl_to_fault：LLM 通道故障（chat 抛异常）→ 规则兜底，页面不瘫
     spec = nl_to_fault("1号主变三相短路", topo, client=FakeLLMDown())
     assert spec.type == "SHORT_CIRCUIT" and spec.target == "TX-01"

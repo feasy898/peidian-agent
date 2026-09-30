@@ -151,6 +151,10 @@ class HigressClient:
                  timeout_s: int = 30) -> None:
         self.base_url = (base_url or os.environ.get("HIGRESS_BASE_URL")
                          or "http://100.100.0.6:8080").rstrip("/")
+        # SSRF 加固（Mimosa advisory）：仅允许 http(s) scheme，禁 file/ftp 等协议面
+        if not re.match(r"^https?://[A-Za-z0-9.\-_]+(?::\d+)?$", self.base_url):
+            raise ValueError(
+                f"HIGRESS base_url 非法（仅允许 http(s)://host[:port]）: {self.base_url}")
         self.api_key = api_key or os.environ.get("HIGRESS_API_KEY") or ""
         self.model = model
         self.timeout_s = timeout_s

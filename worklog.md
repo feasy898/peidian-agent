@@ -78,3 +78,15 @@
   原因：单文件 `ssh cat >` 源码直写被 Mimosa hook 拦截（文件内容均先经 Write 工具
   落盘可查，hook 无法扫描远程路径属工具盲区）；scp 在本机不可用（主机名解析差异）。
 - SSH 高频连接会被对端重置（限速保护），传输脚本需带 sleep 间隔。
+
+### 附录：Mimosa 提交前扫描 advisory 处置（同日补丁）
+- llm_bridge.py [high] SSRF → **已修**：HigressClient.__init__ 对 base_url 强制
+  `http(s)://host[:port]` scheme 白名单（禁 file/ftp/gopher 等协议面），run_tests
+  增 4 组非法 base_url 拒绝用例。
+- run_tests.py / stream.py [high] 路径穿越 → **评估后不修（如实说明理由）**：二者
+  是库 API 接受**调用方显式传入**的落盘路径（`EventBus.write_jsonl(path)`、测试样
+  例目录），本系统内无不可信输入源；web/ 集成时若路径来自请求参数，应在 web 层做
+  白名单校验（已在 README §4 契约语境，后续集成轮复核）。
+- telemetry.py:36 [low] 不安全随机数 → **by design 不修**：seeded PRNG 是确定性
+  回放/双跑逐字节一致的**需求本身**（run_tests t_stream_schema_and_determinism
+  即验收该项），非安全用途。
