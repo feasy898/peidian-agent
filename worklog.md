@@ -264,3 +264,29 @@ diff→validate→reload→curl /peidian-agent/ 自测）。
 PASS exit 0（新增 t_adapter_sg_incomer）；run_matrix 全绿 exit 0（25/25+2 N/A）；
 样例与矩阵输出双跑 sha256 逐字节一致；worklog A1 节恢复 + 本节 append；
 `git status -- fault deploy worklog.md` 干净后指定路径提交。
+
+### worker-A 第 3 轮：前端注入探针（两态实证）+ SG-A00 待落登记（judge 第 3 轮 worker-A 项 1-3）
+
+- **项 2 前端注入探针——已按当前形态先行完成（基线态，数据面两态全实证）**：
+  - chips 态：POST /api/fault {PARK-101, "TX-A01 短路"} → source=fault-engine、8 步全带
+    looked_at/found/why、actions=[open SG-A01 by=agent →ok]（chips 数据）、events 含
+    fault.detected+anomaly.cleared:agent、engine.summary {cleared:true, cleared_by:agent,
+    escalated:false}；PARK-201/301（TX-B01 短路）→ 7 步 escalate 态（nactions=0，
+    marks=fault.detected|control.escalated，chips 区仅事件标记渲染）。
+  - 422 卡态：POST {PARK-201, "2 号变压器重瓦斯跳闸"} → http=422 {error: fault_rejected,
+    reasons:[规则解析器未能识别故障类型…], llm:{used:false, reason:no_credentials}}（零静默）。
+  - 适配器修复后的增量复跑（LN-01 类故障应出现隔离 actions 而非纯 escalate）**待 worker-B
+    修复落位后执行**，已挂账。
+- **项 1 SG-A00 样例再落地——patch 已备、执行被依赖阻塞（如实）**：三档样例 SG-A00 串入
+  LN-01–BUS-A1 + data 重导出 + dsl 复验 + LN-01 隔离探针 + smoke 17 项的完整动作序列已备妥；
+  本轮轮询 worker-B 提交约 6 分钟（2+4min 两轮）HEAD 恒为 088285c，park_adapter.py 未见修复
+  标记。按分工 fault/ 归 worker-B 未擅动；**SG-A00 在修复前不可落**（第 2 轮已实证会打挂真实
+  桥：topology.py:112 LN-01 引用不存在），修复落地即一命令落位。
+- **worklog 恢复状态观察（系 judge 指派 worker-B 任务 1，本 worker 不并行动手避免撞车）**：
+  worker-A 第 1/2 轮主节仍缺失（被 fe8c6ea 覆盖）；provenance 已验 git show e455119:worklog.md
+  含"worker-A · 第 1 轮"节。
+- **项 3 浏览器级验证（如实登记）**：GPU 机无 headless 浏览器（which chromium/chromium-browser/
+  google-chrome/playwright 均空），页面证据维持 curl+API 探针级；部署后补截图。
+- **本轮未改仓库代码**（观察+探针轮）；四套件本轮实跑新证：dsl 15/15 exit 0、fault 14/14 exit 0
+  （worker-B 工作区新增用例，未提交态）、run_evals 233/233 PASS exit 0、web smoke 全 PASS exit 0。
+  模型配额仍 0/10。
