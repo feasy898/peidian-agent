@@ -314,3 +314,23 @@ PASS exit 0（新增 t_adapter_sg_incomer）；run_matrix 全绿 exit 0（25/25+
 **悬留维持如实登记（不计入收工阻断）**：Higress 凭据缺（真实注入验证待凭据，
 配额 0/10 未动）；srv-1 通道缺（caddy 上线按 deploy/DEPLOY.md 待通道）；
 浏览器级截图待部署后补。SG-A00 三档样例 patch 归 worker-A 并行任务。
+
+## 2026-10-01 · worker-A · 第 4 轮（收口轮：SG-A00 三档样例 patch 全序列落地）
+
+**做了什么**（提交 7b0690a，10 路径中 6 归我——fault/examples ×4 与 worker-B 565e853 并发提交收敛为同一确定性内容，详见下）
+- SG-A00（Switchgear incomer，CLOSED）串入三档样例 GRID-01—LN-01—SG-A00—direct—BUS-A1；
+  dsl 套件 15/15 PASS exit 0；data 三档重导出（validate.py export 通过）。
+- LN-01 隔离探针（真实桥，三档全过）：LN-01 断线 → agent open SG-A00 → cleared=true/by=agent/
+  escalated=false/ops=1（改造前纯 control.escalated——行为升级实证）。
+- matrix 双跑+套件三跑：25/25+2NA PASS ×2，matrix-round2.{json,md} 双跑/三跑 sha256 逐文件一致
+  （worker-B 确定性修复在新形态下复证）；eventstream 残留 diff（collapsed_buses 乱序）经复跑消除
+  ——该 4 文件与 worker-B 565e853 并发收敛为同一确定性内容，我的提交只含 dsl/data 6 文件。
+- **judge 第 5 轮判据逐条自验（HEAD=7b0690a 实跑）**：①五套件+矩阵全绿：dsl 15/15 exit0、
+  fault 15/15 exit0、run_evals 233/233 PASS exit0、matrix 25/25+2NA PASS exit0、smoke 全 PASS exit0；
+  ②跑后 git status --short fault/ = 0 行（fixpoint 成立）；③SG-A00 进线形态矩阵显式覆盖：
+  "LN-01 断线"6 行中 3 行 cleared=True/by=agent/esc=False（三档各一，另 3 行 by=human 人工态），
+  全阵 escalated 计数=0（非 N/A 非 escalate）；④仓内 worklog 双节齐全：第 1 轮节（:198，B 恢复）
+  +本节。
+- **悬留维持登记（不计收工阻断）**：Higress 凭据缺（真实 LLM 注入未跑，离线兜底已实证）；
+  srv-1 通道缺（caddy 未上线，deploy/ 包就绪+api.js 相对路径已清障）；浏览器截图缺（无 headless
+  浏览器）。模型配额 0/10 未动，密钥零打印。
