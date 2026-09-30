@@ -74,9 +74,11 @@ class Detector:
                 continue
             cr = float(sample.get(eid, {}).get("current_ratio", 0.0))
             if cr > TH_SC_CURRENT:
-                dead_in_zone = [b for b in topo.zone(eid)
-                                if topo.kind_of(b) == KIND_BUS
-                                and float(sample.get(b, {}).get("v_pu", 1)) < 0.5]
+                # payload 边界显式排序（第 4 轮确定性治理：跨 PYTHONHASHSEED 不漂序）
+                dead_in_zone = sorted(
+                    b for b in topo.zone(eid)
+                    if topo.kind_of(b) == KIND_BUS
+                    and float(sample.get(b, {}).get("v_pu", 1)) < 0.5)
                 cand.append((len(topo.path_to_source(eid)), eid,
                              {"current_ratio": cr,
                               "collapsed_buses": dead_in_zone}))

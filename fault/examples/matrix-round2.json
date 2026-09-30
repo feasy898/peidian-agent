@@ -138,16 +138,22 @@
     "first_phase_confirm": true,
     "steps_have_why": true,
     "cleared_by_agent_if_cleared": true,
-    "escalated_no_false_ops": true,
     "fe_has_steps": true
    },
    "status": "PASS",
    "failed_checks": [],
    "outcome": {
-    "cleared": false,
-    "cleared_by": "",
-    "escalated": true,
-    "ops": []
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
    },
    "fault_event_summary": {
     "type": "line.fault",
@@ -155,7 +161,7 @@
     "targets": [
      "LN-01"
     ],
-    "steps": 7,
+    "steps": 8,
     "telemetry_effects": 15
    },
    "cell_id": "PARK-301|LINE_BREAK|auto",
@@ -184,10 +190,17 @@
    "status": "PASS",
    "failed_checks": [],
    "outcome": {
-    "cleared": false,
-    "cleared_by": "",
+    "cleared": true,
+    "cleared_by": "human",
     "escalated": false,
-    "ops": []
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
    },
    "fault_event_summary": {
     "type": "line.fault",
@@ -516,16 +529,22 @@
     "first_phase_confirm": true,
     "steps_have_why": true,
     "cleared_by_agent_if_cleared": true,
-    "escalated_no_false_ops": true,
     "fe_has_steps": true
    },
    "status": "PASS",
    "failed_checks": [],
    "outcome": {
-    "cleared": false,
-    "cleared_by": "",
-    "escalated": true,
-    "ops": []
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
    },
    "fault_event_summary": {
     "type": "line.fault",
@@ -533,7 +552,7 @@
     "targets": [
      "LN-01"
     ],
-    "steps": 7,
+    "steps": 8,
     "telemetry_effects": 8
    },
    "cell_id": "PARK-201|LINE_BREAK|auto",
@@ -562,10 +581,17 @@
    "status": "PASS",
    "failed_checks": [],
    "outcome": {
-    "cleared": false,
-    "cleared_by": "",
+    "cleared": true,
+    "cleared_by": "human",
     "escalated": false,
-    "ops": []
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
    },
    "fault_event_summary": {
     "type": "line.fault",
@@ -894,16 +920,22 @@
     "first_phase_confirm": true,
     "steps_have_why": true,
     "cleared_by_agent_if_cleared": true,
-    "escalated_no_false_ops": true,
     "fe_has_steps": true
    },
    "status": "PASS",
    "failed_checks": [],
    "outcome": {
-    "cleared": false,
-    "cleared_by": "",
-    "escalated": true,
-    "ops": []
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
    },
    "fault_event_summary": {
     "type": "line.fault",
@@ -911,7 +943,7 @@
     "targets": [
      "LN-01"
     ],
-    "steps": 7,
+    "steps": 8,
     "telemetry_effects": 4
    },
    "cell_id": "PARK-101|LINE_BREAK|auto",
@@ -940,10 +972,17 @@
    "status": "PASS",
    "failed_checks": [],
    "outcome": {
-    "cleared": false,
-    "cleared_by": "",
+    "cleared": true,
+    "cleared_by": "human",
     "escalated": false,
-    "ops": []
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
    },
    "fault_event_summary": {
     "type": "line.fault",

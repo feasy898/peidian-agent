@@ -192,9 +192,12 @@ class Topology:
         self._cache_downstream[eid] = res
         return list(res)
 
-    def zone(self, eid: str) -> set[str]:
-        """故障隔离区 = 元件自身 + 下游。"""
-        return set(self.downstream(eid))
+    def zone(self, eid: str) -> list[str]:
+        """故障隔离区 = 元件自身 + 下游（**有序 list**；第 4 轮确定性治理：
+        旧实现返回 set，检测器 payload 派生列表跨进程随字符串哈希漂序）。
+
+        membership 用法（`x in zone`）对 list 同样成立，调用方零改动。"""
+        return list(self.downstream(eid))
 
     def path_to_source(self, eid: str) -> list[str]:
         """eid 到任一电源的最短路径（含 eid，不含电源节点）。无路径返回 []。"""

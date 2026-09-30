@@ -578,6 +578,41 @@ def t_adapter_sg_incomer():
     write_jsonl_stable(s, os.path.join(EXAMPLES, "eventstream-sg-incomer.jsonl"))
 
 
+def t_bridge_hashseed_determinism():
+    """跨 PYTHONHASHSEED 确定性（第 4 轮，judge"集合序残留"修复的准绳强化）：
+    同一载荷两次桥进程（HASHSEED=1/2，独立进程=独立字符串哈希），输出归一化墙钟
+    字段（ts/event_id/agent.total_ms——均为 v0.1 墙钟计时口径，不入 git 产物）后
+    sha256 必须一致——证明 set→list 出口已无漂序。git 内产物（样例/矩阵）经
+    write_jsonl_stable/generated_at 治理本就全字段确定。"""
+    import hashlib
+    import subprocess
+    park = _sg_inlet_park_json()
+    payload = {"mode": "simulate", "park": park, "text": "LN-01 断线",
+               "agent_enabled": True, "seed": 7}
+    digests = []
+    for hs in ("1", "2"):
+        env = dict(os.environ)
+        env["PYTHONHASHSEED"] = hs
+        env["FAULT_BRIDGE_FORCE_OFFLINE"] = "1"
+        proc = subprocess.run(
+            [sys.executable, os.path.join(HERE, "bridge.py")],
+            input=json.dumps(payload, ensure_ascii=False),
+            capture_output=True, text=True, env=env, timeout=120)
+        assert proc.returncode == 0, f"HASHSEED={hs}: {proc.stderr[-300:]}"
+        o = json.loads(proc.stdout.strip().split("\n")[-1])
+        assert o.get("ok"), o
+        fe = o["fault_event"]
+        fe.pop("ts", None)
+        fe.pop("event_id", None)          # 墙钟派生字段归一化
+        fe["agent"].pop("total_ms", None)  # 墙钟计时（v0.1 演示计时口径），非确定性状态
+        for e in o.get("events", []):
+            e.pop("ts", None)
+        digests.append(hashlib.sha256(
+            json.dumps(o, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest())
+    assert digests[0] == digests[1], f"跨 PYTHONHASHSEED 输出漂序: {digests}"
+
+
 # ================================================================ 样例 DSL
 FAULT_EXAMPLES = {
     "sc_tx01.yaml": """# 示例：1号主变三相短路（四类之一 SHORT_CIRCUIT）
@@ -641,7 +676,7 @@ def main():
               "t_llm_prompt_on_disk", "t_e2e_short_circuit",
               "t_e2e_line_break", "t_e2e_tx_overload", "t_e2e_pv_trip",
               "t_human_mode_switch", "t_stream_schema_and_determinism",
-              "t_adapter_sg_incomer"]]
+              "t_adapter_sg_incomer", "t_bridge_hashseed_determinism"]]
     failed = []
     for name, fn in cases:
         try:
