@@ -170,3 +170,23 @@ worker-B fault/bridge.py 于本轮中段落位（judge 指定线4-1）。按"接
 - 回归：dsl 15/15、fault 13/13、run_evals 233/233 全 exit 0。
 - 悬留：LLM 凭据仍缺（离线规则解析兜底已实证：TX-B01 短路→ok llm.used=false）；CB/CP 映射交叉
   §2.1 待复裁；caddy 部署件按分工待 worker-B 部署包/通道。
+
+### worker-A 第 2 轮追记二：worker-B 线4 交接响应（提交 846526b）+ adapter 缺陷报告（交 worker-B）
+
+- **已办（fe8c6ea 交接项）**：①api.js 六处 URL 绝对→相对（DEPLOY.md §4 方案 B，/peidian-agent/ 子路径兼容）；
+  ②契约 fault-events.md §2.1 更新——CB/CP 交叉两侧实现已同向收敛（worker-B park_adapter CP→常开开关/
+  CapacitorBank→capacitor，与本 worker 建议一致），提请 judge 追认。
+- **adapter 缺陷报告（复现→根因→修复方向，交 worker-B 下轮）**：按 DEPLOY.md §6 建议试落
+  dsl/examples 三档进线串联开关 SG-A00（LN-01 与 10kV 母线间），真实桥即 exit 1——
+  `ValueError: 边元件 LN-01 引用不存在的元件 SG-A00`（fault/topology.py:112，经 fault/park_adapter.py）。
+  根因：park_adapter.py ③ 只在**变压器 direct 链**上注册开关边（walk 自 TX 邻居），④ line/coupler
+  link 的端点若指向独立 SG 设备则不注册。修复方向：④ 前增一步——对未消费的 Switchgear 设备，
+  若 direct 邻居中含 line link 端点，注册为开关边（from=<该 line id>，to=<另一侧 direct 邻居>）。
+  复现载荷：web/public/data/park-simple-01.json + SG-A00 版样例（本对话/worklog 可复原）。
+  **处置**：fault/ 归 worker-B 未擅改；三档样例 SG-A00 已回退至 adapter 兼容形态（data 重导出与
+  HEAD 逐字节一致，dsl 15/15 复验，真实桥 LN-01 断线→fault-engine 7 步+如实 escalate 复证），
+  待修复后再落进线开关（LB@进线即可隔离，不再纯 escalate）。
+- **回归（GPU 实跑）**：web smoke 17 项全 PASS exit 0；dsl 15/15 exit 0；fault 13/13 exit 0；
+  run_evals 233/233 PASS exit 0。本轮 worker-A 提交链：e455119→d0892f4→aed83d7→2672c98→846526b。
+- **悬留（如实）**：LLM 凭据缺（离线兜底已实证）；caddy 上线待 srv-1 通道（worker-B 部署包已就绪，
+  api.js 子路径障碍已清）；CB/CP 追认、adapter 修复、SG-A00 再落地三项跨角色待办已挂账。
