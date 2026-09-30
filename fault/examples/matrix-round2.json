@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-30T20:49:23Z",
+ "generated_at": "deterministic-run",
  "interpreter": "/opt/gpumachine/projects/peidian-agent/peidian-agent/.venv/bin/python",
  "bridge": "/opt/gpumachine/projects/peidian-agent/peidian-agent/fault/bridge.py",
  "matrix": "3 档园区 × 4 类故障 × 人机两态（N/A=园区缺对应元件）",

@@ -15,9 +15,12 @@ bus↔BUS、switchgear↔SG/CB、bess↔BESS、pv↔PV、evcharger↔EVC、load�
 - nodes：GridInlet→grid_infeed；Bus→bus；Transformer→transformer **边**（沿 direct
   链找两侧母线，高压侧为 from）；Switchgear→switchgear **边**（串联于 direct 链，
   normally=params.state）；Load/EVCharger→load（base_kw=peak_kw/total_power_kw）；
-  PV→pv；BESS→bess；Capacitor→capacitor。
+  PV→pv；BESS→bess；Capacitor/CapacitorBank→capacitor。
   注：EVC 落 KIND_LOAD（按负荷参与潮流，逐字映射见 attrs.src_kind）；BESS/CAP 为
   **潮流中性**叶（fault 引擎不为其建潮流模型），README §9 已声明。
+- ③.5（第 3 轮新增）：未被变压器链消费的**独立开关**通用注册——覆盖进线串联形态
+  （line→SG→direct→BUS，如 SG-A00），修 worker-A 缺陷报告（088285c）的注册缺口；
+  方向规则：line/coupler 接触面为 frm（电源经线路来）。
 - links：kind=line → line 边（rated_kw≈ampacity_a×进线电压×√3，缺省 3000）；
   kind=coupler → switchgear 边（normally=state，operable）；kind=direct → 不生成
   独立边，被 TX/SG 边与叶挂接吸收；无法吸收的 direct 残链 → 合成内部 DIR-N line 边
@@ -54,6 +57,31 @@ def _rated_kw(ampacity_a: Any, kv: float) -> float:
         return round(float(ampacity_a) * kv * 1.732, 1)
     except (TypeError, ValueError):
         return 3000.0
+
+
+def _walk_direct_chain(start_idx: int, start_id: str, links: list[dict],
+                       by_id: dict[str, dict], consumed: set[int],
+                       err: str) -> list[tuple[int, str]]:
+    """沿 direct 链走到非 Switchgear 设备；返回 [(link_idx, node_id), …]。
+
+    （第 3 轮重构：从 TX 链闭包提为模块级，供 ③ 变压器链与 ③.5 独立开关共用。）
+    """
+    chain: list[tuple[int, str]] = []
+    cur_idx, cur = start_idx, start_id
+    while True:
+        chain.append((cur_idx, cur))
+        node = by_id.get(cur)
+        if node is None:
+            raise AdapterError(f"direct 链引用未知设备 {cur}（{err}）")
+        if node["type"] != "Switchgear":
+            return chain
+        nxt = [(i, lk, (lk["to"] if lk["from"] == cur else lk["from"]))
+               for i, lk in enumerate(links)
+               if lk["kind"] == "direct" and i != cur_idx and i not in consumed
+               and cur in (lk["from"], lk["to"])]
+        if len(nxt) != 1:
+            raise AdapterError(f"开关 {cur} 的 direct 链分叉/断头（{len(nxt)} 向，{err}）")
+        cur_idx, cur = nxt[0][0], nxt[0][2]
 
 
 def park_to_topology(park_json: dict) -> Topology:
@@ -125,6 +153,7 @@ def park_to_topology(park_json: dict) -> Topology:
                 consumed.add(i)
 
     # ③ 变压器边 + 链上开关边
+    sg_done: set[str] = set()      # 已在 TX 链注册的开关（③.5 跳过）
     for n in nodes:
         if n["type"] != "Transformer":
             continue
@@ -133,23 +162,8 @@ def park_to_topology(park_json: dict) -> Topology:
         if len(nbrs) != 2:
             raise AdapterError(f"变压器 {tx_id} 应有两条 direct 链（实得 {len(nbrs)}）")
 
-        def walk(start: int, nid: str) -> list[tuple[int, str]]:
-            """沿 direct 链从 TX 邻居走到非开关设备；返回 [(link_idx, node_id), …]。"""
-            chain: list[tuple[int, str]] = []
-            cur_idx, cur = start, nid
-            while True:
-                chain.append((cur_idx, cur))
-                node = by_id.get(cur)
-                if node is None:
-                    raise AdapterError(f"direct 链引用未知设备 {cur}")
-                if node["type"] != "Switchgear":
-                    return chain
-                nxt = _direct_nbrs(cur, skip={cur_idx})
-                if len(nxt) != 1:
-                    raise AdapterError(f"开关 {cur} 的 direct 链分叉/断头（{len(nxt)} 向）")
-                cur_idx, cur = nxt[0]
-
-        sides = [walk(i, o) for i, o in nbrs]
+        sides = [_walk_direct_chain(i, o, links, by_id, consumed, f"TX {tx_id}")
+                 for i, o in nbrs]
         sides.sort(key=lambda s: _vnom_kv(by_id[s[-1][1]])
                    if by_id[s[-1][1]]["type"] == "Bus" else -1.0, reverse=True)
         built: list[str] = []          # 两侧紧邻 TX 的元件 id
@@ -168,6 +182,7 @@ def park_to_topology(park_json: dict) -> Topology:
                                             {"normally": state, "operable": True,
                                              "src_kind": "Switchgear"},
                                             frm=path[j - 1], to=path[j + 1]))
+                    sg_done.add(m_id)
                 else:
                     _DIR_SEQ[0] += 1
                     elements.append(Element(f"DIR-{_DIR_SEQ[0]:03d}", KIND_LINE,
@@ -179,6 +194,45 @@ def park_to_topology(park_json: dict) -> Topology:
             built.append(path[-2])   # 紧邻 TX 的本侧元件（无中间设备时即母线）
         elements.append(Element(tx_id, KIND_TX, n.get("label") or tx_id,
                                 dict(n.get("params", {})), frm=built[0], to=built[1]))
+
+    # ③.5 独立开关通用注册（第 3 轮，修 judge 指出的进线串联开关注册缺口——
+    # worker-A 缺陷报告 088285c：SG-A00 进线形态 LN-01→SG-A00→direct→BUS-A01 原
+    # 会落进 ⑤ 残链兜底而报"引用不存在的元件"）。规则：未被 ③ 消费的 Switchgear
+    # 设备，收集其接触面（direct 链走到的端点 + 直接引用它的 line/coupler 链接
+    # id），恰两面则注册开关边；方向 line/coupler 侧为 frm（电源经线路来）。
+    for n in nodes:
+        if n["type"] != "Switchgear" or n["id"] in sg_done:
+            continue
+        sg_id = n["id"]
+        faces: list[tuple[str, bool]] = []   # (对端元件 id, 是否 line/coupler 边)
+        for i, o in _direct_nbrs(sg_id):
+            chain = _walk_direct_chain(i, o, links, by_id, consumed,
+                                       f"独立开关 {sg_id}")
+            terminal = chain[-1][1]
+            if by_id[terminal]["type"] not in ("Bus", "GridInlet"):
+                raise AdapterError(
+                    f"独立开关 {sg_id} 的 direct 链末端应为母线/电源（实得 {terminal}"
+                    f"/{by_id[terminal]['type']}）")
+            faces.append((terminal, False))
+            for ci, _nid in chain:
+                consumed.add(ci)
+        for i, lk in enumerate(links):
+            if lk["kind"] in ("line", "coupler") and sg_id in (lk["from"], lk["to"]):
+                faces.append((str(lk.get("id") or f"{lk['from']}-{lk['to']}"), True))
+        if len(faces) != 2:
+            raise AdapterError(
+                f"独立开关 {sg_id} 应恰有两个接触面（实得 {len(faces)}：{faces}）")
+        if faces[0][1] and not faces[1][1]:
+            frm, to = faces[0][0], faces[1][0]
+        elif faces[1][1] and not faces[0][1]:
+            frm, to = faces[1][0], faces[0][0]
+        else:
+            frm, to = sorted([faces[0][0], faces[1][0]])
+        state = str(n.get("params", {}).get("state", "CLOSED"))
+        elements.append(Element(sg_id, KIND_SW, n.get("label") or sg_id,
+                                {"normally": state, "operable": True,
+                                 "src_kind": "Switchgear"},
+                                frm=frm, to=to))
 
     # ④ line / coupler 链接
     for lk in links:

@@ -201,7 +201,9 @@ def main() -> int:
     passed = [c for c in executed if c["status"] == "PASS"]
     failed = [c for c in executed if c["status"] == "FAIL"]
     result = {
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        # 时间戳治理（第 3 轮）：本文件为确定性输出，不含墙钟——跑后 git status 干净；
+        # 运行时刻由 git 提交记录与 CI/执行日志承载。
+        "generated_at": "deterministic-run",
         "interpreter": PY,
         "bridge": BRIDGE,
         "matrix": "3 档园区 × 4 类故障 × 人机两态（N/A=园区缺对应元件）",
@@ -214,8 +216,8 @@ def main() -> int:
     with open(OUT_JSON, "w", encoding="utf-8", newline="\n") as f:
         json.dump(result, f, ensure_ascii=False, indent=1)
     with open(OUT_MD, "w", encoding="utf-8", newline="\n") as f:
-        f.write("# 端到端矩阵 · 第 2 轮（线4-2）\n\n")
-        f.write(f"- 生成：{result['generated_at']} ｜ 解释器：{PY}\n")
+        f.write("# 端到端矩阵（线4-2）\n\n")
+        f.write(f"- 生成：{result['generated_at']}（时间戳治理：确定性输出）｜ 解释器：{PY}\n")
         f.write(f"- 合计 {result['totals']['cells']} 格 = 执行 {len(executed)}"
                 f"（PASS {len(passed)} / FAIL {len(failed)}）+ N/A {result['totals']['not_applicable']}\n")
         f.write("- 离线兜底：全部格 llm.used=false（FAULT_BRIDGE_FORCE_OFFLINE=1 显式留证）\n\n")

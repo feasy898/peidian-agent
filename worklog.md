@@ -190,3 +190,77 @@ worker-B fault/bridge.py 于本轮中段落位（judge 指定线4-1）。按"接
   run_evals 233/233 PASS exit 0。本轮 worker-A 提交链：e455119→d0892f4→aed83d7→2672c98→846526b。
 - **悬留（如实）**：LLM 凭据缺（离线兜底已实证）；caddy 上线待 srv-1 通道（worker-B 部署包已就绪，
   api.js 子路径障碍已清）；CB/CP 追认、adapter 修复、SG-A00 再落地三项跨角色待办已挂账。
+
+### 【恢复注记】本节为 worker-A 第 1 轮节，由 worker-B 于第 3 轮自 git e455119:worklog.md 取回追加
+> 起因：worker-B 的 fe8c6ea 提交以本地 bundle 整文件覆盖 worklog.md，丢失本节（judge 第 3 轮指出）。
+> **防再犯纪律（即日生效）**：worklog.md 此后只在 GPU 仓内追加；任何 worker 不得以本地整文件覆盖共享文件；
+> 共享文件改动一律仓内 append（本恢复即按此执行）。
+## 2026-10-01 · worker-A · 第 1 轮（线1 ParkDSL + 线2 可视化前端）
+
+（补记：本轮提交 6232d21，32 文件 +5162，仅 dsl/ web/ 指定路径；此前进展只记在仓外
+共享 worklog（projects/peidian-agent/worklog.md），本节按 judge 反馈补入仓内台账。）
+
+**做了什么**
+- 线1 dsl/：
+  - 格式定案 YAML（仓内 ontology/scenarios/prompts 全 YAML 同构；pyyaml 唯一运行时依赖）；
+    规范成文 docs/dsl-spec.md + 机器可读 dsl_spec.yaml（validate.py 唯一裁决源，数据驱动）。
+  - 元件 ID 约定：^(GRID|LN|TX|BUS|SG|CB|BESS|PV|EVC|LD|CP)-[A-Z]?[0-9]{1,2}\$，全园唯一
+    命名空间（devices.id 与 links.id 共用），兼容考古 seed.yaml 单数字风格；故障事件
+    targets[] 引用该命名空间（后被 judge 第2轮裁决定为唯一权威源）。
+  - validate.py：validate/export/summary 三子命令；十类可读校验（E-API/E-PARK/E-DEV/E-ID/
+    E-LINK/E-TOPO/E-VOLT/E-CAP/E-LOOP/E-TIER）；拓扑=常开耦合器断开 BFS 连通 + DFS 回边
+    环检测（父边单次豁免，修平行边双回线漏检）+ 变压器低压侧下游容载×0.85 + tier 规模复核；
+    export→parkdsl-web/1 JSON（含遥测形状表，单一事实源=dsl_spec.yaml）。
+  - examples/ 三档样例各1（简单 740kW 纯负荷 / 中等 1520kW+PV+BESS+EVC / 复杂 3410kW
+    三房环网 CP-01 常开+5 台 DER）；prompts/ 三档模板（规范内嵌）+ run_gen.py（key 走
+    env/stdin 零 argv）+ quota-ledger.md。
+  - 阻塞如实记：Higress /v1/models=404、无凭据 chat=401，GPU 无 bao CLI、env 无
+    LLM_API_KEY——真实模型验证未执行，配额 0/3 未动（第2轮 judge 亲测 404 证实仍缺）。
+- 线2 web/：
+  - 选型：单页静态+手写 SVG 拓扑/Canvas 曲线，node22 零 npm 依赖零构建链零 CDN（部署面
+    =同步目录，回滚=换目录）；UI=shadcn 风格设计令牌本地化（tokens.css zinc 暗色 HSL 变量）。
+  - 三视角（全景/局部/曲线）+ 确定性伪遥测（mulberry32 按 (seed,元件ID,步序) 播种，同
+    (seed,id,t) 双跑逐字节一致；24 点日形状源自 dsl_spec.yaml 经 export 下发）+
+    setInterval 2s 流式刷新 + agent 七步处置时间线 + 人机对比模式（人工点选判分）。
+  - server.js：静态+API（health/parks/park/telemetry/fault/fault.clear/human.attempt），
+    fs.watch 数据目录热加载；故障 mock + worker-B 挂点（env FAULT_MODULE）。
+- 测试与证据：dsl/tests/run_tests.py 15/15 exit 0；web/tests/smoke.sh 11 项 PASS exit 0
+  （同 t 双跑逐字节一致 / t+900 在动 / 故障 schema / 效应生效 / 判分字段）；curl GET / =200；
+  POST /api/fault "2 号变压器重瓦斯跳闸"→P0 targets=[TX-B01] 7 步；node --check 9 js 全过；
+  run_evals 233/233 PASS 零干扰。GPU 无 headless 浏览器，无截图（curl+语法级证据，如实声明）。
+- 与 worker-B 接口对齐点：元件 ID（dsl/docs/dsl-spec.md §5）+ FaultEvent（web/docs/
+  fault-events.md v0.1 草案）——第2轮 judge 已裁决：v0.1 为集成基准，第3轮升 v0.2。
+
+## 2026-10-01 · worker-B · 第 3 轮（收口三件：worklog 恢复/适配器缺口修复+时间戳治理/凭据通道复证）
+
+**① worklog 恢复与纪律（judge 任务 1）**：worker-A 第 1 轮节自 git e455119:worklog.md
+取回并 append（见上方恢复注记）；损害面核实=仅 A 第 1 起节丢失（A 第 2 轮节与两次追记
+系 fe8c6ea 之后追加，未受损）。**纪律即日生效：worklog 只在 GPU 仓内追加，禁止本地
+整文件覆盖共享文件**——本节即按该纪律在仓内追加。
+
+**② park_adapter 进线串联开关注册缺口修复（judge 任务 2，实施 worker-A 缺陷报告
+088285c 的修复方向）**：新增 ③.5 独立开关通用注册——未被变压器链消费的 Switchgear
+设备，收集接触面（direct 链走到的端点 + 直接引用它的 line/coupler 链接 id），恰两面
+则注册开关边；方向规则 line/coupler 侧为 frm；`_walk_direct_chain` 提为模块级供 ③/
+③.5 共用。新增合成样例用例 t_adapter_sg_incomer（PARK-TEST-SG：GRID-01—LN-01—
+SG-A00—direct—BUS-A1）：适配注册 frm=LN-01/to=BUS-A01 正确，**LB@进线可隔离**
+（agent open SG-A00 → anomaly.cleared by=agent，不再纯 escalate）→ 14/14 PASS。
+SG-A00 的 dsl/examples 样例与 data 重导出归 worker-A（其落地后矩阵自动覆盖该形态）。
+
+**时间戳治理（judge 任务 2 后半）**：run_tests 样例落盘改 write_jsonl_stable——
+ts 合成为 2026-10-01T00:00:00Z+sim_s 偏移，文件逐字节确定；run_matrix 顶层
+generated_at 改 deterministic-run（不含墙钟）。实测：测试与矩阵各自双跑，样例与
+matrix-round2.json sha256 逐字节一致；GPU 仓内跑后 `git status -- fault deploy
+worklog.md` 干净。真实墙钟事件流仍可经 EventBus.write_jsonl 获取（运行时输出，
+不入 git）。
+
+**③ 凭据/通道复证（judge 任务 3）**：HIGRESS_API_KEY 未设置（env 命中 0）；
+srv-1 通道 DNS 不可解析（GPU 端实测）。→ 真实注入验证与 caddy 上线**如实登记为
+待凭据/待通道悬留**，配额 0/10 未动用；凭据到位后桥同一入口自动切 Higress
+（llm.used=true），通道到位后按 deploy/DEPLOY.md §2-§3 上线（只读核对→备份→最小
+diff→validate→reload→curl /peidian-agent/ 自测）。
+
+**证据（本轮实跑，GPU 机，解释器 .venv/bin/python 3.12.13）**：run_tests 14/14
+PASS exit 0（新增 t_adapter_sg_incomer）；run_matrix 全绿 exit 0（25/25+2 N/A）；
+样例与矩阵输出双跑 sha256 逐字节一致；worklog A1 节恢复 + 本节 append；
+`git status -- fault deploy worklog.md` 干净后指定路径提交。

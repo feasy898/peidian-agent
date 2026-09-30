@@ -1,6 +1,6 @@
-# 端到端矩阵 · 第 2 轮（线4-2）
+# 端到端矩阵（线4-2）
 
-- 生成：2026-09-30T20:49:23Z ｜ 解释器：/opt/gpumachine/projects/peidian-agent/peidian-agent/.venv/bin/python
+- 生成：deterministic-run（时间戳治理：确定性输出）｜ 解释器：/opt/gpumachine/projects/peidian-agent/peidian-agent/.venv/bin/python
 - 合计 27 格 = 执行 25（PASS 25 / FAIL 0）+ N/A 2
 - 离线兜底：全部格 llm.used=false（FAULT_BRIDGE_FORCE_OFFLINE=1 显式留证）
 

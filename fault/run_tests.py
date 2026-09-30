@@ -65,6 +65,23 @@ def assert_common_integrity(stream):
         assert isinstance(e["payload"], dict)
 
 
+def write_jsonl_stable(stream, path) -> int:
+    """样例落盘（时间戳治理，第 3 轮）：ts 合成为 2026-10-01T00:00:00Z+sim_s 偏移，
+    文件逐字节确定——跑测试不再弄脏 git（judge 第 3 轮要求"跑后 git status 干净"）。
+    真实墙钟事件流仍可经 stream.write_jsonl 获取（bridge/matrix 运行时输出）。"""
+    import datetime
+    base = datetime.datetime(2026, 10, 1, 0, 0, 0,
+                             tzinfo=datetime.timezone.utc)
+    evts = stream.to_list()
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        for e in evts:
+            e2 = dict(e)
+            t = base + datetime.timedelta(seconds=float(e["sim_s"]))
+            e2["ts"] = t.strftime("%Y-%m-%dT%H:%M:%S.") + f"{t.microsecond // 1000:03d}Z"
+            f.write(json.dumps(e2, ensure_ascii=False) + "\n")
+    return len(evts)
+
+
 # ================================================================ A. DSL
 def t_dsl_whitelist_accept():
     topo = demo_park()
@@ -301,7 +318,7 @@ def t_e2e_short_circuit():
     assert snap["sample"]["TX-01"]["current_ratio"] < 4.0, "隔离后不得再有故障电流"
     assert snap["sample"]["LOAD-A1"]["kw"] > 100, "转供后 A3 负荷应恢复供电"
     # 事件流样例落盘
-    n = s.write_jsonl(os.path.join(EXAMPLES, "eventstream-sc-tx01.jsonl"))
+    n = write_jsonl_stable(s, os.path.join(EXAMPLES, "eventstream-sc-tx01.jsonl"))
     assert n == len(s)
     _write_fault_example("sc_tx01")
 
@@ -334,7 +351,7 @@ def t_e2e_line_break():
     # 不许误报光伏脱网异常（母线失电导致的出力为 0 是联锁不是异常）
     assert not any(k[0] == "PV_TRIP" for k in eng.detector.active), \
         "失电联锁不得误报 PV_TRIP 异常"
-    s.write_jsonl(os.path.join(EXAMPLES, "eventstream-lb-lna1.jsonl"))
+    write_jsonl_stable(s, os.path.join(EXAMPLES, "eventstream-lb-lna1.jsonl"))
     _write_fault_example("lb_ln_a1")
 
 
@@ -371,7 +388,7 @@ def t_e2e_tx_overload():
         "转供后 TX-02 高位应触发预警事件"
     assert [e for e in s.to_list("control", "control.escalated")] == [], \
         "本场景不得有升级（方案应一次成功）"
-    s.write_jsonl(os.path.join(EXAMPLES, "eventstream-txover-tx01.jsonl"))
+    write_jsonl_stable(s, os.path.join(EXAMPLES, "eventstream-txover-tx01.jsonl"))
     _write_fault_example("tx_overload_tx01")
 
 
@@ -400,7 +417,7 @@ def t_e2e_pv_trip():
     # 故障保持（待消缺）——如实不报清除
     assert not s.to_list("fault", "anomaly.cleared"), "消缺前不得假报清除"
     assert eng.detector.active[("PV_TRIP", "PV-01")].acked, "异常应标记已确认"
-    s.write_jsonl(os.path.join(EXAMPLES, "eventstream-pvtrip-pv01.jsonl"))
+    write_jsonl_stable(s, os.path.join(EXAMPLES, "eventstream-pvtrip-pv01.jsonl"))
     _write_fault_example("pv_trip_pv01")
 
 
@@ -447,7 +464,7 @@ def t_human_mode_switch():
     assert agent_steps, "重开后 agent 应接管新异常"
     assert all(e["payload"]["anomaly_id"] != ano_id for e in agent_steps), \
         "重开前的人工异常不得被 agent 补写步骤"
-    s.write_jsonl(os.path.join(EXAMPLES, "eventstream-human-mode.jsonl"))
+    write_jsonl_stable(s, os.path.join(EXAMPLES, "eventstream-human-mode.jsonl"))
 
 
 # ================================================================ E/F. 流与确定性
@@ -471,10 +488,94 @@ def t_stream_schema_and_determinism():
     hints = {e["payload"]["hint"] for e in s1.to_list("fault", "fault.detected")}
     assert hints == {"SHORT_CIRCUIT", "PV_TRIP"}, hints
     p = os.path.join(EXAMPLES, "eventstream-mixed-determinism.jsonl")
-    n = s1.write_jsonl(p)
+    n = write_jsonl_stable(s1, p)
     with open(p, encoding="utf-8") as f:
         lines = [json.loads(x) for x in f]
     assert len(lines) == n and [x["seq"] for x in lines] == list(range(1, n + 1))
+    # 时间戳治理自测（第 3 轮）：同流二次落盘必须逐字节一致（跑后 git status 干净的根据）
+    p2 = p + ".tmp"
+    write_jsonl_stable(s1, p2)
+    b1 = open(p, "rb").read()
+    b2 = open(p2, "rb").read()
+    os.remove(p2)
+    assert b1 == b2, "stable 落盘必须逐字节确定"
+
+
+# ================================================================ G. 进线串联开关（第 3 轮）
+def _sg_inlet_park_json() -> dict:
+    """合成 SG-A00 进线形态样例（worker-A 缺陷报告 088285c 的复现载荷）：
+    GRID-01 —LN-01(line)— SG-A00 —direct— BUS-A1 —SG-A01— TX-A01 —direct— BUS-A2 — LD-A01"""
+    return {
+        "api": "parkdsl-web/1",
+        "source": "fault/run_tests.py 合成（SG-A00 进线串联形态）",
+        "park": {"id": "PARK-TEST-SG", "name": "进线开关测试园区", "description": "",
+                 "tier": "simple", "contract_capacity_kw": 1000,
+                 "incoming_voltage": "10kV", "seed": 7},
+        "substations": [{"id": "SR-A", "name": "测试配电房"}],
+        "nodes": [
+            {"id": "GRID-01", "type": "GridInlet", "label": "电网进线", "params": {}},
+            {"id": "SG-A00", "type": "Switchgear", "label": "进线开关",
+             "substation": "SR-A", "params": {"state": "CLOSED", "role": "incomer"}},
+            {"id": "BUS-A1", "type": "Bus", "label": "10kV 母线",
+             "substation": "SR-A", "params": {"voltage_level": "10kV"}},
+            {"id": "SG-A01", "type": "Switchgear", "label": "主变进线开关",
+             "substation": "SR-A", "params": {"state": "CLOSED", "role": "incomer"}},
+            {"id": "TX-A01", "type": "Transformer", "label": "1号主变",
+             "substation": "SR-A", "params": {"capacity_kva": 1000, "hv": "10kV", "lv": "0.4kV"}},
+            {"id": "BUS-A2", "type": "Bus", "label": "0.4kV 母线",
+             "substation": "SR-A", "params": {"voltage_level": "0.4kV"}},
+            {"id": "LD-A01", "type": "Load", "label": "办公负荷",
+             "substation": "SR-A", "params": {"peak_kw": 320, "profile": "office"}},
+        ],
+        "links": [
+            {"id": "LN-01", "from": "GRID-01", "to": "SG-A00", "kind": "line",
+             "params": {"ampacity_a": 400, "length_km": 3.0}},
+            {"from": "SG-A00", "to": "BUS-A1", "kind": "direct"},
+            {"from": "BUS-A1", "to": "SG-A01", "kind": "direct"},
+            {"from": "SG-A01", "to": "TX-A01", "kind": "direct"},
+            {"from": "TX-A01", "to": "BUS-A2", "kind": "direct"},
+            {"from": "BUS-A2", "to": "LD-A01", "kind": "direct"},
+        ],
+        "telemetry": {"seed": 7},
+    }
+
+
+def t_adapter_sg_incomer():
+    """SG-A00 进线串联开关注册缺口修复验证（judge 第 3 轮任务 2）：
+    适配 → LB@LN-01 可被隔离（open SG-A00）→ agent 清除，不再纯 escalate。"""
+    from fault.park_adapter import park_to_topology
+    topo = park_to_topology(_sg_inlet_park_json())
+    assert topo.has("SG-A00") and topo.kind_of("SG-A00") == "switchgear"
+    sg = topo.get("SG-A00")
+    assert sg.frm == "LN-01" and sg.to == "BUS-A1", (sg.frm, sg.to)
+    assert sg.attrs["normally"] == "CLOSED" and sg.attrs["operable"] is True
+    # 初始整网带电
+    states = {e.id: e.attrs.get("normally", "OPEN") for e in topo.by_kind("switchgear")}
+    energ = topo.energized(states)
+    assert all(b in energ for b in ("BUS-A1", "BUS-A2")), "初始不得失电"
+    # LN-01 的隔离面恰为 SG-A00
+    assert topo.isolation_cut("LN-01", states) == ["SG-A00"]
+    # 端到端：LB@LN-01 → 检出 → agent open SG-A00 → 清除（不再升级）
+    eng = Engine(topo, seed=7)
+    eng.inject({"type": "LINE_BREAK", "target": "LN-01", "at_s": 1.0,
+                "params": {"phase": "single", "permanent": True},
+                "note": "进线断线（SG-A00 隔离验证）"})
+    eng.run(4.0)
+    s = eng.stream
+    assert_common_integrity(s)
+    det = s.to_list("fault", "fault.detected")
+    assert det and det[0]["payload"]["hint"] == "LINE_BREAK" \
+        and det[0]["payload"]["target"] == "LN-01"
+    opened = {e["payload"]["target"] for e in ops_of(s, by="agent", op="open")}
+    assert opened == {"SG-A00"}, opened
+    clr = s.to_list("fault", "anomaly.cleared")
+    assert clr and clr[0]["payload"]["by"] == "agent", "进线断线应可隔离清除"
+    assert not s.to_list("control", "control.escalated"), \
+        "有进线开关时 LB 不得纯升级"
+    snap = eng.state_snapshot()
+    assert snap["switches"]["SG-A00"] == "OPEN"
+    assert snap["sample"]["BUS-A1"]["v_pu"] == 0.0, "隔离后进线侧停运"
+    write_jsonl_stable(s, os.path.join(EXAMPLES, "eventstream-sg-incomer.jsonl"))
 
 
 # ================================================================ 样例 DSL
@@ -539,7 +640,8 @@ def main():
               "t_llm_rule_parser", "t_llm_zero_trust_guard",
               "t_llm_prompt_on_disk", "t_e2e_short_circuit",
               "t_e2e_line_break", "t_e2e_tx_overload", "t_e2e_pv_trip",
-              "t_human_mode_switch", "t_stream_schema_and_determinism"]]
+              "t_human_mode_switch", "t_stream_schema_and_determinism",
+              "t_adapter_sg_incomer"]]
     failed = []
     for name, fn in cases:
         try:
