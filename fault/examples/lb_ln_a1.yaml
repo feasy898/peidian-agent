@@ -1,0 +1,9 @@
+# 示例：A区出线1断线（四类之一 LINE_BREAK）
+fault_id: FLT-EX-LB-01
+type: LINE_BREAK
+target: LN-A1            # 仅 line
+at_s: 0.0
+params:
+  phase: single
+  permanent: true
+note: A区出线1单相断线（演示样例）

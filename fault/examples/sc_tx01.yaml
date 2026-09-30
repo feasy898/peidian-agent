@@ -1,0 +1,10 @@
+# 示例：1号主变三相短路（四类之一 SHORT_CIRCUIT）
+fault_id: FLT-EX-SC-01
+type: SHORT_CIRCUIT
+target: TX-01            # 变压器（line/transformer 允许）
+at_s: 0.0                # 仿真秒
+params:
+  phase: three           # single|two|three
+  impedance_ohm: 0.1     # (0, 50]
+  permanent: true
+note: 1号主变三相短路（演示样例）

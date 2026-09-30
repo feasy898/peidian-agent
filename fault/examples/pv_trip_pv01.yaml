@@ -1,0 +1,9 @@
+# 示例：屋顶光伏脱网（四类之一 PV_TRIP）
+fault_id: FLT-EX-PVT-01
+type: PV_TRIP
+target: PV-01            # 仅 pv
+at_s: 0.0
+params:
+  lost_ratio: 1.0        # (0, 1.0]
+  reason: over_voltage   # over_voltage|over_frequency|island|equipment
+note: 光伏过压脱网（演示样例）
