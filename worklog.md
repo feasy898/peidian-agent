@@ -90,3 +90,39 @@
 - telemetry.py:36 [low] 不安全随机数 → **by design 不修**：seeded PRNG 是确定性
   回放/双跑逐字节一致的**需求本身**（run_tests t_stream_schema_and_determinism
   即验收该项），非安全用途。
+
+## 2026-10-01 · worker-A · 第 1 轮（线1 ParkDSL + 线2 可视化前端）
+
+（补记：本轮提交 6232d21，32 文件 +5162，仅 dsl/ web/ 指定路径；此前进展只记在仓外
+共享 worklog（projects/peidian-agent/worklog.md），本节按 judge 反馈补入仓内台账。）
+
+**做了什么**
+- 线1 dsl/：
+  - 格式定案 YAML（仓内 ontology/scenarios/prompts 全 YAML 同构；pyyaml 唯一运行时依赖）；
+    规范成文 docs/dsl-spec.md + 机器可读 dsl_spec.yaml（validate.py 唯一裁决源，数据驱动）。
+  - 元件 ID 约定：^(GRID|LN|TX|BUS|SG|CB|BESS|PV|EVC|LD|CP)-[A-Z]?[0-9]{1,2}\$，全园唯一
+    命名空间（devices.id 与 links.id 共用），兼容考古 seed.yaml 单数字风格；故障事件
+    targets[] 引用该命名空间（后被 judge 第2轮裁决定为唯一权威源）。
+  - validate.py：validate/export/summary 三子命令；十类可读校验（E-API/E-PARK/E-DEV/E-ID/
+    E-LINK/E-TOPO/E-VOLT/E-CAP/E-LOOP/E-TIER）；拓扑=常开耦合器断开 BFS 连通 + DFS 回边
+    环检测（父边单次豁免，修平行边双回线漏检）+ 变压器低压侧下游容载×0.85 + tier 规模复核；
+    export→parkdsl-web/1 JSON（含遥测形状表，单一事实源=dsl_spec.yaml）。
+  - examples/ 三档样例各1（简单 740kW 纯负荷 / 中等 1520kW+PV+BESS+EVC / 复杂 3410kW
+    三房环网 CP-01 常开+5 台 DER）；prompts/ 三档模板（规范内嵌）+ run_gen.py（key 走
+    env/stdin 零 argv）+ quota-ledger.md。
+  - 阻塞如实记：Higress /v1/models=404、无凭据 chat=401，GPU 无 bao CLI、env 无
+    LLM_API_KEY——真实模型验证未执行，配额 0/3 未动（第2轮 judge 亲测 404 证实仍缺）。
+- 线2 web/：
+  - 选型：单页静态+手写 SVG 拓扑/Canvas 曲线，node22 零 npm 依赖零构建链零 CDN（部署面
+    =同步目录，回滚=换目录）；UI=shadcn 风格设计令牌本地化（tokens.css zinc 暗色 HSL 变量）。
+  - 三视角（全景/局部/曲线）+ 确定性伪遥测（mulberry32 按 (seed,元件ID,步序) 播种，同
+    (seed,id,t) 双跑逐字节一致；24 点日形状源自 dsl_spec.yaml 经 export 下发）+
+    setInterval 2s 流式刷新 + agent 七步处置时间线 + 人机对比模式（人工点选判分）。
+  - server.js：静态+API（health/parks/park/telemetry/fault/fault.clear/human.attempt），
+    fs.watch 数据目录热加载；故障 mock + worker-B 挂点（env FAULT_MODULE）。
+- 测试与证据：dsl/tests/run_tests.py 15/15 exit 0；web/tests/smoke.sh 11 项 PASS exit 0
+  （同 t 双跑逐字节一致 / t+900 在动 / 故障 schema / 效应生效 / 判分字段）；curl GET / =200；
+  POST /api/fault "2 号变压器重瓦斯跳闸"→P0 targets=[TX-B01] 7 步；node --check 9 js 全过；
+  run_evals 233/233 PASS 零干扰。GPU 无 headless 浏览器，无截图（curl+语法级证据，如实声明）。
+- 与 worker-B 接口对齐点：元件 ID（dsl/docs/dsl-spec.md §5）+ FaultEvent（web/docs/
+  fault-events.md v0.1 草案）——第2轮 judge 已裁决：v0.1 为集成基准，第3轮升 v0.2。
