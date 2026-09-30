@@ -1,0 +1,393 @@
+{
+ "api": "parkdsl-web/1",
+ "source": "dsl/examples/park-simple-01.yaml",
+ "park": {
+  "id": "PARK-101",
+  "name": "云溪软件园",
+  "description": "小型办公型园区，单一 10kV 进线、一座配电房、两台干式变压器（本期仅投 1 台）。\n全部负荷为办公楼宇与配套商业，无分布式电源，辐射状供电，结构简单、运维界面清晰。",
+  "tier": "simple",
+  "contract_capacity_kw": 1000,
+  "incoming_voltage": "10kV",
+  "seed": 101
+ },
+ "substations": [
+  {
+   "id": "SR-A",
+   "name": "云溪 1# 配电房"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "GRID-01",
+   "type": "GridInlet",
+   "label": "10kV",
+   "substation": null,
+   "params": {
+    "id": "GRID-01",
+    "source_voltage": "10kV",
+    "short_capacity_mva": 150
+   }
+  },
+  {
+   "id": "BUS-A1",
+   "type": "Bus",
+   "label": "BUS-A1",
+   "substation": "SR-A",
+   "substation_name": "云溪 1# 配电房",
+   "params": {
+    "id": "BUS-A1",
+    "type": "Bus",
+    "voltage_level": "10kV"
+   }
+  },
+  {
+   "id": "SG-A01",
+   "type": "Switchgear",
+   "label": "SG-A01",
+   "substation": "SR-A",
+   "substation_name": "云溪 1# 配电房",
+   "params": {
+    "id": "SG-A01",
+    "type": "Switchgear",
+    "rated_current_a": 630,
+    "state": "CLOSED",
+    "role": "incomer"
+   }
+  },
+  {
+   "id": "TX-A01",
+   "type": "Transformer",
+   "label": "TX-A01",
+   "substation": "SR-A",
+   "substation_name": "云溪 1# 配电房",
+   "params": {
+    "id": "TX-A01",
+    "type": "Transformer",
+    "capacity_kva": 1000,
+    "hv": "10kV",
+    "lv": "0.4kV",
+    "cooling": "ONAN"
+   }
+  },
+  {
+   "id": "BUS-A2",
+   "type": "Bus",
+   "label": "BUS-A2",
+   "substation": "SR-A",
+   "substation_name": "云溪 1# 配电房",
+   "params": {
+    "id": "BUS-A2",
+    "type": "Bus",
+    "voltage_level": "0.4kV"
+   }
+  },
+  {
+   "id": "LD-A01",
+   "type": "Load",
+   "label": "LD-A01",
+   "substation": "SR-A",
+   "substation_name": "云溪 1# 配电房",
+   "params": {
+    "id": "LD-A01",
+    "type": "Load",
+    "peak_kw": 320,
+    "profile": "office",
+    "power_factor": 0.88
+   }
+  },
+  {
+   "id": "LD-A02",
+   "type": "Load",
+   "label": "LD-A02",
+   "substation": "SR-A",
+   "substation_name": "云溪 1# 配电房",
+   "params": {
+    "id": "LD-A02",
+    "type": "Load",
+    "peak_kw": 260,
+    "profile": "office"
+   }
+  },
+  {
+   "id": "LD-A03",
+   "type": "Load",
+   "label": "LD-A03",
+   "substation": "SR-A",
+   "substation_name": "云溪 1# 配电房",
+   "params": {
+    "id": "LD-A03",
+    "type": "Load",
+    "peak_kw": 180,
+    "profile": "commercial"
+   }
+  }
+ ],
+ "links": [
+  {
+   "id": "LN-01",
+   "from": "GRID-01",
+   "to": "BUS-A1",
+   "kind": "line",
+   "state": null,
+   "params": {
+    "length_km": 1.8,
+    "ampacity_a": 400
+   }
+  },
+  {
+   "id": null,
+   "from": "BUS-A1",
+   "to": "SG-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "SG-A01",
+   "to": "TX-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "TX-A01",
+   "to": "BUS-A2",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "LD-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "LD-A02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "LD-A03",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  }
+ ],
+ "telemetry": {
+  "seed": 101,
+  "step_sec": 15,
+  "noise_amplitude": 0.04,
+  "wander_amplitude": 0.02,
+  "wander_period_sec": 600,
+  "voltage_drop_factor": 0.03,
+  "voltage_noise": 0.004,
+  "shapes": {
+   "office": [
+    0.35,
+    0.33,
+    0.32,
+    0.32,
+    0.33,
+    0.36,
+    0.45,
+    0.6,
+    0.78,
+    0.9,
+    0.95,
+    0.92,
+    0.8,
+    0.82,
+    0.9,
+    0.92,
+    0.88,
+    0.8,
+    0.68,
+    0.58,
+    0.5,
+    0.45,
+    0.4,
+    0.37
+   ],
+   "factory": [
+    0.55,
+    0.55,
+    0.55,
+    0.55,
+    0.55,
+    0.6,
+    0.75,
+    0.9,
+    0.95,
+    0.95,
+    0.95,
+    0.95,
+    0.85,
+    0.95,
+    0.95,
+    0.95,
+    0.95,
+    0.9,
+    0.75,
+    0.65,
+    0.6,
+    0.58,
+    0.56,
+    0.55
+   ],
+   "commercial": [
+    0.4,
+    0.38,
+    0.36,
+    0.35,
+    0.35,
+    0.38,
+    0.45,
+    0.55,
+    0.65,
+    0.75,
+    0.85,
+    0.9,
+    0.88,
+    0.8,
+    0.82,
+    0.85,
+    0.88,
+    0.92,
+    0.98,
+    0.95,
+    0.85,
+    0.7,
+    0.58,
+    0.47
+   ],
+   "resident": [
+    0.45,
+    0.42,
+    0.4,
+    0.39,
+    0.4,
+    0.45,
+    0.52,
+    0.55,
+    0.52,
+    0.5,
+    0.5,
+    0.52,
+    0.58,
+    0.56,
+    0.54,
+    0.56,
+    0.62,
+    0.75,
+    0.92,
+    1.0,
+    0.95,
+    0.82,
+    0.68,
+    0.55
+   ],
+   "pv": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.02,
+    0.08,
+    0.18,
+    0.32,
+    0.48,
+    0.64,
+    0.8,
+    0.92,
+    0.98,
+    0.94,
+    0.82,
+    0.64,
+    0.44,
+    0.24,
+    0.1,
+    0.02,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "bess": [
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.3,
+    0.2,
+    0.4,
+    0.5,
+    0.5,
+    0.0,
+    0.0,
+    0.0,
+    0.2,
+    0.4,
+    0.5,
+    0.5,
+    0.4,
+    0.1,
+    -0.3,
+    -0.5,
+    -0.5
+   ]
+  },
+  "components": [
+   {
+    "id": "TX-A01",
+    "metric": "loading",
+    "rated_kva": 1000,
+    "profile": null,
+    "pf": 0.85
+   },
+   {
+    "id": "LD-A01",
+    "metric": "power",
+    "rated_kw": 320,
+    "profile": "office",
+    "pf": 0.88
+   },
+   {
+    "id": "LD-A02",
+    "metric": "power",
+    "rated_kw": 260,
+    "profile": "office",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-A03",
+    "metric": "power",
+    "rated_kw": 180,
+    "profile": "commercial",
+    "pf": 0.85
+   }
+  ],
+  "buses": [
+   {
+    "id": "BUS-A1",
+    "vnom_kv": 10.0
+   },
+   {
+    "id": "BUS-A2",
+    "vnom_kv": 0.4
+   }
+  ]
+ }
+}

@@ -1,0 +1,590 @@
+{
+ "api": "parkdsl-web/1",
+ "source": "dsl/examples/park-medium-01.yaml",
+ "park": {
+  "id": "PARK-201",
+  "name": "星辰智造产业园",
+  "description": "中型制造园区，两座 10kV 配电房、干线联络的辐射结构；B 房屋顶光伏 400kWp 与\n500kWh 储能削峰填谷，厂区停车场配建 240kW 充电桩群。负荷以两班制工厂为主，\n兼有研发办公楼宇，DER 渗透率约 25%，是园区级\"源网荷储\"协同的典型形态。",
+  "tier": "medium",
+  "contract_capacity_kw": 2000,
+  "incoming_voltage": "10kV",
+  "seed": 201
+ },
+ "substations": [
+  {
+   "id": "SR-A",
+   "name": "A 配电房（动力中心）"
+  },
+  {
+   "id": "SR-B",
+   "name": "B 配电房（源网荷储示范）"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "GRID-01",
+   "type": "GridInlet",
+   "label": "10kV",
+   "substation": null,
+   "params": {
+    "id": "GRID-01",
+    "source_voltage": "10kV",
+    "short_capacity_mva": 200
+   }
+  },
+  {
+   "id": "BUS-A1",
+   "type": "Bus",
+   "label": "BUS-A1",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力中心）",
+   "params": {
+    "id": "BUS-A1",
+    "type": "Bus",
+    "voltage_level": "10kV"
+   }
+  },
+  {
+   "id": "SG-A01",
+   "type": "Switchgear",
+   "label": "SG-A01",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力中心）",
+   "params": {
+    "id": "SG-A01",
+    "type": "Switchgear",
+    "rated_current_a": 630,
+    "state": "CLOSED",
+    "role": "incomer"
+   }
+  },
+  {
+   "id": "TX-A01",
+   "type": "Transformer",
+   "label": "TX-A01",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力中心）",
+   "params": {
+    "id": "TX-A01",
+    "type": "Transformer",
+    "capacity_kva": 1600,
+    "hv": "10kV",
+    "lv": "0.4kV",
+    "cooling": "ONAF"
+   }
+  },
+  {
+   "id": "BUS-A2",
+   "type": "Bus",
+   "label": "BUS-A2",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力中心）",
+   "params": {
+    "id": "BUS-A2",
+    "type": "Bus",
+    "voltage_level": "0.4kV"
+   }
+  },
+  {
+   "id": "LD-A01",
+   "type": "Load",
+   "label": "LD-A01",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力中心）",
+   "params": {
+    "id": "LD-A01",
+    "type": "Load",
+    "peak_kw": 420,
+    "profile": "factory"
+   }
+  },
+  {
+   "id": "LD-A02",
+   "type": "Load",
+   "label": "LD-A02",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力中心）",
+   "params": {
+    "id": "LD-A02",
+    "type": "Load",
+    "peak_kw": 260,
+    "profile": "office"
+   }
+  },
+  {
+   "id": "EVC-01",
+   "type": "EVCharger",
+   "label": "EVC-01",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力中心）",
+   "params": {
+    "id": "EVC-01",
+    "type": "EVCharger",
+    "total_power_kw": 240,
+    "num_ports": 8
+   }
+  },
+  {
+   "id": "BUS-B1",
+   "type": "Bus",
+   "label": "BUS-B1",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（源网荷储示范）",
+   "params": {
+    "id": "BUS-B1",
+    "type": "Bus",
+    "voltage_level": "10kV"
+   }
+  },
+  {
+   "id": "TX-B01",
+   "type": "Transformer",
+   "label": "TX-B01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（源网荷储示范）",
+   "params": {
+    "id": "TX-B01",
+    "type": "Transformer",
+    "capacity_kva": 1000,
+    "hv": "10kV",
+    "lv": "0.4kV"
+   }
+  },
+  {
+   "id": "BUS-B2",
+   "type": "Bus",
+   "label": "BUS-B2",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（源网荷储示范）",
+   "params": {
+    "id": "BUS-B2",
+    "type": "Bus",
+    "voltage_level": "0.4kV"
+   }
+  },
+  {
+   "id": "PV-01",
+   "type": "PV",
+   "label": "PV-01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（源网荷储示范）",
+   "params": {
+    "id": "PV-01",
+    "type": "PV",
+    "capacity_kwp": 400,
+    "tilt": 10,
+    "azimuth": 180
+   }
+  },
+  {
+   "id": "BESS-01",
+   "type": "BESS",
+   "label": "BESS-01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（源网荷储示范）",
+   "params": {
+    "id": "BESS-01",
+    "type": "BESS",
+    "capacity_kwh": 500,
+    "power_kw": 250,
+    "soc": 62
+   }
+  },
+  {
+   "id": "LD-B01",
+   "type": "Load",
+   "label": "LD-B01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（源网荷储示范）",
+   "params": {
+    "id": "LD-B01",
+    "type": "Load",
+    "peak_kw": 380,
+    "profile": "factory"
+   }
+  },
+  {
+   "id": "LD-B02",
+   "type": "Load",
+   "label": "LD-B02",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（源网荷储示范）",
+   "params": {
+    "id": "LD-B02",
+    "type": "Load",
+    "peak_kw": 220,
+    "profile": "office"
+   }
+  }
+ ],
+ "links": [
+  {
+   "id": "LN-01",
+   "from": "GRID-01",
+   "to": "BUS-A1",
+   "kind": "line",
+   "state": null,
+   "params": {
+    "length_km": 3.2,
+    "ampacity_a": 400
+   }
+  },
+  {
+   "id": null,
+   "from": "BUS-A1",
+   "to": "SG-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "SG-A01",
+   "to": "TX-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "TX-A01",
+   "to": "BUS-A2",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": "LN-02",
+   "from": "BUS-A1",
+   "to": "BUS-B1",
+   "kind": "line",
+   "state": null,
+   "params": {
+    "length_km": 1.6,
+    "ampacity_a": 300
+   }
+  },
+  {
+   "id": null,
+   "from": "BUS-B1",
+   "to": "TX-B01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "TX-B01",
+   "to": "BUS-B2",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "LD-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "LD-A02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "EVC-01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "LD-B01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "LD-B02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "PV-01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "BESS-01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  }
+ ],
+ "telemetry": {
+  "seed": 201,
+  "step_sec": 15,
+  "noise_amplitude": 0.04,
+  "wander_amplitude": 0.02,
+  "wander_period_sec": 600,
+  "voltage_drop_factor": 0.03,
+  "voltage_noise": 0.004,
+  "shapes": {
+   "office": [
+    0.35,
+    0.33,
+    0.32,
+    0.32,
+    0.33,
+    0.36,
+    0.45,
+    0.6,
+    0.78,
+    0.9,
+    0.95,
+    0.92,
+    0.8,
+    0.82,
+    0.9,
+    0.92,
+    0.88,
+    0.8,
+    0.68,
+    0.58,
+    0.5,
+    0.45,
+    0.4,
+    0.37
+   ],
+   "factory": [
+    0.55,
+    0.55,
+    0.55,
+    0.55,
+    0.55,
+    0.6,
+    0.75,
+    0.9,
+    0.95,
+    0.95,
+    0.95,
+    0.95,
+    0.85,
+    0.95,
+    0.95,
+    0.95,
+    0.95,
+    0.9,
+    0.75,
+    0.65,
+    0.6,
+    0.58,
+    0.56,
+    0.55
+   ],
+   "commercial": [
+    0.4,
+    0.38,
+    0.36,
+    0.35,
+    0.35,
+    0.38,
+    0.45,
+    0.55,
+    0.65,
+    0.75,
+    0.85,
+    0.9,
+    0.88,
+    0.8,
+    0.82,
+    0.85,
+    0.88,
+    0.92,
+    0.98,
+    0.95,
+    0.85,
+    0.7,
+    0.58,
+    0.47
+   ],
+   "resident": [
+    0.45,
+    0.42,
+    0.4,
+    0.39,
+    0.4,
+    0.45,
+    0.52,
+    0.55,
+    0.52,
+    0.5,
+    0.5,
+    0.52,
+    0.58,
+    0.56,
+    0.54,
+    0.56,
+    0.62,
+    0.75,
+    0.92,
+    1.0,
+    0.95,
+    0.82,
+    0.68,
+    0.55
+   ],
+   "pv": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.02,
+    0.08,
+    0.18,
+    0.32,
+    0.48,
+    0.64,
+    0.8,
+    0.92,
+    0.98,
+    0.94,
+    0.82,
+    0.64,
+    0.44,
+    0.24,
+    0.1,
+    0.02,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "bess": [
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.3,
+    0.2,
+    0.4,
+    0.5,
+    0.5,
+    0.0,
+    0.0,
+    0.0,
+    0.2,
+    0.4,
+    0.5,
+    0.5,
+    0.4,
+    0.1,
+    -0.3,
+    -0.5,
+    -0.5
+   ]
+  },
+  "components": [
+   {
+    "id": "TX-A01",
+    "metric": "loading",
+    "rated_kva": 1600,
+    "profile": null,
+    "pf": 0.85
+   },
+   {
+    "id": "LD-A01",
+    "metric": "power",
+    "rated_kw": 420,
+    "profile": "factory",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-A02",
+    "metric": "power",
+    "rated_kw": 260,
+    "profile": "office",
+    "pf": 0.85
+   },
+   {
+    "id": "EVC-01",
+    "metric": "power",
+    "rated_kw": 240,
+    "profile": "commercial",
+    "pf": 0.9
+   },
+   {
+    "id": "TX-B01",
+    "metric": "loading",
+    "rated_kva": 1000,
+    "profile": null,
+    "pf": 0.85
+   },
+   {
+    "id": "PV-01",
+    "metric": "power",
+    "rated_kw": 400,
+    "profile": "pv",
+    "pf": 1.0
+   },
+   {
+    "id": "BESS-01",
+    "metric": "power",
+    "rated_kw": 250,
+    "profile": "bess",
+    "pf": 0.95
+   },
+   {
+    "id": "LD-B01",
+    "metric": "power",
+    "rated_kw": 380,
+    "profile": "factory",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-B02",
+    "metric": "power",
+    "rated_kw": 220,
+    "profile": "office",
+    "pf": 0.85
+   }
+  ],
+  "buses": [
+   {
+    "id": "BUS-A1",
+    "vnom_kv": 10.0
+   },
+   {
+    "id": "BUS-A2",
+    "vnom_kv": 0.4
+   },
+   {
+    "id": "BUS-B1",
+    "vnom_kv": 10.0
+   },
+   {
+    "id": "BUS-B2",
+    "vnom_kv": 0.4
+   }
+  ]
+ }
+}

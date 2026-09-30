@@ -1,0 +1,21 @@
+[
+  {"name": "dup-device-id", "base": "park-simple-01.yaml", "expect_code": "E-ID",
+   "patch": [["      - {id: LD-A03, type: Load, peak_kw: 180, profile: commercial}",
+              "      - {id: LD-A03, type: Load, peak_kw: 180, profile: commercial}\n      - {id: LD-A01, type: Load, peak_kw: 90, profile: office}"]]},
+  {"name": "dangling-link-endpoint", "base": "park-simple-01.yaml", "expect_code": "E-LINK",
+   "patch": [["- {from: BUS-A2, to: LD-A03, kind: direct}",
+              "- {from: BUS-A2, to: LD-A09, kind: direct}"]]},
+  {"name": "tx-overload", "base": "park-simple-01.yaml", "expect_code": "E-CAP",
+   "patch": [["capacity_kva: 1000", "capacity_kva: 800"]]},
+  {"name": "tier-mismatch", "base": "park-simple-01.yaml", "expect_code": "E-TIER",
+   "patch": [["tier: simple", "tier: medium"]]},
+  {"name": "closed-loop-no-open-coupler", "base": "park-simple-01.yaml", "expect_code": "E-LOOP",
+   "patch": [["  - {from: BUS-A1, to: SG-A01, kind: direct}",
+              "  - {from: GRID-01, to: BUS-A1, kind: line, id: LN-02, length_km: 1.0, ampacity_a: 400}\n  - {from: BUS-A1, to: SG-A01, kind: direct}"]]},
+  {"name": "bad-voltage-level", "base": "park-simple-01.yaml", "expect_code": "E-DEV",
+   "patch": [["voltage_level: 10kV", "voltage_level: 6.6kV"]]},
+  {"name": "wrong-api", "base": "park-simple-01.yaml", "expect_code": "E-API",
+   "patch": [["api: parkdsl/1", "api: parkdsl/2"]]},
+  {"name": "bare-off-boolean", "base": "park-complex-01.yaml", "expect_code": "E-DEV",
+   "patch": [["state: \"OFF\"", "state: OFF"]]}
+]

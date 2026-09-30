@@ -1,0 +1,95 @@
+# examples/park-complex-01.yaml · 复杂档样例：三配电房 10kV 环网（联络点常开）+ 多类 DER
+# ParkDSL v1 —— 校验：python dsl/validate.py validate dsl/examples/park-complex-01.yaml
+# 结构：GRID-01→A→B→C 手拉手环网，CP-01（A–C 联络点）常开，闭环校验由此通过。
+api: parkdsl/1
+park:
+  id: PARK-301
+  name: 湾流综合能源示范园区
+  description: |-
+    大型综合能源园区：一座 10kV 环网柜级开关站带 A/B/C 三座配电房，手拉手环网
+    （A–C 联络点常开，故障时可转供）。负荷覆盖智造厂房、写字楼、商业综合体与
+    人才公寓四类形态；B 房配置光伏+储能形成微源，C 房屋顶光伏与充电桩群参与
+    需求响应。运行方式多样、转供路径复杂，是故障定位与多智能体协同的典型考场。
+  tier: complex
+  contract_capacity_kw: 3500
+  incoming_voltage: 10kV
+  seed: 301
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 300}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力车间）
+    devices:
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: TX-A02, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: BUS-A3, type: Bus, voltage_level: 0.4kV}
+      - {id: CB-A01, type: CapacitorBank, capacity_kvar: 300, state: "OFF"}
+      - {id: LD-A01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 300, profile: factory}
+      - {id: LD-A03, type: Load, peak_kw: 250, profile: office}
+  - id: SR-B
+    name: B 配电房（微源示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 500}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 520, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 460, profile: factory}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 360, num_ports: 12}
+  - id: SR-C
+    name: C 配电房（商业与公寓）
+    devices:
+      - {id: BUS-C1, type: Bus, voltage_level: 10kV}
+      - {id: TX-C01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: BUS-C2, type: Bus, voltage_level: 0.4kV}
+      - {id: TX-C02, type: Transformer, capacity_kva: 800, hv: 10kV, lv: 0.4kV}
+      - {id: BUS-C3, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-02, type: PV, capacity_kwp: 300}
+      - {id: LD-C01, type: Load, peak_kw: 320, profile: commercial}
+      - {id: LD-C02, type: Load, peak_kw: 280, profile: commercial}
+      - {id: LD-C03, type: Load, peak_kw: 180, profile: office}
+      - {id: LD-C04, type: Load, peak_kw: 240, profile: resident}
+      - {id: EVC-02, type: EVCharger, total_power_kw: 120, num_ports: 6}
+
+links:
+  # 10kV 环网骨架（A→B→C 手拉手，CP-01 常开）
+  - {from: GRID-01, to: BUS-A1, kind: line, id: LN-01, length_km: 2.5, ampacity_a: 400}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.2, ampacity_a: 400}
+  - {from: BUS-B1, to: BUS-C1, kind: line, id: LN-03, length_km: 0.9, ampacity_a: 400}
+  - {from: BUS-A1, to: BUS-C1, kind: coupler, id: CP-01, state: OPEN}
+  # A 房
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: TX-A02, kind: direct}
+  - {from: TX-A02, to: BUS-A3, kind: direct}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: CB-A01, kind: direct}
+  - {from: BUS-A3, to: LD-A03, kind: direct}
+  # B 房
+  - {from: BUS-B1, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+  - {from: BUS-B2, to: EVC-01, kind: direct}
+  # C 房
+  - {from: BUS-C1, to: TX-C01, kind: direct}
+  - {from: TX-C01, to: BUS-C2, kind: direct}
+  - {from: BUS-C1, to: TX-C02, kind: direct}
+  - {from: TX-C02, to: BUS-C3, kind: direct}
+  - {from: BUS-C2, to: PV-02, kind: direct}
+  - {from: BUS-C2, to: LD-C01, kind: direct}
+  - {from: BUS-C2, to: LD-C02, kind: direct}
+  - {from: BUS-C3, to: LD-C03, kind: direct}
+  - {from: BUS-C3, to: LD-C04, kind: direct}
+  - {from: BUS-C3, to: EVC-02, kind: direct}

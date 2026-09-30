@@ -1,0 +1,37 @@
+# examples/park-simple-01.yaml · 简单档样例：单配电房纯负荷辐射网
+# ParkDSL v1 —— 校验：python dsl/validate.py validate dsl/examples/park-simple-01.yaml
+api: parkdsl/1
+park:
+  id: PARK-101
+  name: 云溪软件园
+  description: |-
+    小型办公型园区，单一 10kV 进线、一座配电房、两台干式变压器（本期仅投 1 台）。
+    全部负荷为办公楼宇与配套商业，无分布式电源，辐射状供电，结构简单、运维界面清晰。
+  tier: simple
+  contract_capacity_kw: 1000
+  incoming_voltage: 10kV
+  seed: 101
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 150}
+
+substations:
+  - id: SR-A
+    name: 云溪 1# 配电房
+    devices:
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV, cooling: ONAN}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 320, profile: office, power_factor: 0.88}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: LD-A03, type: Load, peak_kw: 180, profile: commercial}
+
+links:
+  - {from: GRID-01, to: BUS-A1, kind: line, id: LN-01, length_km: 1.8, ampacity_a: 400}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: LD-A03, kind: direct}
