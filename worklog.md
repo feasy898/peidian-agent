@@ -290,3 +290,27 @@ PASS exit 0（新增 t_adapter_sg_incomer）；run_matrix 全绿 exit 0（25/25+
 - **本轮未改仓库代码**（观察+探针轮）；四套件本轮实跑新证：dsl 15/15 exit 0、fault 14/14 exit 0
   （worker-B 工作区新增用例，未提交态）、run_evals 233/233 PASS exit 0、web smoke 全 PASS exit 0。
   模型配额仍 0/10。
+
+## 2026-10-01 · worker-B · 第 4 轮（收口轮：确定性残留修复）
+
+**修复（judge 第 4 轮唯一实事：集合序残留）**
+- 审计 detect/telemetry/agent/topology/engine 全部 set→list 出口，定位唯一输出边界
+  泄漏：`topology.zone()` 旧实现返回 **set**，`detect.py` ① 的 collapsed_buses 直接
+  迭代之——跨进程（PYTHONHASHSEED 随机化）列表序漂移，即 judge 亲测复现的残留。
+- 修复两层：① `zone()` 返回类型 set→**有序 list**（downstream 本就排序；membership
+  调用零改动兼容）；② detect.py payload 边界对 collapsed_buses 显式 sorted。
+- 准绳强化用例 t_bridge_hashseed_determinism：同一载荷两次桥进程
+  PYTHONHASHSEED=1/2（独立字符串哈希），输出归一化墙钟字段（ts/event_id/
+  agent.total_ms——v0.1 演示计时口径，不入 git 产物）后 sha256 必须一致。
+  首跑即抓出 total_ms 计时抖动（非集合序，属墙钟量），归一化后通过——
+  git 内产物（样例/矩阵）经既有治理本就全字段确定。
+
+**判据实证（judge 第 5 轮验收准绳，GPU 机 HEAD=49f33aa 实跑）**
+- RUN1：fault 15/15 PASS + 矩阵 25/25+2NA PASS；RUN2：同结果；两轮退出码均 0。
+- 两轮之间 fault/examples 全文件（8 jsonl+json+md）sha256 逐文件比对**完全一致**。
+- `git status --short -- fault` 为空。
+- （worklog 本节按第 3 轮确立的纪律在 GPU 仓内 append。）
+
+**悬留维持如实登记（不计入收工阻断）**：Higress 凭据缺（真实注入验证待凭据，
+配额 0/10 未动）；srv-1 通道缺（caddy 上线按 deploy/DEPLOY.md 待通道）；
+浏览器级截图待部署后补。SG-A00 三档样例 patch 归 worker-A 并行任务。
