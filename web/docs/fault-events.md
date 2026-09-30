@@ -39,14 +39,15 @@
 | load | LD |
 | capacitor | CP |
 
-### 2.1 如实登记：CB/CP 两处交叉待复裁
+### 2.1 CB/CP 交叉：两侧实现已同向收敛，提请 judge 追认
 
 ParkDSL 语义：`CB`=CapacitorBank（可投切电容器组，state "ON"/"OFF"）；`CP`=母线联络点
 （coupler，环网常开）。按裁决表字面（switchgear↔SG/CB、capacitor↔CP）会把电容器组成
-开关、把联络点成电容。**适配落地建议按电气语义**：`CB→capacitor`（or switchgear 承载投切面）、
-`CP→switchgear(normally:OPEN, operable:true)`——后者正是 worker-B 转供所需的联络开关
-（fault/README.md §2"倒闸转供需要联络开关"）。桥实现方可两读；FaultEvent schema 不受影响；
-**差异已提交 judge 复裁，未擅改裁决文本**。
+开关、把联络点成电容。worker-A 在本节初版提出按电气语义适配的建议；**worker-B 线4
+park_adapter.py（提交 fe8c6ea）已按同一方向落地**：CP（coupler）→ 常开开关（switchgear，
+normally:OPEN，转供所需联络点）、CapacitorBank → capacitor 叶元件，并附证据
+（dsl/examples/park-complex-01.yaml:66）作"有声偏离"登记。两侧实现一致，FaultEvent schema
+不受影响；**提请 judge 对该偏离追认**，追认后本节可并回 §2 正表。
 
 ## 3. FaultEvent v0.2（v0.1 基础上，全部为可选扩展字段）
 
