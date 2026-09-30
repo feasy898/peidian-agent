@@ -152,3 +152,21 @@
 - 传输完整性：bundle sha256 双端核对 674483dd…（含全部第 2 轮交付）。
 - 门禁：run_evals 233/233、ci_isolation OK（第 1 轮已证，本轮 fault/ 改动不触
   m0-m7 评估域；如 judge 需可随时复跑）。
+
+### worker-A 第 2 轮追记：真实桥联调收口（提交 2672c98）
+
+worker-B fault/bridge.py 于本轮中段落位（judge 指定线4-1）。按"接口对不齐处集成轮收口"：
+- server.js 客户端从自拟握手（v0.2 §4 初稿）**适配到实际协议**（文档已修订为 v0.2.1 §4）：
+  stdin={mode:simulate,park 原样,text,agent_enabled,horizon_s}；stdout={ok,fault_event,events[],llm,summary}；
+  白名单拒绝（exit 3+rejected）→HTTP 422 透传 reasons，**不静默 mock**（零信任）；桥体故障才走
+  bridge→FAULT_MODULE→mock 回退链。
+- projectBridgeEvent 按 judge 裁决③把 events[] 的 agent.step（phase/looked_at/found/why）合并进
+  fault_event.agent.steps，action.executed|rejected→actions[]，control/fault 标记→events[]，
+  source=fault-engine+engine.llm（used=false 离线兜底如实标注）。
+- 前端：422 拒绝卡（reasons 逐条+离线说明）；预设改桥可解析式样（TX-B01 短路等）保留 NL 式样。
+- smoke.sh：stub 桩节替换为真实桥节，17 检查全过 exit 0。
+- 三档×真实桥探针（server 8790 实跑）：PARK-101（SG-A01 串联主变）8 步闭环 anomaly.cleared；
+  PARK-201/301 无相邻可遥控开关→如实 control.escalated；三档 looked_at 贯通，effects 4/5/6 条。
+- 回归：dsl 15/15、fault 13/13、run_evals 233/233 全 exit 0。
+- 悬留：LLM 凭据仍缺（离线规则解析兜底已实证：TX-B01 短路→ok llm.used=false）；CB/CP 映射交叉
+  §2.1 待复裁；caddy 部署件按分工待 worker-B 部署包/通道。
