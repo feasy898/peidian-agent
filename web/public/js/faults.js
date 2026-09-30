@@ -45,9 +45,50 @@ const FAULTS = (() => {
       $('#human-result').innerHTML = '';
       if (hooks.onFaultTargetsChanged) hooks.onFaultTargetsChanged(ev.targets || []);
       if (state.mode === 'agent') renderTimeline(ev);
-      else { $('#timeline').innerHTML = '<div class="empty">人工模式：时间线已隐藏</div>'; refreshHumanPanel(); }
+      else {
+        $('#timeline').innerHTML = '<div class="empty">人工模式：时间线已隐藏</div>';
+        $('#fault-result').innerHTML = opsBlock(ev);
+        refreshHumanPanel();
+      }
     } catch (e) { alert('注入失败：' + e.message); }
     btn.disabled = false;
+  }
+
+  /* ---- v0.2 扩展字段渲染：looked_at/found/why（agent.step）+ actions/events 投影 ---- */
+  function stepExt(s) {
+    if (!s.phase && !s.looked_at && !s.why) return '';
+    const looked = (s.looked_at || []).map(esc).join(' ');
+    const found = s.found && typeof s.found === 'object'
+      ? Object.entries(s.found).slice(0, 4)
+          .map(([k, v]) => `${esc(k)}=${esc(typeof v === 'object' ? JSON.stringify(v) : String(v))}`).join(' ')
+      : '';
+    return `<div class="d" style="margin-top:3px">
+      ${s.phase ? `<span class="badge">${esc(s.phase)}</span>` : ''}
+      看：<span class="num" style="color:hsl(var(--accent))">${looked || '—'}</span>
+      ${found ? `｜判：<span class="num">${found}</span>` : ''}
+      ${s.why ? `｜据：${esc(s.why)}` : ''}
+    </div>${s.conclusion ? `<div class="refs">${esc(s.conclusion)}</div>` : ''}`;
+  }
+  function opsBlock(ev) {
+    const acts = (ev.actions || []).map(a => {
+      const human = a.by === 'human';
+      const bad = a.result && a.result !== 'ok';
+      return `<span class="badge" style="color:${bad ? 'hsl(var(--destructive))' : human ? 'hsl(var(--accent))' : 'hsl(var(--success))'}">
+        ${human ? '👤' : '🤖'} ${esc(a.op)} ${esc(a.target)} → ${esc(a.result || '?')}</span>`;
+    }).join(' ');
+    const marks = (ev.events || []).map(e => {
+      if (e.type === 'control.passed') return `<div class="hint">⏸ 已交人工（agent 反应已关闭，界面交给人定位）</div>`;
+      if (e.type === 'anomaly.cleared') return `<span class="badge tier-simple">✓ 异常清除 by=${esc(e.by || '?')}</span>`;
+      if (e.type === 'fault.detected') return `<span class="badge fault-on">检测 ${esc(e.severity || '')} @ ${esc(e.target || '')}</span>`;
+      if (e.type === 'control.escalated') return `<span class="badge tier-complex">⚠ 复测未消除，升级</span>`;
+      return '';
+    }).filter(Boolean).join(' ');
+    if (!acts && !marks) return '';
+    return `<div class="card"><div class="card-head"><span class="card-title">操作面与事件标记</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:7px;font-size:12.5px">
+        ${marks ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${marks}</div>` : ''}
+        ${acts ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="kicker">操作</span>${acts}</div>` : ''}
+      </div></div>`;
   }
 
   /* ---- Agent 模式：步骤逐步点亮，总耗时 = ev.agent.total_ms ---- */
@@ -60,7 +101,8 @@ const FAULTS = (() => {
         <div class="tl-dot">✓</div>
         <div class="tl-body">
           <div class="t">${s.idx}. ${esc(s.title)} <span class="tl-meta" data-meta></span></div>
-          <div class="d">${esc(s.detail)}</div>
+          <div class="d">${esc(s.detail || '')}</div>
+          ${stepExt(s)}
           ${s.refs && s.refs.length ? `<div class="refs">${s.refs.map(esc).join(' · ')}</div>` : ''}
         </div>
       </div>`).join('');
@@ -91,7 +133,7 @@ const FAULTS = (() => {
               <span class="verdict ok">闭环</span>
               <span class="muted" style="font-size:12.5px">端到端 <b class="num" style="color:hsl(var(--foreground))">${total} ms</b>（演示计时） · 目标 <b class="num">${esc((ev.targets || []).join(', ')) || '—'}</b></span>
             </div>
-          </div></div>`;
+          </div></div>` + opsBlock(ev);
       }
     }, 160);
   }

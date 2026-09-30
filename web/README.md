@@ -25,9 +25,13 @@ python dsl/validate.py export dsl/examples/park-complex-01.yaml -o web/public/da
 | `GET /api/health` | 存活 + 园区清单 |
 | `GET /api/parks` / `GET /api/park/:id` | 清单 / 全量（parkdsl-web/1） |
 | `GET /api/telemetry?park=&points=&t=` | 确定性伪遥测；同 `t` 双跑逐字节一致（curl 可复现） |
-| `POST /api/fault {park,text}` | 故障注入 → FaultEvent（契约：docs/fault-events.md） |
+| `POST /api/fault {park,text}` | 故障注入 → FaultEvent v0.2（契约：docs/fault-events.md）；回退链 bridge→FAULT_MODULE→mock |
 | `POST /api/fault/clear` | 清除当前故障 |
 | `POST /api/human/attempt` | 人工定位判分（人机对比） |
+
+环境变量：`FAULT_BRIDGE_CMD`（worker-B 桥命令，缺省探测 `<repo>/fault/bridge.py` + `.venv/bin/python`）、
+`FAULT_BRIDGE_TIMEOUT_MS`（默认 20000）、`FAULT_MODULE`（js 模块挂点）、`PORT`、`DATA_DIR`。
+白名单纪律：`park` 参数一律过 `^PARK-[0-9]{3}$`；body 出现 `path/file/out/dir/sink` 键直接 400（请求参数永不触达文件路径）。
 
 ## 技术选型（理由）
 

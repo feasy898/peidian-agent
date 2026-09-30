@@ -155,6 +155,12 @@ class FaultStore {
     this.active.set(parkJson.park.id, ev);
     return ev;
   }
+  /** 桥模式登记：FaultEvent 由外部引擎产出，仅入册供遥测效应与人工判分使用 */
+  adopt(parkId, ev) {
+    this.seq += 1;
+    this.bySeq.set(ev.event_id, { ev, park: parkId, born: Date.now() });
+    this.active.set(parkId, ev);
+  }
   activeEffects(parkId) {
     const ev = this.active.get(parkId);
     return ev ? ev.telemetry_effects : [];
