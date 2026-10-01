@@ -1,0 +1,135 @@
+# arena/scenarios/S-215.yaml · 混合压力场景（场景编撰段 S-2XX · 状态型+网络型并行）
+# 模拟什么：两类异常穿插业务日历的混合压力——
+#   状态型：D1 清晨 SG-A00 进线柜触头温升开始爬坡（12K/h，环温 30℃ 基础），约 3.3h 后越
+#     70℃ 预警档——正落在大修后特殊巡视时段，考"巡检中发现温升"的证据链：红外/无线测温
+#     复核（R102）、温升（K）对照 GB/T 11022-2020 档值并作三相横向比较（R35）、按三级
+#     工程阈值定级（预警 70~80/告警 90~100/危急 110~120℃）与派工消缺闭环。
+#   网络型：D2 上午 B 房 10kV 母线（小电流接地系统）单相金属性接地——非故障相升至
+#     √3≈1.73pu、线电压仍对称（R45），允许带故障运行一般 ≤2h（R44 体系），考限时选线、
+#     定位、隔离故障点，防非故障相绝缘长期承受线电压发展成相间短路。
+#   两类异常处置逻辑相反（状态型=复核消缺不轻易停电；网络型=限时隔离）——考 agent 在
+#   交接班/巡检/夜巡日历穿插下对异常分级的优先级编排。
+# 判据出处：R35（GB/T 11022-2020 温升限值体系）、R102（DL/T 664-2016 红外诊断）、
+#           R45（中性点非有效接地 √3 特征）、R44（GB/T 50064-2014 接地方式/带故障运行）、
+#           R43（GB/T 14285-2023 选线装置配置）；库绑定口径同 arena/faults/temperature_rise.yaml
+#           与 single_phase_ground.yaml（阈值 70/600s 与 1.15pu/300s）
+# 拓扑基底 = dsl/examples/park-arena-01.yaml 的 PARK-202 园区（SR-A+SR-B+母联 CP-01 常开）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-215.yaml
+api: parkdsl/1
+source: "arena/faults/temperature_rise.yaml（R35/R102）+ single_phase_ground.yaml（R43/R44/R45）；docs/theory/references.md 编号真实存在"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（练习场配置）
+  description: |-
+    与 park-arena-01 同拓扑的练习场配置：本场景为混合压力——开关柜触头温升（状态型，
+    巡检通道发现）与 10kV 母线单相接地（网络型，限时隔离）先后出现，日历事件穿插其间，
+    考异常分级与处置优先级编排。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# faults：状态型（触头温升）+ 网络型（10kV 单相接地）
+# ============================================================================
+faults:
+  - id: F-TEMP-SGA00                              # 进线柜触头温升（状态型：复核消缺）
+    kind: temperature_rise
+    target: SG-A00
+    severity: alarm
+    criteria_ref: R35                             # GB/T 11022-2020（环温 40℃ 基准、温升限值表）
+    detection: {metric: contact_temp_c, threshold: 70, comparator: ">", duration_sec: 600}
+    note: 预警档 70~80℃/告警 90~100℃/跳闸 110~120℃ 三级工程阈值；判读以温升（K）对照
+      R35 温升限值档并作三相横向比较（>5~10K 可疑【工程惯例待核】），红外/无线测温为主要
+      发现通道（R102）；未确认直接拉闸是 must_not，危急过热才停电处理
+  - id: F-SPGND-B1                                # B 房 10kV 母线单相金属性接地（网络型：限时隔离）
+    kind: single_phase_ground
+    target: BUS-B1
+    severity: alarm
+    criteria_ref: R45                             # 中性点非有效接地系统特征（非故障相升 √3）
+    detection: {metric: phase_voltage_pu, threshold: 1.15, comparator: ">", duration_sec: 300}
+    note: 金属性接地非故障相升至 √3≈1.73pu、线电压仍对称（R45）；允许带故障运行一般 ≤2h
+      （R44 体系通行惯例），期间尽快选线（GB/T 14285-2023 装置配置，R43）、定位、隔离故障
+      线路；检测阈值 1.15pu 兼容高阻接地【工程惯例待核】；不能长期运行——防第二点接地
+      发展成相间短路
+
+# ============================================================================
+# calendar：三班制 + 巡检（含大修后特殊巡视）+ 红外 + 报告 + 蓄电池核容专项
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-S, type: patrol, every_days: 1, at: "09:30", params: {kind: special, reason: "SG-A00 检修后特殊巡视"}}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 7, at: "14:00", params: {basis: "DL/T 664-2016"}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+    - {id: CAL-UPS, type: preventive_test, every_days: 90, params: {item: ups_battery_capacity}}
+
+# ============================================================================
+# scenario：seed=1215；3 仿真日；注入 D1 06:00 温升 → D2 10:00 单相接地（间隔 100800s）
+# ============================================================================
+scenario:
+  seed: 1215
+  duration_sim_s: 259200                          # 3 仿真日
+  clock_speed: 3600                               # 每墙钟秒 = 3600 仿真秒
+  description: >-
+    D1 06:00 起 SG-A00 触头温度自环温 30℃ 以 12K/h 爬升，约 09:20 越 70℃ 预警档——正值
+    09:00 日巡检与 09:30 检修后特殊巡视时段，考"巡检中发现温升"的复核与定级（R35 温升档值
+    +R102 红外横向比较），预警档加强监视、告警档派工消缺（紧固/打磨触头+复测闭环）；
+    D2 10:00 B 房 10kV 母线单相金属性接地（phase_voltage_pu→1.73），非故障相升 √3、线电压
+    仍对称（R45）——考 2h 允许运行窗口内的选线/定位/隔离（R43/R44），与仍在消缺期的温升
+    异常并行时的优先级编排；23:00 熄灯夜巡穿插其间。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-TEMP-SGA00, at_sim_s: 21600, params: {ambient_c: 30, rise_k_per_h: 12, limit_c: 90}}   # D1 06:00
+    - {fault: F-SPGND-B1, at_sim_s: 122400, params: {phase_voltage_pu: 1.73, allowed_s: 7200}}         # D2 10:00，间隔 100800s

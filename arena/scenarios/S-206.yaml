@@ -1,0 +1,114 @@
+# arena/scenarios/S-206.yaml · 变压器重过载：隔离 + 母联转供完整闭环
+# 叙事：晚高峰 B 房 1 号变（TX-B01）下游负荷骤增、负载率冲破 1.0（REG-TECH PHYS-TX-LOAD 重过载 P0）。
+#       agent 应确认告警→隔离故障变（开 SG-B00/SG-B01）→合母联 CP-01 由 A 房转供 BUS-B2
+#       →复测负载率回降闭环；严禁"未转供先停主变"扩大失电。
+# 判据出处：R39 = DL/T 572-2021《电力变压器运行规程》（docs/theory/references.md）；
+#           过载定值 REG-TECH PHYS-TX-LOAD（regulations/REG-TECH.yaml: >0.80 预警 / >1.00 重过载 P0）。
+# 容量口径：TX-A01 取 3150kVA——保证隔离 TX-B01 并经 CP-01 全量转供后，A 变负载率约 0.67
+#           （油温模型 40+60×ratio ≈ 80℃ < 85℃，不产生级联本体异常），转供演示不失真。
+# 校验：python dsl/validate.py validate arena/scenarios/S-206.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-206.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+source: "S-206 变压器重过载演练：晚高峰 overload@TX-B01 超 1.0（R39 DL/T 572-2021；REG-TECH PHYS-TX-LOAD），agent 应隔离+母联 CP-01 转供闭环。"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（S-206 重过载演练）
+  description: |-
+    与 park-arena-01 同源 PARK-202 结构（SR-A 动力中心 + SR-B 源网荷储 + 常开母联 CP-01），
+    A 房主变升容至 3150kVA 保留转供裕度。演练：晚高峰 TX-B01 重过载 → 隔离 → CP-01 转供。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 3150, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# v1.1 · faults：故障库引用条（kind ∈ arena/faults 库；criteria_ref → docs/theory/references.md）
+# ============================================================================
+faults:
+  - id: F-OVL-206                                 # 变压器重过载（引擎原生 TX_OVERLOAD）
+    kind: overload
+    target: TX-B01
+    severity: alarm
+    criteria_ref: R39                             # DL/T 572-2021《电力变压器运行规程》
+    detection: {metric: load_rate, threshold: 1.0, comparator: ">", duration_sec: 600}
+    note: 负载率 >1.0 重过载 P0（REG-TECH PHYS-TX-LOAD，regulations/REG-TECH.yaml；
+      >0.80 预警为 threshold.warn 事件）；重过载运行控制口径出处 DL/T 572-2021【R39】。
+      检测判据权威=引擎原生 TX_OVERLOAD 规则（fault/detect.py TH_TX_TRIP=1.00，电流 >4pu
+      按短路征兆优先），本 detection 为园区监控配置留痕。期望 agent：确认→隔离 TX-B01
+      （开 SG-B00/SG-B01 形成明显断开点）→合 CP-01 转供 BUS-B2（预计 A 变负载率约 0.67，
+      <1.0 有裕度）→复测负载率回降闭环；严禁未转供先停主变。
+
+# ============================================================================
+# v1.1 · calendar：业务日历（三班制 + 交接班/巡检/报告/重载红外专项）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 1, at: "14:00", params: {kind: overload_tracking}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# ============================================================================
+# v1.1 · scenario：倍速场景 + 注入计划（晚高峰 D-1 18:00）
+# ============================================================================
+scenario:
+  seed: 1206
+  duration_sim_s: 86400                           # 1 仿真日（干跑快）
+  clock_speed: 600                                # 每墙钟秒 = 600 仿真秒
+  description: 晚高峰 B 变重过载演练：18:00 TX-B01 负载率冲破 1.0（P0），agent 应
+    隔离故障变并合母联 CP-01 转供 BUS-B2，复测闭环。演示"先转供、后退出"的
+    网络型处置纪律（R39；REG-TECH PHYS-TX-LOAD）。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-OVL-206, at_sim_s: 64800, params: {overload_ratio: 1.2, cause: 晚高峰下游负荷骤增}}
+    # 18:00=64800s 注入后 1 拍内检出（引擎原生规则无延时），隔离+转供分钟级完成

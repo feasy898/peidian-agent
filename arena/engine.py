@@ -322,7 +322,13 @@ class ArenaEngine:
             if nxt_inj is not None:
                 nxt = min(nxt, nxt_inj)
             horizon = nxt - now
-            busy = bool(self.engine.detector.active) or bool(self.engine.active_faults)
+            # 忙碌判定：存在**未确认**的活动异常时才走细步长（诊断/处置窗口）。
+            # 全部异常已 ack（派工待消缺）时，消缺期内不会产生新状态——按空闲大步长
+            # 跳到下一事件/注入/时限点（repair 到期由 _advance_repairs 逐拍检查，
+            # 步长粒度只影响到期时刻的量化误差）。确定性与状态机语义不变。
+            unacked = [a for a in self.engine.detector.active.values()
+                       if a.status == "active" and not a.acked]
+            busy = bool(unacked)
             dt = self.active_dt if (busy or horizon <= self.active_dt) else self.idle_dt
             dt = max(min(dt, horizon, dur - now), 1e-3)
             self.engine.dt = dt

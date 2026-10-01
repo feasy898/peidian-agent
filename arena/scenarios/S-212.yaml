@@ -1,0 +1,125 @@
+# arena/scenarios/S-212.yaml · 配电房高温告警（场景编撰段 S-2XX · 环境类）
+# 模拟什么：夏季午后 A 配电房通风失效，室温阶跃至 42℃——超出 5~35℃ 工程惯例运行区间
+#   （DB11/T 527-2021 体系参考，R65；条目未单列 5~35℃ 数值），越 >40℃ 工程告警线（对应
+#   GB/T 11022-2020 开关设备环温 40℃ 正常使用条件上限，R35）。agent 应复核环境监测数据、区分内因（通风/空调失效）
+#   与外因、安排强制通风降温，高温未退出前加强对房内设备的监视。傍晚叠加 SG-A00 触头温升
+#   爬坡（环温 42℃ 基础上 +12K/h），考"环境高温→触头过热"的关联判读：温升（K）对照 R35 档值、
+#   三相横向比较，按三级阈值定级处置（R102 红外诊断通道）。
+# 判据出处：R65（DB11/T 527-2021 配电室安全管理规范）、R35（GB/T 11022-2020 环温/温升限值）、
+#           R102（DL/T 664-2016 红外诊断）；环境类库绑定口径同 arena/faults/environmental.yaml
+# 拓扑基底 = dsl/examples/park-arena-01.yaml 的 PARK-202 园区（SR-A+SR-B+母联 CP-01 常开）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-212.yaml
+api: parkdsl/1
+source: "arena/faults/environmental.yaml（R35/R63/R64/R94；DB11/527 体系=references.md R65）+ temperature_rise.yaml（R35/R102）"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（练习场配置）
+  description: |-
+    与 park-arena-01 同拓扑的练习场配置：本场景聚焦环境类异常——配电房高温告警及其
+    叠加的开关柜触头温升，考环境—设备关联研判与通风降温、消缺工单闭环。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# faults：环境高温（挂 A 房 10kV 母线，环境量演示简化）+ 触头温升（高温叠加）
+# ============================================================================
+faults:
+  - id: F-ENV-TEMP-A                              # A 配电房室温越限（环境量挂接母线）
+    kind: environmental
+    target: BUS-A1
+    severity: warn
+    criteria_ref: R65                             # DB11/T 527-2021 配电室安全管理规范（DB11/527 体系）
+    detection: {metric: room_temp_c, threshold: 40, comparator: ">", duration_sec: 300}
+    note: 配电房运行温度 5~35℃ 为工程惯例口径（DB11/T 527-2021 体系参考，R65；该条目
+      仅载值班/巡视/演练/温报 55~85℃ 等条款，未单列 5~35℃ 数值）；room_temp_c>40℃
+      告警亦为工程惯例，对应 GB/T 11022-2020 开关设备环温 40℃ 正常使用条件上限
+      （R35）；处置=查通风/空调内因、强制通风降温，高温仅记录不处置是典型 must_not
+  - id: F-TEMP-SGA00                              # 进线柜触头温升（高温环境叠加接触劣化）
+    kind: temperature_rise
+    target: SG-A00
+    severity: alarm
+    criteria_ref: R35                             # GB/T 11022-2020（环温 40℃ 基准、温升限值表）
+    detection: {metric: contact_temp_c, threshold: 70, comparator: ">", duration_sec: 600}
+    note: 预警档 70~80℃/告警 90~100℃/跳闸 110~120℃ 三级工程阈值；判读以温升（K）对照
+      R35 温升限值档并作三相横向比较，红外/无线测温为主要发现通道（R102）
+
+# ============================================================================
+# calendar：三班制 + 巡检 + 红外 + 报告 + 通风/空调专项
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-IR, type: infrared_scan, every_days: 7, at: "14:00", params: {basis: "DL/T 664-2016 表面温度/相对温差法"}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+    - {id: CAL-FAN, type: preventive_test, every_days: 30, params: {item: ventilation_exhaust_fan}}
+    - {id: CAL-HVAC, type: preventive_test, every_days: 90, params: {item: air_conditioner}}
+    - {id: CAL-DIESEL, type: preventive_test, every_days: 30, params: {item: diesel_start}}
+
+# ============================================================================
+# scenario：seed=1212；2 仿真日；注入 11:00 室温 42℃ → 17:00 触头温升（间隔 21600s）
+# ============================================================================
+scenario:
+  seed: 1212
+  duration_sim_s: 172800                          # 2 仿真日
+  clock_speed: 1800                               # 每墙钟秒 = 1800 仿真秒
+  description: >-
+    D1 11:00 A 房室温阶跃 42℃（通风失效内因），room_temp_c>40℃ 告警——agent 应复核温湿度
+    遥测、区分内外因、强制通风降温（R65 体系/R35 环温上限）；D1 17:00 起进线柜 SG-A00 触头
+    温度以 12K/h 自 42℃ 环温爬升，约 2.3h 后越 70℃ 预警档——考环境高温与触头过热的关联
+    判读（温升 K 对照 R35 档值、横向比较，R102 红外通道），按三级阈值定级并派工消缺闭环。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-ENV-TEMP-A, at_sim_s: 39600, params: {mode: high_temp, room_temp_c: 42}}   # D1 11:00
+    - {fault: F-TEMP-SGA00, at_sim_s: 61200, params: {ambient_c: 42, rise_k_per_h: 12, limit_c: 90}}  # D1 17:00，间隔 21600s

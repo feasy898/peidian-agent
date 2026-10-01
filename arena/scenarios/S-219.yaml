@@ -1,0 +1,170 @@
+# arena/scenarios/S-219.yaml · 练习场场景 S-219（园区变体 · 长周期）
+# 场景叙事：青枫生命科学园——两座配电房、三台主变、四类 DER（光伏/储能/双充电桩，
+# medium 档 der_max=4 打满）、0.4kV 母联 CP-01 常开。最大允许仿真窗 259200s（3 仿真日）
+# 以 3600 倍速压缩观察，日历全周期轮换（三班交接班×10、日巡×3、夜巡/红外/预试各×2、
+# 保电、95598、日报×3）。
+# 注入分布在全周期：第 1 日晨 B 房馈线柜局放（趋势型，默认爬升约 +8h 越注意档）→
+# 第 2 日午 A2 段充电桩谐波越限 → 第 3 日午 B2# 变油温爬升（本体故障：隔离 SG-B01 后
+# B3 段公寓/商业失电，母联 CP-01 够不到 B3——转供不可达，失电区保持隔离、恢复交人工）。
+# 干跑实证（本仓引擎，runtime/scen-dryrun）：3 注入全部检出（时延约 +29.4h/+900s/+15315s），
+# 日历全窗触发 23 条（交接班/日巡/夜巡/红外/预试/保电/95598/日报），无假报清除。
+# 考点：长周期下交接班/巡检节奏与故障处置的交织、多日趋势型隐患的检出耐心。
+# 判据出处：R32/R33/R37/R39/R91 = docs/theory/references.md（GB/T 14549、GB/T 15543、
+# 开关柜局放案例、DL/T 572-2021、DL/T 1102-2021）；光伏脱网为引擎原生类型（判据见
+# fault/detect.py，日照正常而出力≈0 的仿真口径，无对应 R 编号）。
+# 拓扑底：park-medium-01 结构变体（改参数：三主变、双充电桩、resident 负荷、保留母联）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-219.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-219.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+park:
+  id: PARK-204
+  name: 青枫生命科学园（长周期观察）
+  description: |-
+    中等档长周期变体：两座 10kV 配电房、三台主变（A1#1600 + B1#1000 + B2#800）、
+    0.4kV 母联 CP-01 常开；DER 四类打满 medium 档 der_max=4——B1# 变段屋顶光伏 300kWp、
+    B2# 变段储能 300kWh 与人才公寓充电桩 180kW、A1# 变段访客充电桩 240kW。
+    负荷覆盖研发办公、实验厂房、配套商业与人才公寓。B3 段无转供通道（母联只到 B2 段），
+    B2# 变停役即公寓失电——长周期处置排程与升级边界的观察窗。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 204
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（研发动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 240, profile: office}
+      - {id: EVC-02, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（公寓与微源）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: TX-B02, type: Transformer, capacity_kva: 800, hv: 10kV, lv: 0.4kV}
+      - {id: BUS-B3, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 300, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 300, power_kw: 150, soc: 55}
+      - {id: LD-B01, type: Load, peak_kw: 300, profile: office}
+      - {id: LD-B02, type: Load, peak_kw: 200, profile: commercial}
+      - {id: LD-B03, type: Load, peak_kw: 220, profile: resident}
+      - {id: LD-B04, type: Load, peak_kw: 160, profile: commercial}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 180, num_ports: 6}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 2.8, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.5, ampacity_a: 400}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-B1, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: TX-B02, kind: direct}
+  - {from: TX-B02, to: BUS-B3, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-02, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B3, to: LD-B03, kind: direct}
+  - {from: BUS-B3, to: LD-B04, kind: direct}
+  - {from: BUS-B3, to: BESS-01, kind: direct}
+  - {from: BUS-B3, to: EVC-01, kind: direct}
+
+# ============================================================================
+# v1.1 · faults：故障库引用条（kind ∈ arena/faults 库；criteria_ref → docs/theory/references.md）
+# ============================================================================
+faults:
+  - id: F-PD-01                                   # 局部放电（B 房 B2# 变馈线柜）
+    kind: partial_discharge
+    target: SG-B01
+    severity: warn
+    criteria_ref: R37                             # 35kV 开关柜局放案例（TEV/超声分级）
+    detection: {metric: tev_db, threshold: 20, comparator: ">", duration_sec: 600}
+    note: TEV 横向+纵向趋势判读；>20dB 注意 / 30dB 级严重（Q/GDW 11060-2013 分级，案例 R37）
+  - id: F-HARM-01                                 # 谐波畸变（A 段访客充电桩）
+    kind: harmonic
+    target: BUS-A2
+    severity: warn
+    criteria_ref: R32                             # GB/T 14549-1993（0.38kV THDu ≤5%）
+    detection: {metric: thdu_pct, threshold: 5, comparator: ">", duration_sec: 900}
+    note: 访客充电桩群整流特征谐波；0.4kV 母线按 5% 口径
+  - id: F-TXFAULT-01                              # B2# 变本体故障（油温）
+    kind: transformer_fault
+    target: TX-B02
+    severity: accident
+    criteria_ref: R39                             # DL/T 572-2021（顶层油温不宜经常超过 85℃）
+    detection: {metric: oil_temp_c, threshold: 85, comparator: ">", duration_sec: 1800}
+    note: B2# 变停役后 B3 段（公寓/商业/储能/充电桩）失电，母联 CP-01 只到 B2 段——
+      转供不可达，升级人工停役抢修（105℃ 跳闸口径；干变为温控器 130/150℃）
+  - id: F-UNBAL-01                                # 三相不平衡（公寓单相负荷，监视配置未注入）
+    kind: three_phase_unbalance
+    target: BUS-B3
+    severity: warn
+    criteria_ref: R33                             # GB/T 15543-2008
+    detection: {metric: neg_seq_unbalance_pct, threshold: 2, comparator: ">", duration_sec: 600}
+    note: 人才公寓晚高峰单相负荷集中；留意中性线电流
+  - id: F-OVL-01                                  # A1# 变过载（监视配置未注入）
+    kind: overload
+    target: TX-A01
+    severity: warn
+    criteria_ref: R91                             # DL/T 1102-2021《配电变压器运行规程》
+    detection: {metric: load_rate, threshold: 1.0, comparator: ">", duration_sec: 600}
+    note: A1# 变下游峰值 860kVA/1600kVA，留有转供 B2 段裕度（REG-TECH PHYS-TX-LOAD）
+  - id: F-PVTRIP-01                               # 光伏脱网（监视配置未注入；引擎原生，无 criteria_ref）
+    kind: pv_trip
+    target: PV-01
+    severity: info
+    detection: {metric: pv_output_kw, threshold: 0, comparator: "==", duration_sec: 300}
+    note: 判据见 fault/detect.py（日照正常而出力≈0 的仿真口径）；消缺前异常保持、不假报清除
+
+# ============================================================================
+# v1.1 · calendar：业务日历（全周期轮换；周期项按 3 日仿真窗压缩标定）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 2, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 2, at: "14:00"}
+    - {id: CAL-PREVENT, type: preventive_test, every_days: 2, at: "10:00", params: {item: ups_battery_capacity}}
+    - {id: CAL-BAODIAN, type: baodian, every_days: 90, at: "09:00", params: {level: "一级"}}
+    - {id: CAL-95598, type: work_order_95598, at: "11:00", params: {response_min: 45}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# ============================================================================
+# v1.1 · scenario：倍速场景 + 注入计划
+# ============================================================================
+scenario:
+  seed: 1219
+  duration_sim_s: 259200                          # 3 仿真日（上限 259200）
+  clock_speed: 3600                               # 每墙钟秒 = 1 仿真小时，全窗 72 墙钟秒
+  description: 生命科学园三日全周期轮换：晨巡发现 B2# 变馈线柜局放趋势→次日午间
+    访客充电桩谐波越限→第三日午间 B2# 变油温爬升（隔离后 B3 公寓段失电、转供不可达，
+    升级人工停役）。考长周期日历节奏（三班交接/日巡/夜巡/红外/预试/保电）与
+    多日趋势型隐患的处置耐心
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-PD-01, at_sim_s: 21600}           # 第 1 日 06:00 馈线柜局放开始爬升（趋势型）
+    - {fault: F-HARM-01, at_sim_s: 129600}        # 第 2 日 12:00 充电桩午间谐波越限（阶跃型）
+    - fault: F-TXFAULT-01
+      at_sim_s: 216000                            # 第 3 日 12:00 B2# 变油温爬升（加速速率 12K/h）
+      params: {rise_k_per_h: 12, target_oil_temp_c: 95}

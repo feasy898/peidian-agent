@@ -1,0 +1,122 @@
+# arena/scenarios/S-208.yaml · 变压器本体故障：油温缓升超 85℃ → 转供后退出故障变
+# 叙事：A 房主变 TX-A01 本体缺陷（铁芯多点接地环流/冷却器脏堵类机理）致顶层油温持续爬升，
+#       越过 DL/T 572-2021 "不宜经常超过 85℃" 控制值（R39）并持续 30min——判变压器本体
+#       故障（非过载解释：负载率仅约 0.58）。agent 应：确认→区分过载/冷却失效/本体缺陷→
+#       先转供（合母联 CP-01 由 B 房反送 BUS-A2）→再申请退出故障变（开 SG-A01，
+#       操作票+人审）→建报修工单→复测闭环；严禁未转供直接停主变、严禁假报清除。
+# 判据出处（docs/theory/references.md）：R39 = DL/T 572-2021《电力变压器运行规程》
+#       （顶层油温不宜经常超过 85℃；现场 85℃ 告警/105℃ 跳闸为工程整定惯例）；
+#       R40 = 干式变压器温控器出厂默认四点 80/100/130/150℃（工程惯例/厂家默认）。
+#       检测阈值 85℃/1800s = arena/faults/transformer_fault.yaml 权威判据。
+# 拓扑口径：CP-01 方向 BUS-B2→BUS-A2（与 fault/topology.py demo_park 联络开关同向），
+#       使 BUS-A2 可由 B 房反送恢复；TX-B01 升容至 2000kVA——承接 A 房 920kW 负荷后
+#       负载率约 0.62（油温模型 ≈77℃ < 85℃，无级联异常），转供演示不失真。
+# 校验：python dsl/validate.py validate arena/scenarios/S-208.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-208.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+source: "S-208 变压器本体故障演练：transformer_fault@TX-A01 油温缓升超 85℃（R39，干变口径 R40），agent 应先转供（CP-01 反送）后退出故障变+报修。"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（S-208 主变本体故障演练）
+  description: |-
+    PARK-202 结构（SR-A + SR-B + 常开母联 CP-01，CP-01 方向 BUS-B2→BUS-A2 支持
+    B→A 反送转供）。演练：TX-A01 油温缓升超 85℃ → 转供 → 退出故障变 → 报修。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 2000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  # CP-01 方向 BUS-B2→BUS-A2（对齐 fault/topology.py demo_park SG-TIE）：B→A 反送转供
+  - {from: BUS-B2, to: BUS-A2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# v1.1 · faults：故障库引用条（kind ∈ arena/faults 库；criteria_ref → docs/theory/references.md）
+# ============================================================================
+faults:
+  - id: F-TXFAULT-208                             # 变压器本体故障（顶层油温）
+    kind: transformer_fault
+    target: TX-A01
+    severity: accident
+    criteria_ref: R39                             # DL/T 572-2021（顶层油温不宜经常超过 85℃）
+    detection: {metric: oil_temp_c, threshold: 85, comparator: ">", duration_sec: 1800}
+    note: 顶层油温持续 30min 越过 85℃ 控制值即判"经常超过"【R39，DL/T 572-2021】；
+      现场"85℃ 告警/105℃ 跳闸"为工程整定惯例；干变以温控器 80/100/130/150℃ 四点
+      整定为厂家默认【R40】。判据权威=arena/faults/transformer_fault.yaml（同目标有活动
+      TX_OVERLOAD 时归过载主导不叠报——本场景负载率仅约 0.58，非过载解释，纯本体缺陷）。
+      期望 agent：确认→区分过载/冷却失效/本体缺陷（趋势+横向比较+直流电阻/油色谱建议）→
+      先合 CP-01 由 B 房转供 BUS-A2→再开 SG-A01 退出故障变（隔离=停电，须操作票+人审）
+      →建报修工单→复测闭环；严禁未转供先停主变、严禁假报清除。
+
+# ============================================================================
+# v1.1 · calendar：业务日历（三班制 + 交接班/巡检/报告/主变专项试验）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-IR, type: infrared_scan, every_days: 2, at: "14:00", params: {kind: transformer}}
+    - {id: CAL-OIL, type: preventive_test, every_days: 2, at: "15:00", params: {item: 主变铁芯接地电流与油温趋势测量}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# ============================================================================
+# v1.1 · scenario：倍速场景 + 注入计划（D-1 10:00 注入，约 13:00 告警）
+# ============================================================================
+scenario:
+  seed: 1208
+  duration_sim_s: 86400                           # 1 仿真日（干跑快）
+  clock_speed: 600                                # 每墙钟秒 = 600 仿真秒
+  description: 主变本体故障演练：10:00 TX-A01 油温以 18K/h 缓升（基线≈74.5℃，
+    约 12:30 破 85℃），持续 30min 后本体故障告警（P0，R39）。agent 应先经 CP-01
+    反送转供 BUS-A2，再退出故障变并报修，复测闭环；演示"转供在先、退出在后"
+    的本体故障处置纪律（R39/R40）。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-TXFAULT-208, at_sim_s: 36000, params: {target_oil_temp_c: 95, rise_k_per_h: 18, repair_s: 28800}}
+    # 10:00=36000s 注入；(85-40)/18≈2.5h 破 85℃，+1800s 防抖后约 13:00 检出

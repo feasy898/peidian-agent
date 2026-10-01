@@ -137,33 +137,43 @@ def _scenario_files(adjudication_only: bool, scen_dir: Path | None = None) -> li
     return files
 
 
+def _run_one(job: tuple) -> dict:
+    """单个 run 的工作函数（可被 multiprocessing.Pool 调用；必须是模块级可序列化）。"""
+    cfg, seed, run_id, runs_root, scenario_file = job
+    try:
+        ae = ArenaEngine(cfg, seed=seed, run_id=run_id, runs_root=runs_root)
+        d = ae.run().to_dict()
+        d["scenario_file"] = scenario_file
+        return d
+    except Exception as exc:  # noqa: BLE001
+        return {"run_id": run_id, "seed": seed, "scenario_file": scenario_file,
+                "error": f"{type(exc).__name__}: {exc}"}
+
+
 def run_batch(runs: int, seed_base: int, files: list[Path],
-              runs_root: Path) -> list[dict]:
+              runs_root: Path, workers: int = 1) -> list[dict]:
     """对场景清单轮转 seed 批跑；返回每 run 的 eval 摘要（失败 run 如实入列）。"""
-    results: list[dict] = []
     if not files:
-        return results
+        return []
     configs = []
     for f in files:
         try:
             configs.append((f, load_scenario(f)))
         except ScenarioRejected:
             continue
+    jobs = []
     for i in range(runs):
         f, cfg = configs[i % len(configs)]
-        seed = seed_base + i
-        try:
-            ae = ArenaEngine(cfg, seed=seed, run_id=f"conv-{i:06d}",
-                             runs_root=runs_root)
-            res = ae.run()
-            d = res.to_dict()
-            d["scenario_file"] = f.name
-            results.append(d)
-        except Exception as exc:  # 批跑不因单run失败中断；失败如实记录
-            results.append({"run_id": f"conv-{i:06d}", "scenario_file": f.name,
-                            "seed": seed, "error": f"{type(exc).__name__}: {exc}"})
-        if (i + 1) % 500 == 0:
-            print(f"  ... {i + 1}/{runs}", flush=True)
+        jobs.append((cfg, seed_base + i, f"conv-{i:06d}", str(runs_root), f.name))
+    if workers > 1:
+        import multiprocessing as mp
+        with mp.Pool(processes=workers) as pool:
+            results = pool.map(_run_one, jobs, chunksize=max(1, len(jobs) // (workers * 8)))
+    else:
+        results = [_run_one(j) for j in jobs]
+    for i, d in enumerate(results):
+        if (i + 1) % 500 == 0 or i + 1 == len(results):
+            print(f"  ... {i + 1}/{len(results)}", flush=True)
     return results
 
 
@@ -268,6 +278,8 @@ def main(argv=None) -> int:
                     help="判定模式必须 frozen: true，否则拒绝")
     ap.add_argument("--scenarios-dir", default=str(SCEN_DIR),
                     help="场景目录（缺省 arena/scenarios）")
+    ap.add_argument("--workers", type=int, default=8,
+                    help="批跑并行进程数（缺省 8；1=串行）")
     ap.add_argument("--runs-root", default=str(ROOT / "runs" / "converge"))
     args = ap.parse_args(argv)
 
@@ -289,8 +301,9 @@ def main(argv=None) -> int:
         return 2
 
     print(f"converge mode={args.mode} runs={runs} scenarios={len(files)} "
-          f"frozen={frozen}", flush=True)
-    results = run_batch(runs, args.seed_base, files, Path(args.runs_root))
+          f"frozen={frozen} workers={args.workers}", flush=True)
+    results = run_batch(runs, args.seed_base, files, Path(args.runs_root),
+                        workers=args.workers)
     verdict = judge(results, thresholds)
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
