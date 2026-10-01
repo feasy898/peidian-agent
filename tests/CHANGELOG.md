@@ -1709,3 +1709,26 @@ result=PASS`（exit 0，本节登记时点实跑）。
   母联 CP-01，使隔离转供路径可演示（适配器缺陷因此暴露并修复）。
 - **门禁**：fault 15/15、arena 24/24、dsl 25/25、run_evals 233/233、ci_isolation
   zero hits 全绿（本轮实跑）；样例场景端到端：4/4 注入检出、4/4 agent 闭环、0 误升级。
+
+## 2026-10-02 · 场景库生产期间暴露的三个引擎缺陷修复（工作流升级驱动）
+
+**触发**：场景库工作流（dwfrun-b46ea344）子代理升级——`phase_loss` 两条目标路径都被堵，
+且发现样板 `park-arena-01.yaml` 的 F-PHLOSS-01@LD-A01 从未检出过（同一根因）。
+
+1. **叶元件通用信号被整体抑制**（fault/telemetry.py）：`_generic_signals` 要求 target ∈
+   energized，而负荷/光伏/储能/电容是挂接母线的叶元件、不在带电图内
+   （topology.py successors 只走 EDGE_KINDS）。修正为叶元件按「所挂母线带电」判定。
+   实测：phase_loss@LD-A01 与 @LN-01 现均可检出。
+2. **DSL faults/injections 的 target 命名空间过窄**（dsl/validate.py）：仅接受元件 ID，
+   拒绝 link ID（LN/CP）——与 dsl_spec.yaml id_rules.note「devices.id 与 links.id(LN/CP)
+   共用同一命名空间」的规范相悖，且引擎 Topology 中边元素本就是合法注入目标。修正为
+   元件 ID ∪ link ID 的元素域。
+3. **③.5 独立开关注册的方向缺陷**（fault/park_adapter.py）：一母线面+一线路面的开关
+   此前一律按「线侧为电源」建边，对**联络串开关**（BUS-A1→SG-A02→LN-02→SG-B02→BUS-B1，
+   S-207 形态）建成反向边，energized BFS 断裂导致整段失电。修正为按线路 DSL 的
+   from/to 推导功率方向（开关在线路 from 端 → 母线→开关→线路；to 端 → 线路→开关→母线，
+   与既有进线开关 SG-A00 的正确行为同口径）。
+
+**回归**：fault 15/15、dsl 25/25、arena 24/24、run_evals 233/233 全绿；
+S-207 干跑实证完整闭环：SINGLE_PHASE_GROUND@BUS-B1 检出→agent 拉 SG-B02 隔离→
+合 CP-01 转供→anomaly.cleared（by=agent）。

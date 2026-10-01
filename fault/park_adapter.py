@@ -213,7 +213,8 @@ def park_to_topology(park_json: dict) -> Topology:
         if n["type"] != "Switchgear" or n["id"] in sg_done:
             continue
         sg_id = n["id"]
-        faces: list[tuple[str, bool]] = []   # (对端元件 id, 是否 line/coupler 边)
+        # (对端元件 id, 是否 line/coupler 接触面, 本开关在该链路 DSL 中的端: from/to/None)
+        faces: list[tuple] = []
         for i, o in _direct_nbrs(sg_id):
             chain = _walk_direct_chain(i, o, links, by_id, consumed,
                                        f"独立开关 {sg_id}")
@@ -222,16 +223,29 @@ def park_to_topology(park_json: dict) -> Topology:
                 raise AdapterError(
                     f"独立开关 {sg_id} 的 direct 链末端应为母线/电源（实得 {terminal}"
                     f"/{by_id[terminal]['type']}）")
-            faces.append((terminal, False))
+            faces.append((terminal, False, None))
             for ci, _nid in chain:
                 consumed.add(ci)
         for i, lk in enumerate(links):
             if lk["kind"] in ("line", "coupler") and sg_id in (lk["from"], lk["to"]):
-                faces.append((str(lk.get("id") or f"{lk['from']}-{lk['to']}"), True))
+                side = "from" if lk["from"] == sg_id else "to"
+                faces.append((str(lk.get("id") or f"{lk['from']}-{lk['to']}"), True, side))
         if len(faces) != 2:
             raise AdapterError(
                 f"独立开关 {sg_id} 应恰有两个接触面（实得 {len(faces)}：{faces}）")
-        if faces[0][1] and not faces[1][1]:
+        line_faces = [f for f in faces if f[1]]
+        other_faces = [f for f in faces if not f[1]]
+        if len(line_faces) == 1 and len(other_faces) == 1:
+            # 一母线面一线路面：按线路 DSL 的 from/to 定功率方向。
+            # 开关在线路 from 端 → 母线→开关→线路（联络串开关，S-207 形态）；
+            # 在 to 端 → 线路→开关→母线（进线串开关，SG-A00 形态）。
+            line_id, _is_line, side = line_faces[0]
+            other_id = other_faces[0][0]
+            if side == "from":
+                frm, to = other_id, line_id
+            else:
+                frm, to = line_id, other_id
+        elif faces[0][1] and not faces[1][1]:
             frm, to = faces[0][0], faces[1][0]
         elif faces[1][1] and not faces[0][1]:
             frm, to = faces[1][0], faces[0][0]

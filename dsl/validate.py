@@ -91,11 +91,24 @@ def validate_extensions(data: dict, devices: dict, origin: str, errs: list) -> l
 
     仅在基础校验全过之后调用（见 validate_dsl 尾部），避免结构错误层叠。
     错误码：E-FAULT（故障库引用）/ E-CAL（业务日历）/ E-SCEN（场景与注入计划）。
+
+    target 命名空间 = 元件 ID ∪ link ID（LN/CP）：dsl_spec.yaml id_rules.note 明确
+    "devices.id 与 links.id(LN/CP) 共用同一命名空间"，fault 引擎 Topology 中边元件
+    与叶元件同为可注入目标。
     """
     ext = SPEC.get("extensions") or {}
     fspec = ext.get("faults") or {}
     cspec = ext.get("calendar") or {}
     sspec = ext.get("scenario") or {}
+
+    # link ID 命名空间（line/coupler 带 id；direct 不生成独立 ID）
+    link_ids: set[str] = set()
+    for lk in data.get("links") or []:
+        if isinstance(lk, dict) and lk.get("kind") in ("line", "coupler"):
+            lid = lk.get("id")
+            if isinstance(lid, str) and lid:
+                link_ids.add(lid)
+    id_universe = set(devices) | link_ids
 
     def is_num(v) -> bool:
         return isinstance(v, (int, float)) and not isinstance(v, bool)
@@ -143,8 +156,9 @@ def validate_extensions(data: dict, devices: dict, origin: str, errs: list) -> l
                     errs.append(Err("E-FAULT", f"{loc}.criteria_ref",
                                     "criteria_ref 须为 R 编号（docs/theory/references.md 编号）", actual=repr(cref)))
                 tgt = f.get("target")
-                if tgt is not None and tgt not in devices:
-                    errs.append(Err("E-FAULT", f"{loc}.target", "target 引用的元件不存在", actual=repr(tgt)))
+                if tgt is not None and tgt not in id_universe:
+                    errs.append(Err("E-FAULT", f"{loc}.target",
+                                    "target 引用的元件或线路不存在", actual=repr(tgt)))
                 det = f.get("detection")
                 if det is not None:
                     if not isinstance(det, dict):
@@ -260,8 +274,8 @@ def validate_extensions(data: dict, devices: dict, origin: str, errs: list) -> l
                             errs.append(Err("E-SCEN", f"{loc}.at_sim_s", "注入时刻不得晚于场景时长",
                                             actual=f"{at}≥{dur}"))
                         t = j.get("target")
-                        if t is not None and t not in devices:
-                            errs.append(Err("E-SCEN", f"{loc}.target", "注入目标元件不存在", actual=repr(t)))
+                        if t is not None and t not in id_universe:
+                            errs.append(Err("E-SCEN", f"{loc}.target", "注入目标元件或线路不存在", actual=repr(t)))
                         p = j.get("params")
                         if p is not None and not isinstance(p, dict):
                             errs.append(Err("E-SCEN", f"{loc}.params", "注入 params 必须是映射"))

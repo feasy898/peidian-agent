@@ -21,14 +21,17 @@ import random
 from collections import deque
 from typing import Any
 
-from .topology import KIND_BUS, KIND_LINE, KIND_LOAD, KIND_PV, KIND_SW, \
-    KIND_TX, Topology
+from .topology import KIND_BESS, KIND_BUS, KIND_CAP, KIND_LINE, KIND_LOAD, \
+    KIND_PV, KIND_SW, KIND_TX, Topology
 
 __all__ = ["TelemetryModel", "DAYLIGHT", "FAULT_CURRENT_PU", "GENERIC_TYPES"]
 
 DAYLIGHT = 0.7    # 演示恒定日照因子（伪遥测简化声明）
 NOISE = 0.03
 FAULT_CURRENT_PU = 6.0
+
+# 叶元件（挂接母线的非边元件）——通用信号以所挂母线带电为准（v1.1）
+LEAF_KINDS = (KIND_LOAD, KIND_PV, KIND_BESS, KIND_CAP)
 
 # v1.1 通用信号故障集合（注入=信号规则；检测判据见 fault.detect.DEFAULT_CRITERIA）
 GENERIC_TYPES = frozenset({
@@ -163,7 +166,15 @@ class TelemetryModel:
             if f.type not in GENERIC_TYPES:
                 continue
             tgt = f.target
-            if tgt not in energ:
+            if not self.topo.has(tgt):
+                continue
+            te = self.topo.get(tgt)
+            if te.kind in LEAF_KINDS:
+                # 叶元件（负荷/光伏/储能/电容）不在带电图内：以所挂母线带电为准
+                bus = te.at
+                if bus is None or bus not in energ:
+                    continue
+            elif tgt not in energ:
                 continue
             p = f.params
             elapsed_h = max(0.0, sim_s - float(getattr(f, "at_s", 0.0) or 0.0)) / 3600.0
