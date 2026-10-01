@@ -384,3 +384,30 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
 ④Higress/LLM 真实凭据缺（场景生成器的真实模型路径未启用，当前离线兜底）；
 ⑤gen_scenario.py（LLM 规则化生成器）未实现——语料由工作流产出先行，生成器
 列后续；⑥ui/ 待办：遥测曲线、人机对比评分卡、单线图（ui/README 已列）。
+
+## 2026-10-02 · ZCode 主会话 · 场景库收尾 + 引擎三修 + 100 次校准（DD-558e7 前链）
+
+**做了什么**：
+- **场景库 20 个全部入库**（D-4 达标）：GLM-5.3-Flash 工作流 dwfrun-b46ea344
+  （4 编撰组×5 → 独立复核 → 修订+机械校验 exit 0）；覆盖设备量测/网络保护/直流运维/
+  园区变体四类，全部过 dsl 校验 + arena 干跑（detected≥1、0 rejected）。
+- **修了三个引擎缺陷**（commit 8a4f146，均由场景编撰升级/实测驱动，纯加法修复）：
+  ①telemetry 叶元件（负荷/光伏/储能/电容）通用信号被 energized 判定整体抑制
+  （phase_loss@load 结构性不可检出——连样板 F-PHLOSS-01 也从未触发）；
+  ②dsl/validate faults/injections target 命名空间过窄（拒 link ID，与
+  dsl_spec id_rules.note 相悖）；③park_adapter ③.5 独立开关一母线面+一线路面时
+  方向反向（联络串开关 BUS→SG→LN→SG→BUS 形态下 B 段整段失电，S-207 暴露）。
+- **批跑 10x 提速**（3 万次的前提）：arena busy 判定精化（全部异常 ack 后按空闲
+  大步长跳到下一事件，消缺期无新状态）单 run 30s→1.7-3.6s；converge.py 多进程
+  批跑（--workers，64 核机 12 workers）。
+- **100 次校准**（12 workers、100 run、0 errors）：红线违规 0、收益 0.6414 vs
+  参照 0.6320（pass）、漂移全 pass；N=100 红线置信上界 2.95%（3/N 须 3 万次才能
+  判定——统计口径预期，非失败）；升级率 0.2/平均检出时延 3502s/平均闭环 1.7。
+  基线数字已写入 thresholds.yaml calibration_baseline，冻结决策包入
+  evidence/owner-gates.md（等 owner 裁定 D-5）。
+- **门禁**：arena 24/24、dsl 25/25、fault 15/15、run_evals 233/233 全绿（每步实跑）。
+
+**悬留/待办**：①**D-5 等 owner 冻结**（决策包已就绪：红线 3/N 维持/收益基线建议补
+--agent-off 批/漂移维持）；②3 万次隔离判定 + D-7 报告在冻结后执行；③A-4/B-4 批示门
+未过；④M1 spec 漂移 R-2 待复核；⑤Higress 凭据缺；⑥gen_scenario.py 未实现；
+⑦ui/ 遥测曲线/对比评分卡/单线图待迭代。
