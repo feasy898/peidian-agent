@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>peidian-agent · 园区配电练习场（人类体验模式）</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⚡</span>
+    <div>
+      <h1>园区配电练习场</h1>
+      <p class="sub">人类体验模式 · 全替身仿真 · 故障注入 / 关闭 agent / 人工诊断挑战</p>
+    </div>
+  </div>
+  <div class="run-meta" id="runMeta">
+    <span class="chip" id="chipRun">未开始</span>
+    <span class="chip mono" id="chipSim">sim_s 0</span>
+    <span class="chip mono" id="chipSpeed">×—</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ============ 左：控制 ============ -->
+  <aside class="col left">
+    <section class="panel">
+      <h2>1 · 选择场景</h2>
+      <label>场景库</label>
+      <select id="scenarioSel"><option value="">（加载中…）</option></select>
+      <label>园区拓扑（DSL 样例）</label>
+      <select id="parkSel"><option value="">（加载中…）</option></select>
+      <div class="row">
+        <div class="grow">
+          <label>seed</label>
+          <input id="seedInput" type="number" value="42" min="0">
+        </div>
+        <div class="grow">
+          <label>空闲步长 s</label>
+          <input id="idleDt" type="number" value="60" min="1">
+        </div>
+      </div>
+      <div class="row switches">
+        <label class="switch">
+          <input type="checkbox" id="agentOn" checked>
+          <span>agent 接管处置</span>
+        </label>
+      </div>
+      <button class="primary" id="startBtn">▶ 启动模拟</button>
+      <p class="hint">关闭「agent 接管处置」= 人类挑战模式：异常只上报，由你来定位与处置。</p>
+    </section>
+
+    <section class="panel">
+      <h2>2 · 故障注入 <span class="tag">危险操作·留痕</span></h2>
+      <div id="faultBtns" class="fault-grid"><p class="hint">启动 run 后显示本例故障。</p></div>
+    </section>
+
+    <section class="panel">
+      <h2>3 · 人工操作台</h2>
+      <div class="row">
+        <select id="opSel">
+          <option value="open">open 分闸</option>
+          <option value="close">close 合闸</option>
+          <option value="ack">ack 确认告警</option>
+        </select>
+        <input id="opTarget" class="grow" placeholder="目标（开关 ID / 异常 ID）" list="targetHints">
+        <datalist id="targetHints"></datalist>
+      </div>
+      <input id="opReason" class="grow" placeholder="原因（留痕）">
+      <button id="actBtn" class="warn">执行</button>
+      <p class="hint">与 agent 同款执行器：非法操作会被拒绝并留痕（action.rejected）。</p>
+    </section>
+  </aside>
+
+  <!-- ============ 中：时间线 ============ -->
+  <main class="col center">
+    <section class="panel stats">
+      <div class="stat"><b id="stDetected">0</b><span>检出</span></div>
+      <div class="stat"><b id="stCleared">0</b><span>闭环</span></div>
+      <div class="stat"><b id="stEscalated">0</b><span>升级</span></div>
+      <div class="stat"><b id="stActions">0</b><span>人工动作</span></div>
+      <div class="stat"><b id="stAgentSteps">0</b><span>agent 步骤</span></div>
+      <div class="stat"><b id="stBusiness">0</b><span>营业事件</span></div>
+    </section>
+
+    <section class="panel timeline-panel">
+      <div class="panel-head">
+        <h2>事件时间线</h2>
+        <div class="filters" id="chanFilters">
+          <button class="f on" data-ch="all">全部</button>
+          <button class="f" data-ch="control">控制</button>
+          <button class="f" data-ch="fault">故障</button>
+          <button class="f" data-ch="agent">agent</button>
+          <button class="f" data-ch="ops">操作</button>
+        </div>
+      </div>
+      <ol class="timeline" id="timeline"></ol>
+    </section>
+  </main>
+
+  <!-- ============ 右：异常与 agent ============ -->
+  <aside class="col right">
+    <section class="panel">
+      <h2>agent 开关</h2>
+      <label class="switch big">
+        <input type="checkbox" id="agentToggle" checked>
+        <span id="agentToggleLabel">agent 在线</span>
+      </label>
+      <p class="hint">运行中可随时切换：关闭后新异常只上报不处置（control.passed），由你接管。</p>
+    </section>
+
+    <section class="panel">
+      <h2>活动异常</h2>
+      <div id="anomalyCards"><p class="hint">暂无活动异常。</p></div>
+    </section>
+
+    <section class="panel">
+      <h2>run 记录</h2>
+      <pre class="mono small" id="evalBox">（完成后显示 eval 摘要）</pre>
+    </section>
+  </aside>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
