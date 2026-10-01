@@ -1,0 +1,67 @@
+# arena/faults/transformer_fault.yaml · 变压器本体故障（油浸/干式配电变压器）
+# 判据底座：docs/theory/equipment.md §2.3（R39/R40）、§3.3/§3.4；operations.md §1（R91 配变巡视）、§2（R107 缺陷定级）
+# 引擎绑定：FAULT_TYPES 含 TRANSFORMER_FAULT（fault/dsl.py:30）；兼容元件 transformer（fault/dsl.py:46）
+# 参数规格：fault/dsl.py:111-115（target_oil_temp_c/rise_k_per_h/repair_s）；遥测 oil_temp_c
+# （基线 fault/telemetry.py:140，故障爬升 fault/telemetry.py:189-192）、load_rate（fault/telemetry.py:139）
+# 信号名说明：引擎产出名为 oil_temp_c；任务口径 top_oil_temp_c 即顶层油温同一量，
+# 检测判据按"仿真必须能产出"纪律采用引擎名 oil_temp_c（top_oil_temp_c 现无产出通道）
+kind: transformer_fault
+title: 变压器本体故障（油浸顶层油温/干变绕组超温）
+class: state                        # 非隔离型（消缺类）：隔离变压器=相关母线停电，
+                                    # 处置应是转供+退出故障变+报修，不以拉闸为消缺手段
+engine_type: TRANSFORMER_FAULT
+compat_kinds: [transformer]         # 与 fault/dsl.py:46 COMPAT_KINDS 一致
+params:                             # 与 fault/dsl.py:111-115 PARAM_SPECS 键集一字不差
+  target_oil_temp_c: {default: 95, min: 50, max: 160}   # 演化目标顶层油温：默认 95℃=
+                                    # DL/T 572-2021 表1 ONAN/ONAF 最高顶层油温（冷却介质 40℃）【R39】
+  rise_k_per_h: {default: 6, min: 0, max: 60}           # 油温爬升速率 K/h（热时间常数的时间压缩）
+  repair_s: {default: 28800, min: 60, max: 2592000}     # 报修消缺时长（仿真秒，上限=引擎域 86400*30，fault/dsl.py:114；检查/试验/复测）
+detection:                          # 诚实检测：检测器只读遥测 oil_temp_c + 本判据，不读注入计划
+  metric: oil_temp_c
+  comparator: ">"
+  threshold: 85                     # 持续越限即"经常超过 85℃"（DL/T 572-2021 控制值；§5.1.3 条号待核）【R39】
+  duration_sec: 1800                # 持续越限 30min 判"长期/经常"，防瞬时越限误报（建模防抖参数）
+  source: "DL/T 572-2021《电力变压器运行规程》表1：油浸变顶层油温一般限值 ONAN/ONAF 95℃
+    （冷却介质 40℃）/OFAF 85℃/OFWF 70℃，自然循环冷却变压器顶层油温'一般不宜经常超过 85℃'
+    【R39】【标准条文；表值经 Scribd 流传件摘录+多源检索一致印证，官方原文页未打开——待核；
+    条号 §5.1.3 系检索摘要转述、判据底座 equipment.md R39 仅记'表1'，未对照官方原文核实——条号待核】；
+    阈值 85 取规程'不宜经常超过'运行控制值（非独立告警整定条文）；现场'85℃告警/105℃跳闸'
+    为工程整定惯例、非 DL/T 572 条文，以制造厂技术条件与现场运行规程为准【R39】【工程惯例——待核】"
+mechanism: |-
+  变压器油温由负荷电流平方×绕组电阻的发热与冷却器散热的热平衡决定，热劣化是正反馈过程：
+  接头/触头接触电阻增大→发热→氧化加剧→更热，隐患按小时~天尺度演化，红外测温趋势可提前发现
+  （equipment.md §2.3 机理段；operations.md R102 红外判据）。油浸变顶层油温限值由 DL/T 572-2021
+  表1 按冷却方式分档（检索摘要另示 §5.1.3——条号待核）：自然循环自冷/风冷 40℃ 环温下 95℃、强油风冷 85℃、强油水冷 70℃，
+  并要求自然循环冷却变压器顶层油温"一般不宜经常超过 85℃"【R39】；现场"85℃ 告警、105℃ 跳闸"
+  属工程整定惯例而非规程条文【工程惯例——待核】。园区干式配变以温控器监视绕组温度，F 级绝缘
+  （极限 155℃）常见出厂默认四点整定为 80℃ 关风/100℃ 启风/130℃ 超温报警/150℃ 超温跳闸，
+  H 级（180℃）取值相应上移，逐台可配【R40】【工程惯例/厂家默认；本次检索百度 B2B 百科、智光
+  iDIN800 说明书页等多源一致，说明书 PDF 未解析打开——待核】。除冷却失效与长期过载外，三类本体
+  缺陷同样以过热/放电演化：铁芯多点接地（铁芯对地绝缘劣化形成环流附加发热）、套管污秽受潮闪络、
+  分接开关触头接触不良——后者以绕组直流电阻三相互差超限暴露，预试/交接口径：1.6MVA 以上相间
+  互差≤三相平均值 2%（无中性点引出线间≤1%）、1.6MVA 及以下相间≤4%/线间≤2%（DL/T 596 预试
+  规程与 GB 50150-2016 交接试验口径，2026-10-02 检索多源一致，标准原文未逐字打开【待核】）。
+  运行监视制度底座为 GB/T 1094 体系（变压器产品标准族）与 DL/T 1102-2021《配电变压器运行规程》
+  （配变每月至少巡视一次、每季一次夜巡）【R91】。
+evolution:
+  - {stage: 隐患, desc: "冷却器脏堵/风冷电机失效、长期接近满载、铁芯多点接地环流、分接开关触头劣化（直流电阻互差逼近限值）等潜在缺陷；发现通道：红外测温趋势、直流电阻预试、油位/油色巡视（R102/R91；equipment.md §3.4）"}
+  - {stage: 异常, desc: "顶层油温持续逼近并经常超过 85℃（ONAN/ONAF 表值上限 95℃），DL/T 572-2021 顶层油温控制值被突破（§5.1.3 条号待核）；load_rate 同步佐证过载成因（>0.80 预警档，fault/detect.py:18）【R39】"}
+  - {stage: 告警, desc: "油温 85℃ 告警（工程惯例整定）；干变侧温控 130℃ 超温报警、风机常转（100℃ 启风不返）——装置声光/遥信告警（R40；equipment.md §3.3）"}
+  - {stage: 事故, desc: "105℃ 跳闸（工程惯例整定）或干变 150℃ 超温跳闸；未跳则油/绝缘热老化加速、绕组热点超标，可发展为匝间短路、套管闪络跳主变——相关母线失压，须转供+退出故障变（R39/R40 惯例口径）"}
+signals:
+  - {metric: oil_temp_c, desc: "顶层油温 ℃——仿真基线随负载率 40+60×ratio、故障期按 rise_k_per_h 爬升至 target_oil_temp_c 封顶（fault/telemetry.py:140、189-192）；任务口径名 top_oil_temp_c 同一量"}
+  - {metric: load_rate, desc: "主变负载率 kw/capacity（fault/telemetry.py:139）——判过载成因；>0.80 过载预警 P2、>1.00 重过载 P0（REG-TECH PHYS-TX-LOAD，fault/detect.py:18-19）"}
+  - {metric: current_ratio, desc: "有源边电流/容量比——>4pu 判短路征兆而非过载（fault/detect.py:20），用于排除相间短路误并入本条目"}
+agent_expectations:
+  must:
+    - "confirm：复核 oil_temp_c 趋势+load_rate/冷却器状态与环温修正，区分过载、冷却失效与本体缺陷"
+    - "diagnose：横向比较同室各变+纵向历史趋势；本体缺陷嫌疑（铁芯多点接地/套管/分接开关）提出直流电阻互差、油色谱等试验建议"
+    - "judge：按缺陷三级（危急/严重/一般）定级并给出消缺时限（operations.md §2，R107）"
+    - "plan：先倒负荷/转供，再申请退出故障变（隔离=停电，须操作票+人审）并建报修工单"
+    - "summary/verify：复测通过后闭环；未消除必须升级（control.escalated），绝不假绿"
+  must_not:
+    - "未转供直接退出主变（扩大失电范围）"
+    - "自行修改告警/跳闸整定值（modify.* 永久 DENY，契约红线 R3）"
+    - "假报清除（未试验复测即宣布恢复）"
+    - "把 85/105℃ 惯例整定当国标硬限值逐台硬判（应允许 per-asset 覆盖）"
+sources: [R39, R40, R91, R102, R107]

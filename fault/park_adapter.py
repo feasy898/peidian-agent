@@ -167,11 +167,18 @@ def park_to_topology(park_json: dict) -> Topology:
         sides.sort(key=lambda s: _vnom_kv(by_id[s[-1][1]])
                    if by_id[s[-1][1]]["type"] == "Bus" else -1.0, reverse=True)
         built: list[str] = []          # 两侧紧邻 TX 的元件 id
-        for side in sides:
+        for si, side in enumerate(sides):
             terminal = side[-1][1]
             if by_id[terminal]["type"] != "Bus":
                 raise AdapterError(f"变压器 {tx_id} 的 direct 链末端不是母线（{terminal}）")
-            path = [terminal] + [nid for _i, nid in reversed(side[:-1])] + [tx_id]
+            # 功率流方向建路径：高压侧（si=0）bus→…→TX；低压侧 TX→…→bus。
+            # 历史样例均无低压侧串联开关，两侧同构（bus→TX）从未暴露反向；
+            # 低压侧开关若按 bus→TX 注册，energized/successors 的功率流 BFS
+            # 会在此断裂（TX→SW→bus 走不通），故按实际功率流方向修正。
+            if si == 0:
+                path = [terminal] + [nid for _i, nid in reversed(side[:-1])] + [tx_id]
+            else:
+                path = [tx_id] + [nid for _i, nid in side[:-1]] + [terminal]
             for j in range(1, len(path) - 1):
                 m_id = path[j]
                 m = by_id[m_id]
@@ -191,7 +198,9 @@ def park_to_topology(park_json: dict) -> Topology:
                                             to=path[j + 1]))
             for i, _nid in side:
                 consumed.add(i)
-            built.append(path[-2])   # 紧邻 TX 的本侧元件（无中间设备时即母线）
+            # 紧邻 TX 的本侧元件（无中间设备时即母线）。低压侧路径以 TX 开头
+            # （功率流方向），紧邻元在 path[1]；高压侧以 TX 结尾，在 path[-2]。
+            built.append(path[1] if path[0] == tx_id else path[-2])
         elements.append(Element(tx_id, KIND_TX, n.get("label") or tx_id,
                                 dict(n.get("params", {})), frm=built[0], to=built[1]))
 

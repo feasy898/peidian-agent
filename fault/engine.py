@@ -14,29 +14,33 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from .actions import ActionExecutor
-from .agent import AgentResponder
+from .agent import AgentResponder, STATE_HINTS
 from .detect import Anomaly, Detector
 from .dsl import FaultRejected, FaultSpec, validate_fault_dict
 from .stream import EventBus
-from .telemetry import DAYLIGHT, TelemetryModel
+from .telemetry import DAYLIGHT, TelemetryModel, GENERIC_TYPES
 from .topology import KIND_BUS, KIND_TX, Topology, demo_park
 
 __all__ = ["Engine"]
 
 MAX_CONVERGE_ITERS = 4  # 单拍内 收敛圈数上限（动作→新样本→新检测）
+# 不触发"复测未消除"升级的 hint：PV_TRIP（已确认待消缺）与全部状态类
+# （ack+派工的语义就是异常保持至 repair 完成，见 agent._handle_state）。
+NON_ESCALATING = frozenset({"PV_TRIP"}) | STATE_HINTS
 
 
 class Engine:
     def __init__(self, topo: Optional[Topology] = None, seed: int = 20261001,
                  agent_enabled: bool = True, stream: Optional[EventBus] = None,
-                 dt: float = 0.5) -> None:
+                 dt: float = 0.5, criteria: Optional[dict] = None,
+                 target_criteria: Optional[dict] = None) -> None:
         self.topo = topo or demo_park()
         # 注意：EventBus 定义了 __len__，空流为 falsy——必须用 is None 判断
         self.stream = stream if stream is not None else EventBus()
         self.dt = dt
         self.sim_s = 0.0
         self.telem = TelemetryModel(self.topo, seed=seed)
-        self.detector = Detector(self.topo)
+        self.detector = Detector(self.topo, criteria, target_criteria)
         self.executor = ActionExecutor(self.topo, self.stream)
         self.responder = AgentResponder(
             self.topo, self.stream, self.executor,
@@ -47,6 +51,7 @@ class Engine:
         self.planned: list[FaultSpec] = []
         self.active_faults: list[FaultSpec] = []
         self._fired: set[str] = set()
+        self._repair_deadlines: dict[str, float] = {}   # fault_id → 消缺到期仿真秒
         self.sample: dict[str, dict] = {}
         self._warned: dict[str, bool] = {}
 
@@ -102,7 +107,7 @@ class Engine:
         handled_now: list[Anomaly] = []
         for _ in range(MAX_CONVERGE_ITERS):
             self.sample = self.telem.sample(self.executor.switch_states,
-                                            self.active_faults)
+                                            self.active_faults, self.sim_s)
             energ = self.topo.energized(self.executor.switch_states)
             new, cleared = self.detector.scan(self.sample,
                                               self.executor.switch_states,
@@ -142,13 +147,48 @@ class Engine:
         keys_active = set(self.detector.active)
         for a in handled_now:
             if a.key() in keys_active and a.status == "active" \
-                    and a.hint != "PV_TRIP":
+                    and a.hint not in NON_ESCALATING:
                 self.responder.on_stuck(a, self.sim_s)
                 self.stream.append("control", "control.escalated", {
                     "anomaly_id": a.anomaly_id, "hint": a.hint,
                     "target": a.target,
                     "note": "agent 动作后复测未消除，升级人工",
                 }, sim_s=self.sim_s)
+        self._advance_repairs()
+
+    def _advance_repairs(self) -> None:
+        """v1.1 消缺生命周期：通用信号故障的异常被 ack → 排 repair 期；到期摘除故障。
+
+        派工确认（ack）是「转运维消缺」的动作语义；repair_s 到期后故障从 active 摘除，
+        信号随之消失，下一拍检测器按诚实检测报 anomaly.cleared。
+        """
+        for f in list(self.active_faults):
+            if f.type not in GENERIC_TYPES:
+                continue
+            a = self.detector.active.get((f.type, f.target))
+            if a is None or not a.acked:
+                continue
+            if f.fault_id in self._repair_deadlines:
+                continue
+            repair_s = float(f.params.get("repair_s", 7200) or 7200)
+            self._repair_deadlines[f.fault_id] = self.sim_s + repair_s
+            self.stream.append("ops", "ops.repair_scheduled", {
+                "fault_id": f.fault_id, "type": f.type, "target": f.target,
+                "repair_s": repair_s, "due_at_s": round(self.sim_s + repair_s, 3),
+                "note": "告警已确认，派工消缺排期",
+            }, sim_s=self.sim_s)
+        for fid, deadline in list(self._repair_deadlines.items()):
+            if self.sim_s + 1e-9 < deadline:
+                continue
+            for f in list(self.active_faults):
+                if f.fault_id == fid:
+                    self.active_faults.remove(f)
+                    self.stream.append("ops", "ops.repair_completed", {
+                        "fault_id": f.fault_id, "type": f.type, "target": f.target,
+                        "note": "消缺完成，故障摘除（复测见后续检测）",
+                    }, sim_s=self.sim_s)
+                    break
+            self._repair_deadlines.pop(fid, None)
 
     def run(self, until_s: float) -> None:
         while self.sim_s < until_s - 1e-9:

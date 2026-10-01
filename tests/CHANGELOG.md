@@ -1680,3 +1680,32 @@ result=PASS`（exit 0，本节登记时点实跑）。
   四个样例 export 结构完整、旧三档 validate 行为不变（向后兼容实证）。
 - 影响面：`specs-v2/` 与 `tests/test_m*.yaml` 零改动，233 门禁不受影响（本 entry 不触发
   01 v2 §6 的 spec_hash 重登记）。
+
+## 2026-10-01 · 阶段 d 练习场落地：arena 编排层 + fault 引擎 v1.1 扩展 + 论文故障库
+
+**TASK.md §2.4 D-1/D-2/D-3 实证**（样例场景 7 仿真日、4 次注入全检出闭环）：
+
+- **arena/ 新建**（编排层，不改引擎语义）：`engine.py`（DSL→拓扑→注入→自适应步长
+  →业务日历→agent/人工→recorder→eval 摘要）、`run_scenario.py`（CLI：--seed/--human
+  交互暂停/--agent-off/--json）、`faultlib.py`（arena/faults 库装配：11 条目→判据覆盖表，
+  零信任核对 engine_type/compat_kinds）、`tests/run_tests.py`（24 用例）。
+- **fault/ 引擎 v1.1 扩展**（4 类白名单→15 类，加法式）：
+  - `dsl.py`：11 类通用信号故障的类型/兼容矩阵/参数规格注册（白名单仍封闭）；
+  - `telemetry.py`：通用信号层（爬升类线性封顶、阶跃类置值；目标断电即信号消失）；
+  - `detect.py`：Criterion/DEFAULT_CRITERIA（每条带【标准条文】/【工程惯例】出处与 R 编号）
+    + METRIC_HINTS 信号映射 + 持续时间判据 + 每设备判据（园区 DSL faults 节 detection 为
+    **告警定值配置**，非注入计划，诚实检测不受影响）+ 主导原因抑制（TRANSFORMER_FAULT
+    遇活动 TX_OVERLOAD 不叠报）；
+  - `engine.py`：ack→repair_s 排期→消缺摘除的完整生命周期（ops.repair_scheduled/completed）；
+    状态类异常不再误报 "复测未消除" 升级（NON_ESCALATING）；
+  - `agent.py`：STATE_PLAYBOOK 处置剧本（9 类非隔离型：确认+派工+禁则）+ 新签名表。
+- **park_adapter.py 修复一处潜伏缺陷**：变压器低压侧串联开关的边方向此前被建成
+  bus→TX（功率流反向），energized BFS 会断裂；历史样例无低压侧开关故从未暴露。
+  现高压侧 bus→TX、低压侧 TX→bus（功率流方向）。
+- **arena/faults/ 论文故障库 11 条目**（GLM-5.3-Flash 工作流产出+独立复核+机械校验）：
+  每条含机理/判据（带标准号+【工程惯例】标注）/演化链四阶段/可观测信号/agent 处置锚点/
+  sources（R 编号真实可核）；判据有出处 38 条、【待核】32 条如实标注。
+- **dsl/examples/park-arena-01.yaml 补强**：B 房加 SG-B00/SG-B01 串联开关 + A/B 低压
+  母联 CP-01，使隔离转供路径可演示（适配器缺陷因此暴露并修复）。
+- **门禁**：fault 15/15、arena 24/24、dsl 25/25、run_evals 233/233、ci_isolation
+  zero hits 全绿（本轮实跑）；样例场景端到端：4/4 注入检出、4/4 agent 闭环、0 误升级。

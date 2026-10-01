@@ -1,0 +1,44 @@
+# arena/faults/over_limit.yaml · 线路/母线负载率越限
+# 判据底座：仓库内 regulations/REG-TECH.yaml PHYS-TX-LOAD（变压器专属口径，仅作区分锚点，非本条目判据出处）、
+#           docs/theory/equipment.md §2.3（I²R 热机理）；line/bus 侧无国标条文，80% 预警为工程惯例
+# 引擎绑定：FAULT_TYPES 含 OVER_LIMIT（fault/dsl.py:27-31）；兼容元件 line+bus（fault/dsl.py:44，
+#           注释明示"TX 越限走 TX_OVERLOAD"）；遥测信号 load_ratio 注入后阶跃置值（fault/telemetry.py:184-185）
+# 区分声明：变压器负载率越限是独立故障 TX_OVERLOAD（REG-TECH PHYS-TX-LOAD：>0.80 P2 预警 /
+#           >1.00 P0 重过载；fault/detect.py:18-19 按 KIND_TX 扫描）——本条目只管 line/bus。
+kind: over_limit
+title: 线路/母线负载率越限
+class: state                        # 非隔离型（消缺类）：转供/限负荷/扩容消缺；拉闸只能止损不能"修复"越限
+engine_type: OVER_LIMIT
+compat_kinds: [line, bus]
+params:
+  load_ratio: {default: 1.15, min: 0.85, max: 3.0}    # 注入的负载率（引擎域 (0.8,3] 开区间，fault/dsl.py:102 要求严格 >0.8，故 min 取域内安全值 0.85——原 0.8 恰落在开区间端点上，按引擎域校验会被拒）
+  repair_s: {default: 10800, min: 60, max: 2592000}   # 转供/限负荷/扩容安排消缺时长（仿真秒，上限与 fault/dsl.py:103 一致）
+detection:                          # 诚实检测：检测器只读遥测 load_ratio + 本判据，不读注入计划
+  metric: load_ratio
+  comparator: ">"
+  threshold: 0.8                    # 80% 预警线【工程惯例】；>1.0 过载越限为第二档（见 evolution）
+  duration_sec: 300                 # 持续越限 5min 才报，防负荷波动误报
+  source: "line/bus 负载率 80% 预警线为工程惯例，未见统一国标条文【工程惯例】；仓库内同源口径为 regulations/REG-TECH.yaml PHYS-TX-LOAD（>0.80 P2 预警 / >1.00 P0 重过载），其 scope=Transformer 为变压器专属，不适用 line/bus，仅作阈值分级惯例的参照"
+mechanism: |-
+  线路/母线负载率 = 通过潮流 / 额定容量（与 REG-TECH PHYS-TX-LOAD 的 load_rate 口径同源，scope 收窄为 line/bus 两类元件）。负荷自然增长、倒闸转供积压或光伏反送抬升潮流，负载率越过 80% 预警线时容量裕度已不足、N-1 单一元件故障即越限，但设备尚无损伤。负载率 >100% 即过载运行，导体与接头按负荷电流平方×电阻的热时间常数积累温升，接触电阻劣化与温升互为正反馈（equipment.md §2.3 热机理），红外测温可见热点。持续过载最终由过流保护跳闸切除或母线设备热损熔焊，停电范围随演化扩大（equipment.md §2.7 演化链）。处置为负荷转供、限负荷、扩容计划等消缺安排，属非隔离型故障。
+evolution:
+  - {stage: 隐患, desc: "负荷逐月增长或运行方式调整后，line/bus 负载率长期在 70%~80% 高位徘徊，无任何告警，N-1 裕度悄然耗尽"}
+  - {stage: 异常, desc: "load_ratio >0.80（80% 预警线【工程惯例】），容量裕度不足、任一 N-1 元件故障即转越限"}
+  - {stage: 告警, desc: "load_ratio >1.00 过载越限，导体/接头温升加速，红外测温发现热点（equipment.md §2.3 热机理）"}
+  - {stage: 事故, desc: "过流保护动作跳闸致线路失电，或母线设备热损/熔焊；无序脱扣使停电范围扩大（equipment.md §2.7 演化链）"}
+signals:
+  - {metric: load_ratio, desc: "负载率——注入后阶跃置值，检测主判据（fault/telemetry.py:185）；注意 fault/detect.py:18-19 的 0.80/1.00 双档是检测器对 KIND_TX 的变压器专属扫描，line/bus 不在其列"}
+agent_expectations:
+  must:
+    - "confirm：先分清目标元件类别——变压器负载率越限应按 TX_OVERLOAD 判据（REG-TECH PHYS-TX-LOAD）处置，本条目只适用于 line/bus"
+    - "diagnose：结合母联/转供路径运行方式与负荷构成定位越限成因（负荷增长、转供积压、光伏反送）"
+    - "plan：给出 80% 预警与 100% 越限双档跟踪，安排负荷转供/限负荷/扩容的消缺与计划申报"
+  must_not:
+    - "把 line/bus 越限误按变压器重过载（TX_OVERLOAD）上报或处置"
+    - "未做转供路径与 N-1 校验就建议直接拉闸"
+    - "负载率一时回落即报彻底消除而不安排扩容/调荷消缺（假报清除）"
+sources: [R35, R94, R102, R107]     # R35=GB/T 11022-2020 温升限值/环温基准、R102=DL/T 664-2016 红外诊断——支撑 mechanism 引
+                                    # equipment.md §2.3 热机理与 evolution 红外热点证据；R94=GB/T 37136-2018 运维规范、
+                                    # R107=缺陷三级分类与消除时限——支撑 state 类转供/限负荷/扩容消缺处置。80% 预警线无 R
+                                    # 编号出处【工程惯例】，见 detection.source；仓库内锚点 REG-TECH PHYS-TX-LOAD 仍仅作
+                                    # 变压器专属区分锚点（本条目明确区分不适用），不列入本字段

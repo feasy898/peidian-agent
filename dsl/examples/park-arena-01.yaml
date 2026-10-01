@@ -33,7 +33,9 @@ substations:
     name: B 配电房（源网荷储示范）
     devices:
       - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
       - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
       - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
       - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
       - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
@@ -47,8 +49,11 @@ links:
   - {from: SG-A01, to: TX-A01, kind: direct}
   - {from: TX-A01, to: BUS-A2, kind: direct}
   - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
-  - {from: BUS-B1, to: TX-B01, kind: direct}
-  - {from: TX-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
   - {from: BUS-A2, to: LD-A01, kind: direct}
   - {from: BUS-A2, to: LD-A02, kind: direct}
   - {from: BUS-A2, to: EVC-01, kind: direct}
@@ -89,19 +94,19 @@ faults:
     criteria_ref: R33                             # GB/T 15543-2008（负序不平衡 ≤2% / 短时 4%）
     detection: {metric: neg_seq_unbalance_pct, threshold: 2, comparator: ">", duration_sec: 900}
     note: 单相负荷分配不均；Yyn0 配变留意中性线电流
-  - id: F-OVL-01                                  # 变压器过载（负载率越限）
-    kind: over_limit
+  - id: F-OVL-01                                  # 变压器重过载（引擎原生 TX_OVERLOAD）
+    kind: overload
     target: TX-B01
     severity: warn
     criteria_ref: R39                             # DL/T 572-2021（变压器运行规程）
-    detection: {metric: loading_pct, threshold: 80, comparator: ">", duration_sec: 600}
-    note: 负载率 >80% 预警为工程惯例定值；顶层油温判据见 R39（不宜经常超过 85℃）
+    detection: {metric: load_rate, threshold: 1.0, comparator: ">", duration_sec: 600}
+    note: 负载率 >1.0 重过载 P0（REG-TECH PHYS-TX-LOAD）；>0.80 预警为工程惯例（threshold.warn 事件）
   - id: F-TXFAULT-01                              # 变压器本体故障（油温）
     kind: transformer_fault
     target: TX-A01
     severity: accident
     criteria_ref: R39
-    detection: {metric: top_oil_temp_c, threshold: 85, comparator: ">", duration_sec: 1800}
+    detection: {metric: oil_temp_c, threshold: 85, comparator: ">", duration_sec: 1800}
     note: 顶层油温不宜经常超过 85℃；105℃ 跳闸口径（干变为温控器 130/150℃）
   - id: F-SPGND-01                                # 小电流接地系统单相接地
     kind: single_phase_ground
@@ -110,8 +115,9 @@ faults:
     criteria_ref: R45                             # 中性点非有效接地系统特征（非故障相升 √3）
     detection: {metric: phase_voltage_pu, threshold: 1.7, comparator: ">", duration_sec: 120}
     note: 线电压仍对称、允许带故障运行一般 ≤2h；发展成相间短路必须退出
-  - id: F-DCGND-01                                # 直流系统接地（无 target：园区级）
+  - id: F-DCGND-01                                # 直流系统接地（挂接 A 房 10kV 母线）
     kind: dc_ground_fault
+    target: BUS-A1
     severity: alarm
     criteria_ref: R41                             # DL/T 1392-2014（直流绝缘监测装置）
     detection: {metric: dc_insulation_kohm, threshold: 25, comparator: "<", duration_sec: 60}

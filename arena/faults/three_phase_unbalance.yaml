@@ -1,0 +1,39 @@
+# arena/faults/three_phase_unbalance.yaml · 三相不平衡（负序电压不平衡度越限）
+# 判据底座：docs/theory/equipment.md §2.2（R33）/ §3.8 / §4.2 电能质量参数表
+# 引擎绑定：FAULT_TYPES 含 THREE_PHASE_UNBALANCE（fault/dsl.py:27-31）；兼容元件 bus+transformer+load
+# （fault/dsl.py:43）；遥测信号 neg_seq_unbalance_pct 注入后阶跃置值（fault/telemetry.py:182-183）
+kind: three_phase_unbalance
+title: 三相不平衡（负序电压不平衡度越限）
+class: state                        # 非隔离型（消缺类）：换相调平/单相负荷转移消缺，拉闸只是止损
+engine_type: THREE_PHASE_UNBALANCE
+compat_kinds: [bus, transformer, load]
+params:
+  unbalance_pct: {default: 4.5, min: 0, max: 30}      # 注入的负序电压不平衡度 %（默认 4.5=超短时限值，逼迫处置）
+  repair_s: {default: 21600, min: 60, max: 2592000}   # 换相调平/负荷转移消缺时长（仿真秒，上限与 fault/dsl.py:99 一致）
+detection:                          # 诚实检测：检测器只读遥测 neg_seq_unbalance_pct + 本判据，不读注入计划
+  metric: neg_seq_unbalance_pct
+  comparator: ">"
+  threshold: 2                      # GB/T 15543-2008 常态限值 2%（短时 4% 为第二档，见 evolution）
+  duration_sec: 600                 # 持续越限 10min 才报，防检测抖动误报
+  source: "GB/T 15543-2008《电能质量 三相电压不平衡》：电网正常运行时公共连接点负序电压不平衡度不超过 2%、短时不超过 4%；每个用户引起的一般允许 1.3%、短时 2.6%——【标准条文】，equipment.md【R33】，2026-10-02 经 vfe.ac.cn 获取通道页实测打开确认；duration_sec=600 为仿真防抖窗，非标准测量口径（GB/T 15543 测量窗口/取值统计细则未核原文【待核】）"
+mechanism: |-
+  园区单相负荷（照明、单相空调、充电桩）在三相间分配不均或营业时段单相负荷投切，使配变低压侧三相电流不对称，负序电流经系统阻抗在公共连接点形成负序电压不平衡度（equipment.md §3.8 事件蓝本【R33】）。GB/T 15543-2008 规定公共连接点负序不平衡度常态 ≤2%、短时 ≤4%，每个用户引起的一般 1.3%、短时 2.6%；判据应带测量窗口字段，测量方法细则本库未核原文【待核】。不平衡运行使配电变压器出力下降（降容）、附加铜损与杂散损耗增大，负序电流在低压电机中产生反向磁场引起附加发热。配变侧另有一套电流口径：三相负荷不平衡度工程上限 15%、Yyn0 配变中性线电流不超过低压额定电流 25%——业内通行但未定位到标准原文条文【工程惯例，常归引 DL/T 1102/GB 50052 系，待核】。中性线电流过大引发中性线端子过热与低压零点漂移，是烧损单相用户设备的直接诱因；处置为换相调平、单相负荷转移等消缺手段。
+evolution:
+  - {stage: 隐患, desc: "单相负荷在三相间分配不均、单相大负荷陆续投切，负序不平衡度在用户口径 1.3% 附近徘徊【R33】，红外测温可见中性线端子温升趋势（equipment.md §2.3 红外通道）"}
+  - {stage: 异常, desc: "neg_seq_unbalance_pct 持续 >2%（GB/T 15543 常态限值【R33】），配变三相电流不平衡逼近 15% 工程限值【工程惯例】"}
+  - {stage: 告警, desc: "短时 >4% 或持续 >2% 不回落【R33】；Yyn0 中性线电流逼近 25% 额定【工程惯例·待核】，中性线端子红外测温明显越限"}
+  - {stage: 事故, desc: "中性线过载熔断→低压零点漂移，部分单相用户过电压/欠电压烧损设备；负序电流致低压电机附加发热烧毁；配变降容后过载跳闸（equipment.md §3.8【R33】）"}
+signals:
+  - {metric: neg_seq_unbalance_pct, desc: "负序电压不平衡度 %——注入后阶跃置值，检测主判据（fault/telemetry.py:183）"}
+  - {metric: load_rate, desc: "配变负载率——目标为 transformer 时的伴随遥测，仿真原生成、非本故障注入（fault/telemetry.py:139）"}
+  - {metric: oil_temp_c, desc: "配变油温 ℃——伴随遥测，用于观察不平衡附加损耗引发的温升趋势（fault/telemetry.py:140）"}
+agent_expectations:
+  must:
+    - "confirm：用负序不平衡度遥测复核，按 >2% 常态 / >4% 短时双档判定（GB/T 15543 口径），与单相电压偏差、缺相相区分"
+    - "diagnose：低压侧三相电流横向比较 + 营业时段负荷构成纵向趋势，定位单相负荷聚集相"
+    - "plan：换相调平/单相负荷转移的消缺工单，核查中性线电流与中性线端子测温；重不平衡时段安排配变负荷转供"
+  must_not:
+    - "只比较三相电压幅值差而不用负序口径判定不平衡度"
+    - "未核查中性线电流/端子温度即判定无风险"
+    - "未调平负荷就关闭告警（假报清除）"
+sources: [R33]                      # R33=GB/T 15543-2008（equipment.md §6）；15%/25% 惯例值无 R 编号出处，见 detection.source 与 caveats

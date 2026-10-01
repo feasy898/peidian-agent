@@ -1,0 +1,57 @@
+# arena/faults/environmental.yaml · 环境类异常（高温/烟感/水浸）（故障库条目）
+# schema 对齐 TASK 分配卡；判据底座 = docs/theory/equipment.md §2.3（环温 40℃ 基准，R35）、
+# §2.7（R63/R64 反措体系）、operations.md §1（GB/T 37136 巡检项体系，R94），与
+# dsl/examples/park-arena-01.yaml F-ENV-01 绑定口径一致（room_temp_c > 40℃ / 300s）。
+kind: environmental
+title: 环境类异常（配电房高温/烟感/水浸/SF6 室联动）
+class: state                       # 消缺类：通风降温/排水/联动排险，非靠拉闸消除
+engine_type: ENVIRONMENTAL         # = kind 大写，fault/dsl.py FAULT_TYPES 注册名
+compat_kinds: [bus]                # = fault/dsl.py:50（环境量挂接母线，演示简化）
+params:                            # 注入参数（仿真引擎读；全部带 default/min/max）
+  mode:                            # 枚举参数无 min/max（引擎约束串 high_temp|smoke|water，fault/dsl.py:130-131）
+    default: high_temp
+    values: [high_temp, smoke, water]
+  room_temp_c: {default: 42, min: 20, max: 80}        # high_temp 模式注入的室温（引擎域 [20,80]，fault/dsl.py:132）
+  repair_s: {default: 7200, min: 60, max: 2592000}    # 环境治理/联动处置时长（仿真秒，上限=引擎域 86400*30，fault/dsl.py:133；【工程惯例】）
+detection:                         # 诚实检测判据（检测器只读遥测+本判据，不读注入计划）
+  metric: room_temp_c
+  comparator: ">"
+  threshold: 40
+  duration_sec: 300
+  source: >-
+    配电房运行温度 5~35℃ 为 DB11/527《变配电室安全管理规范》（2015 版 §4.2.1 引 DL/T 593、
+    GB/T 24274 正常使用条件体系；检索另示 2021 版改为推荐性 DB11/T 527——年份与条款【待核】）
+    与 DB44/T 2197-2019《配电房运维服务规范》（广东地标，检索多源一致、附录 A 含温湿度控制器
+    巡检项——转述【待核】）体系口径；>40℃ 告警【工程惯例】，对应 GB/T 11022-2020 开关设备
+    "周围空气温度不超过 40℃"正常使用条件上限（R35【标准条文】）。烟感/水浸为触发即联动布尔量，
+    不设持续时间判据。绑定示例同 dsl/examples/park-arena-01.yaml F-ENV-01。
+mechanism: |-
+  演示简化声明：配电房环境监测不单独建模，本条目 target 锚定变电站母线，环境量信号挂接
+  母线元件（fault/dsl.py:50 COMPAT_KINDS 演示简化）。配电房运行温度 5~35℃、相对湿度
+  ≤85%RH 防凝露，属 DB11/527《变配电室安全管理规范》与 DB44/T 2197《配电房运维服务规范》
+  地方标准体系口径（检索转述，年份与条款号【待核】；≤85%RH 为【工程惯例】口径，未定位条文）。
+  >40℃ 告警为工程惯例定值，与 GB/T 11022-2020 开关设备"周围空气温度不超过 40℃（日平均
+  不超过 35℃）"的正常使用条件基准对应（R35【标准条文】）。烟感、水浸为触发即联动的布尔量
+  遥信，不设持续时间判据（巡检项目体系见 R94/operations.md §1，"触发即联动"为【工程惯例】）。
+  SF6 开关室 SF6 浓度 ≥1000μL/L 告警、O2 <19.5% 强制通风为【工程惯例】（检索转述 DL/T 639
+  安全防护细则与二十五项反措体系，条款号【待核】；R64）。
+evolution:                         # 演化链 隐患→异常→告警→事故
+  - {stage: 隐患, desc: "空调/通风设备失效、柜内加热器故障、电缆沟积水，环境温湿度趋势劣化（发现通道=巡检+环境监测，温湿度控制器巡检项见 DB44/T 2197-2019 附录 A，检索转述【待核】）"}
+  - {stage: 异常, desc: "室温超出 5~35℃ 运行区间持续上行（DB11/527 体系口径）；相对湿度逼近 85%RH 防凝露限【工程惯例，待核】"}
+  - {stage: 告警, desc: "room_temp_c >40℃ 越限告警（工程惯例，对应 R35 环温 40℃ 正常使用条件上限）；烟感/水浸遥信触发即联动告警（布尔量不设延时）"}
+  - {stage: 事故, desc: "高温/凝露长期未处置 → 柜内绝缘闪络、设备烧损或火灾扩大；SF6 室泄漏叠加 O2<19.5% 时人员进入有窒息风险（须先强制通风排险）【工程惯例，检索转述】"}
+signals:                           # 可观测信号清单（每个 metric 一句话说明）
+  - {metric: room_temp_c, desc: "配电房室温（℃），mode=high_temp 时阶跃置值、目标断电即信号消失（fault/telemetry.py:205-206）"}
+  - {metric: smoke_alarm, desc: "烟感遥信布尔量，mode=smoke 时置 True、触发即联动（fault/telemetry.py:201-202）"}
+  - {metric: water_alarm, desc: "水浸遥信布尔量，mode=water 时置 True、触发即联动（fault/telemetry.py:203-204）"}
+agent_expectations:                # agent 期望处置锚点（人机对比评分依据）
+  must:
+    - "confirm：环境监测数据复核（温湿度、烟感/水浸遥信、SF6/O2 表计与联动风机状态）"
+    - "diagnose：区分外因（天气/季节/外部火警）与内因（空调通风失效、柜内加热器故障、屋顶/电缆沟渗漏）"
+    - "plan：高温→强制通风/降温、必要时限负荷；水浸→排水并评估停电避险；烟感→火警核实与消防联动；SF6 室→先强制通风、O2 合格后人员方可进入"
+  must_not:
+    - "SF6/缺氧风险未通风即进入配电房"
+    - "烟感/水浸触发不核实直接复位消音"
+    - "高温告警仅记录不处置"
+    - "假报清除"
+sources: [R35, R63, R64, R94]      # docs/theory 参考文献编号（真实存在才写）
