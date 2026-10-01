@@ -354,3 +354,33 @@ PASS exit 0（新增 t_adapter_sg_incomer）；run_matrix 全绿 exit 0（25/25+
 **悬留/待办（如实登记）**：A-4 owner 批示门未过（不可代签）；M1-agent-core.md 冻结后
 内容漂移待 owner 复核（R-2）；Higress/LLM 真实模型凭据仍缺（真实注入验证待凭据）；
 git stat 缓存 341 文件 ` M` 噪音（内容 diff 为空，提交以内容为准）。
+
+## 2026-10-02 · ZCode 主会话 · 转向计划主交付轮（阶段 a/b/c/d 主体落地）
+
+**做了什么**（提交链：fbc9eaf 环境基线 → 9c9fb4a 阶段 d 主体 → 390ff33 人类体验+收敛件
+→ b556609 清理；另有 monorepo 内其他会话并发提交，本会话只动 peidian-agent 子树）：
+- **阶段 a 理论卷**（GLM-5.3-Flash 工作流 dwfrun-8ab46deb）：docs/theory/ 六件
+  （overview/references/business/equipment/safety/operations），references 62 条、
+  四域论断 252 条、43 个来源 WebFetch 实测可达；独立复核+修订 5 处（R46/R47 空号、
+  统计行不符、类型枚举名不副实等）；A-1..A-3 过，A-4 待 owner。
+- **阶段 b/c 草案**：docs/contracts/agent-purpose-contract.md（七节+红线 R1-R7）、
+  module-map.md（26 件三态判定：fault/ 升唯一注入引擎权威、m5 injector 停演进、
+  三处 LLM 调用点收编、web/ 冻结+ui/ 全新）；evidence/owner-gates.md 批示门台账。
+- **阶段 d 主体**：ParkDSL v1.1 三节（faults/calendar/scenario，25/25）；arena 编排层
+  （engine/run_scenario/faultlib/tests 24 用例）；fault 引擎 4→15 类（11 类通用信号 +
+  ack→repair 生命周期 + Criterion 判据表带出处）；park_adapter 修复低压侧串联开关
+  方向反向的潜伏缺陷；arena/faults 论文故障库 11 条目（38 条判据有出处、【待核】如实）。
+- **人类体验模式**：CLI --human（异常暂停等人工）+ arena/serve.py（HTTP+SSE）+ ui/
+  全新前端三件套（owner 裁定推翻重做）；冒烟实测通过（run/事件流/人工注入/静态服务）。
+- **收敛件**：thresholds.yaml（红线 3/N Clopper-Pearson、收益、前后窗漂移；
+  frozen: false 待校准）+ converge.py（calibrate/judge，未冻结拒绝判定）。
+- docs/expert-review.md：判据溯源总表（标准条文 vs 工程惯例 vs 待核）+ 审查清单。
+- **门禁**：全绿实跑——run_evals 233/233、ci_isolation zero hits、dsl 25/25、
+  fault 15/15、arena 24/24；样例场景端到端 4/4 注入检出、4/4 agent 闭环、0 误升级。
+
+**悬留/待办（如实登记）**：①场景库 20 个工作流 dwfrun-b46ea344 生产中（S-201 起，
+完成并复核后单独提交）；②D-5 链路未闭环：100 次校准→owner 冻阈值→3 万次隔离判定→
+D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner 批示门未过；
+④Higress/LLM 真实凭据缺（场景生成器的真实模型路径未启用，当前离线兜底）；
+⑤gen_scenario.py（LLM 规则化生成器）未实现——语料由工作流产出先行，生成器
+列后续；⑥ui/ 待办：遥测曲线、人机对比评分卡、单线图（ui/README 已列）。
