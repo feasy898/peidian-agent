@@ -1657,3 +1657,26 @@ result=PASS`（exit 0，本节登记时点实跑）。
   "现行 20 用例"与体内 30 条套件计数不一致（既有陈旧行），留待 owner/阶段 c 模块图一并处置；
 - 本机 git 工作树 stat 缓存对 341 个 EOL 归一文件显示 ` M`（内容 diff 为空、
   blob sha 与索引逐一致），纯缓存噪音，提交时以内容为准。
+
+## 2026-10-01 · ParkDSL v1.1 增量（阶段 d 练习场三节 · docs/theory 设备卷判据已入例）
+
+**动机**：TASK.md 阶段 d 需要 DSL 承载练习场三件事——故障库绑定、业务日历、倍速场景。
+**做法**：全部为**可选顶层节**，不含这些节的文件校验/导出行为与 v1 完全一致
+（api 仍 `parkdsl/1`，向后兼容；`spec_version` 1.0→1.1）。
+
+- `dsl/dsl_spec.yaml`：新增 `extensions:` 块（faults：16 类 kind/severity/comparator/
+  criteria_ref(R编号)/detection 判据；calendar：8 类事件+shifts 班次；scenario：seed/
+  duration_sim_s/clock_speed[0.1,3600]/agent 开关/injections 注入计划）。
+- `dsl/validate.py`：新增 `validate_extensions()`（错误码 E-FAULT/E-CAL/E-SCEN），
+  在基础校验全过后才跑（防结构错误层叠）；`build_export` 透传三节进 `parkdsl-web/1` JSON
+  （既有键不变）。shifts_pattern 修订：尾端班次允许 `24:00`。
+- `dsl/examples/park-arena-01.yaml`：新样例（PARK-202，11 条故障绑定+10 条日历+4 次
+  注入的 7 仿真日倍速场景）；criteria_ref 全部指向 `docs/theory/equipment.md` 真实
+  参考文献（R31–R50，GB/DL 标准+事故案例），非编造。
+- `dsl/tests/negative_cases.json`：+8 个 v1.1 负向用例（未知 kind/悬空 target/非法
+  comparator/非法 severity/非法日历类型/clock_speed 越界/幽灵注入/超时长注入）。
+- 文档：`dsl/docs/dsl-spec.md` §10、`dsl/README.md`、顶层 README 基线表同步。
+- **门禁**：`python dsl/tests/run_tests.py` → **25/25 PASS** exit 0（15→25）；
+  四个样例 export 结构完整、旧三档 validate 行为不变（向后兼容实证）。
+- 影响面：`specs-v2/` 与 `tests/test_m*.yaml` 零改动，233 门禁不受影响（本 entry 不触发
+  01 v2 §6 的 spec_hash 重登记）。

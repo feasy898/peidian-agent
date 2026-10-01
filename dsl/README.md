@@ -4,12 +4,12 @@
 
 ```
 dsl/
-├── docs/dsl-spec.md      人读规范（定案理由/元件表/ID 约定/校验规则/遥测公式）
-├── dsl_spec.yaml         机器可读规范 = validate.py 唯一裁决源
+├── docs/dsl-spec.md      人读规范（定案理由/元件表/ID 约定/校验规则/遥测公式/v1.1 三节）
+├── dsl_spec.yaml         机器可读规范 = validate.py 唯一裁决源（含 extensions: 练习场三节）
 ├── validate.py           CLI: validate / export / summary（Python 3.12 + pyyaml）
-├── examples/             三档样例各 1 份（全部过校验）
+├── examples/             四份样例：三档拓扑 + park-arena-01（v1.1 练习场三节示范）
 ├── prompts/              LLM 三档生成模板 + run_gen.py 运行器 + 配额台账
-└── tests/run_tests.py    全量测试（正向 3 + 负向 8 + 导出 3 + tier 推断）
+└── tests/run_tests.py    全量测试（正向 4 + 负向 16 + 导出 4 + tier 推断）
 ```
 
 常用命令（仓库根，`. .venv/bin/activate`）：

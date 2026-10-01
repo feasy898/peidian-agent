@@ -28,7 +28,7 @@ ParkDSL 描述园区拓扑与规程 → 仿真环境（伪遥测/故障注入）
 |---|---|---|
 | G0-1 评测门禁 | `python run_evals.py --module all` | **233/233 PASS, exit 0（约 1 分钟）** |
 | G0-2 隔离扫描 | `python scripts/ci_isolation.py` | **ISOLATION OK: zero hits**（仓内 grep holdout 关键词零命中） |
-| G0-3 ParkDSL | `python dsl/tests/run_tests.py` | **15/15 PASS** |
+| G0-3 ParkDSL | `python dsl/tests/run_tests.py` | **25/25 PASS**（含 v1.1 练习场三节 10 个新用例） |
 | G0-4 故障注入 | fault 套件 | **13/13 PASS**（含四类故障端到端） |
 | G0-5 演示流 | `python demo/run_demo.py --flow all` | 全判据通过（pass_rate=1.0） |
 
