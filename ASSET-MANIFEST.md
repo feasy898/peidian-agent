@@ -6,6 +6,13 @@
 > **冻结范围**：specs-v2/ 规格资产 + tests/ eval 资产 + 变异证据（.mutations/）+ 发布基线
 > （releases/rel-0001）+ 黄金集（golden/dev/）。sha256 均为冻结会话在统一门禁通过后实测
 > （`sha256` 对文件字节计算，autocrlf 工作区原样字节）。
+> **2026-10-01 行尾归一登记（CRLF→LF）**：本机检出曾因 `core.autocrlf=true` 全树落 CRLF，
+> 历史登记多在 CRLF 字节上计算。本仓已锁 `peidian-agent/.gitattributes`（`* text=auto
+> eol=lf`）并对工作树完成 LF 归一；本表 spec_hash/eval_hash 与 golden MANIFEST 的登记基准
+> 自此换为 LF 字节。凡只差行尾的件已实证内容零变化（12/12 golden 种子 CRLF 哈希=原登记值、
+> golden_set_version CRLF 口径=rel-0001 登记值、M6 CRLF 哈希=原登记值）；
+> M1-agent-core.md 存在冻结后真实内容编辑（见 §6 漂移 R-2）。全过程与门禁实跑见
+> tests/CHANGELOG.md 2026-10-01 节。
 > 本文件不自列 hash（自引用无意义）；`specs-v2/README.md` §0.1 的占位由本文件承接。
 
 ## 1. 规格资产 · specs-v2/ 全部文件 sha256（20 件）
@@ -15,12 +22,12 @@
 | `specs-v2/README.md` | `371ffbf2cde6483824440c7e3edcb94a4255f102182d7e99d39cd3581c95c4e1` |
 | `specs-v2/00-ontology.md` | `4d97a7656530309f689406e3b07c9abcf070c04a240323b8edec31099f98b89f` |
 | `specs-v2/01-contracts.md` | `03ea0e12f6950e90ef276782fd8648a6d4c15b37c66f159b0d1f936064cb52e2` |
-| `specs-v2/M1-agent-core.md` | `04e561060348b47eeddded5dd7bb1cb5462a6e5acd50a1b4102059f7139513d4` |
+| `specs-v2/M1-agent-core.md` | `e2b3ad35628eca045f80251978cf6c17d197065a5c7cada3e77c0c244e6fab89`（2026-10-01 重登记：行尾归一 + **冻结后真实内容漂移**——CRLF/LF 双口径均≠原登记 `04e56106…`，编辑不可溯源，见 §6 R-2 待 owner 复核；test_m1.yaml spec_hash 已同步重登记） |
 | `specs-v2/M2-information.md` | `1cc8dfa82ed164a9f58b7f9a8c53d0470facdfd7f60b38a3c3798f69b485efe7` |
 | `specs-v2/M3-action-gateway.md` | `294a1346e9b35499e97024c34d281ee2a5bbd2e8a6ecb60de6eb593d1b790c80` |
 | `specs-v2/M4-semantic-ontology.md` | `83e15234d4cfbbc34488b3aafedfd292171e6b9332232456a21e7b83c0127cbb` |
 | `specs-v2/M5-simulation.md` | `3e8b63ddb2b5ff5a2b7f7331a1cecf341ce149a2cdeab50eaee5eaddb052dedb` |
-| `specs-v2/M6-flywheel.md` | `ca7cd46fad831bd82a7184068457c1221628643f39c150c4aa8d447e9fc72213` |
+| `specs-v2/M6-flywheel.md` | `b3834826bc2dc5427032a87ce272cc040f487dd5f9d8ded57cef8797a98e411d`（2026-10-01 重登记：行尾归一，内容零变化（CRLF 字节=原登记 `ca7cd46f…`）；test_m6.yaml spec_hash 已同步重登记） |
 | `specs-v2/M7-registry-release.md` | `9fe6dce406fc2583ea8cfd86e0b5809398ede1df2b6277d8098fce58eee782a2` |
 | `specs-v2/DEVIATIONS-draft.md` | `b3a536b4c5a9949e943d0a9e8cb31d82c4a1dcc5f312a24977c16b296d8a61b1` |
 | `specs-v2/DEVIATIONS.md` | `db61a97e774150a5eb28f0ce570c33f6ad2cee31d5d7cacb2a14a10911bc3b1f` |
@@ -155,8 +162,14 @@ M5-02-N2、M6-02-N2/08-N2、M7-07-N3）全部随套件重生成登记 spec_hash�
   `f01ebaf1855523f5…`、contract_version=1.1）；黄金实测 97.67/100（pass_rate=1.0，
   by_domain=capability/category/catalog/red_line 四块 + 双层签名）。
 - **golden/dev/**：12 条手工种子 + `rubrics.yaml`，`MANIFEST.yaml`
-  `b59153113ab55513e223960837bb65be5ca8d2e5df2ef2ee2d4a268b4a7bb7ac`（逐文件 sha256+来源
-  标记，CI hash 基准）；holdout 红线：dev 集遇 holdout 标记直接拒绝，holdout/golden 永不
+  `095b104abb8a8bc0592f62cfd1cd9398ea1a9a59f21bff563340398cd20710e3`（2026-10-01 按
+  sanctioned 工具 `m6_flywheel.golden_set manifest` 重建；工具在 Windows 下以文本模式
+  写出 CRLF，已按 .gitattributes 归一为 LF，最终登记
+  `9c9aaaa1cc424bb50933644edd9fb82a59498a4fc6a1dcb1cbcc8a6ef327de30`：12 个种子内容
+  零变化——CRLF 字节逐一等于原登记值，仅登记基准换为 LF 字节；`golden_set_version` 转
+  LF 口径 `dev-836081d97036a274`，rel-0001 的 CRLF 口径 `dev-f7e4e295e43be004` 作历史
+  登记留档）；
+  逐文件 sha256+来源标记，CI hash 基准）；holdout 红线：dev 集遇 holdout 标记直接拒绝，holdout/golden 永不
   入调优（EVAL-M6-02 系列 + 变异 m6-holdout-* 三条全杀守护）。
 - **已知基线漂移 R-1（照实登记，待 owner 裁决）**：rel-0001 发布物
   `evaluation/cases.yaml` 现内容与 manifest 登记 hash 不符（commit 06ce55a 发布后同步改写
@@ -164,6 +177,13 @@ M5-02-N2、M6-02-N2/08-N2、M7-07-N3）全部随套件重生成登记 spec_hash�
   只读复核当前 ASSEMBLE REFUSED。代码行为正确（write-once 篡改检测实证），处置二选一
   （还原发布时点内容 / re-publish 新 release），完整 git 证据链见
   `specs-v2/deviations/M7.md` §3。**本冻结未触碰 releases/ 任何文件。**
+- **已知基线漂移 R-2（2026-10-01 发现，照实登记，待 owner 复核）**：
+  `specs-v2/M1-agent-core.md` 现内容与冻结登记值 `04e56106…` 不符（LF/CRLF 双口径均不中），
+  即冻结后该规格发生过真实内容编辑但漏重登记（接手仓历史压平为单提交，编辑不可溯源）。
+  已按 01 v2 §6 协议重登记 spec_hash/eval_hash（见 tests/CHANGELOG.md 2026-10-01 节），
+  m1 套件 30/30 全过；该规格第 5 行「现行 20 用例」与体内 30 条计数不一致（陈旧行）。
+  请 owner 在阶段 c 模块图或专项复核中确认该编辑正当性；**owner 确认前，不得把该文件
+  当作未改动的冻结件引用**。golden/dev 内容经验证零变化（CRLF 证明），不构成 R-2 同类问题。
 
 ## 7. 冻结会话复核命令与输出（2026-09-29 实跑）
 

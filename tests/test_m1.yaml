@@ -21,7 +21,7 @@ spec_ref:
   - specs-v2/00-ontology.md
   - specs-v2/01-contracts.md
   - specs/ADDENDUM.md
-spec_hash: 0b5be472b45c879f3675be791358d04a618d21dbd172c876ef3032dd0123cac0
+spec_hash: 673df3dd6825b203189ad5a87e76a05efe7196ab0a0d29b4c7db62638554b75f
 executors:
   - module: m1_core.eval_plugin
 

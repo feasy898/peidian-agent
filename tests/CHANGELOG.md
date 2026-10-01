@@ -1609,3 +1609,51 @@
   `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
   result=PASS`（exit 0，本轮实跑）；`python scripts/ci_isolation.py` → 零命中（新增
   skills/demand-analysis/ 与 tests/ 两件按 ISOLATION_PATTERN 实扫，exit 0）。
+
+## 2026-10-01 · 接手环境哈希重登记（CRLF→LF 归一 · 阶段 a 启动前基线修复）
+
+**触发**：新会话在 windev-01 接手运行门禁，`run_evals.py --module all` 首跑
+`modules=0/8 failed=8`（SPEC_DRIFT ×8）。排查确认根因是**行尾登记口径**，不是规格损坏。
+
+**根因链（实证）**：
+1. 本机 git `core.autocrlf=true`，monorepo 浅克隆检出后 peidian-agent 全部文本落CRLF；
+2. 历史冻结期的哈希登记（golden MANIFEST、ASSET-MANIFEST specs-v2 表、套件 spec_hash）
+   均在 **CRLF 工作树**上计算（Windows 会话）：
+   - golden/dev 12 个种子逐一验证 `sha256(CRLF 字节) == manifest 登记值`（12/12 全中），
+     `golden_set_version` 按 CRLF 字节重算 = `dev-f7e4e295e43be004`，与
+     `releases/rel-0001/release.yaml` 登记值逐位一致——**内容零变化，纯行尾差**；
+   - `specs-v2/M6-flywheel.md` 的 CRLF 字节哈希 = manifest 登记值 `ca7cd46f…`（内容一致）；
+   - `specs-v2/M1-agent-core.md` 的 LF/CRLF 字节哈希均**不**等于 manifest 登记值
+     `04e56106…`——该文件存在冻结后的真实内容编辑（压平历史不可溯源，**提请 owner 复核**，
+     详见 manifest 审计注记）。
+3. monorepo 处于 cone 稀疏检出且 patterns 仅含 `chenmai8`，peidian-agent 全树被置
+   skip-worktree，`git add` 拒更索引——已 `git sparse-checkout disable` 解封为全量检出。
+
+**修复动作（全部为登记/环境层，无一句规格语义改写）**：
+1. 环境归一：`git config core.autocrlf false`；peidian-agent 子树 338 个 i/lf 文件
+   工作树 CRLF→LF；新增 `peidian-agent/.gitattributes`（`* text=auto eol=lf`）防复发；
+2. **spec_hash 重登记**（01 v2 §6 协议，spec_ref 字节变化→套件回写+本节登记）：
+
+  | suite | 新 spec_hash (sha256) | 新 eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m1.yaml | `673df3dd6825b203189ad5a87e76a05efe7196ab0a0d29b4c7db62638554b75f` | `01023952898088fc0820ace114786241bfffcae7720951b7ccebf2aa520a2d83` |
+  | test_m6.yaml | `78c162327f7396700ad3462bfb0fc5dd868239a9f9c164c6eea3f90bfc31b8d2` | `582887b8a51bddef335e5052f758dabdfa5f65e40c7ab6c774fb8f05617198ca` |
+
+  （m0/m2/m3/m4/m5/m7 六套件 LF 字节即原登记值，无需重登记；m1/m6 重登记后 30/30、
+  21/21 用例全过。）
+3. **golden manifest 重建**（`python -m m6_flywheel.golden_set manifest golden/dev`，
+  sanctioned 工具、非手改）：内容不变（CRLF 证明在前），仅把登记基准换为 LF 字节；
+  `verify` 复跑 OK；`golden_set_version` 转为 LF 口径 `dev-836081d97036a274`
+  （rel-0001 的 CRLF 口径值作为历史登记留档，不追改）。
+4. 顺手修：`pyproject.toml` `requires-python` `>=3.11` → `>=3.12`（README 已知问题#2）。
+5. ASSET-MANIFEST.md specs-v2 表 M1/M6 两行哈希同步为 LF 现值并补审计注记。
+
+**门禁**：修复后 `python run_evals.py --module all` →
+`EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
+result=PASS`（exit 0，本节登记时点实跑）。
+
+**遗留（如实登记，不计入收工阻断）**：
+- M1-agent-core.md 冻结后真实内容漂移的**具体编辑不可溯源**（压平历史），其第 5 行
+  "现行 20 用例"与体内 30 条套件计数不一致（既有陈旧行），留待 owner/阶段 c 模块图一并处置；
+- 本机 git 工作树 stat 缓存对 341 个 EOL 归一文件显示 ` M`（内容 diff 为空、
+  blob sha 与索引逐一致），纯缓存噪音，提交时以内容为准。

@@ -334,3 +334,23 @@ PASS exit 0（新增 t_adapter_sg_incomer）；run_matrix 全绿 exit 0（25/25+
 - **悬留维持登记（不计收工阻断）**：Higress 凭据缺（真实 LLM 注入未跑，离线兜底已实证）；
   srv-1 通道缺（caddy 未上线，deploy/ 包就绪+api.js 相对路径已清障）；浏览器截图缺（无 headless
   浏览器）。模型配额 0/10 未动，密钥零打印。
+
+## 2026-10-01 · ZCode 主会话 · 转向计划启动轮（Phase 0 基线修复 + 阶段 a 工作流点火）
+
+**做了什么**：
+- 接手实测：session cwd（D:\new-workspace\配电agent）为空目录，项目本体在
+  `D:\new-workspace\澄迈项目\机械臂\peidian-agent`（remote feasy898/agentic-factory-projects，
+  本地=远程 HEAD 0ab1c25，浅克隆）；Monorepo 顶层另有 6 个项目不在本任务范围。
+- 环境修复（详见 tests/CHANGELOG.md 2026-10-01 节与 ASSET-MANIFEST §6 R-2）：
+  core.autocrlf=true 致全树 CRLF → 门禁 0/8；排查后确认登记口径=CRLF 字节，
+  完成 LF 归一（338 文件）+ `.gitattributes` 锁 LF + sparse-checkout disable
+  （原 cone 仅含 chenmai8，peidian-agent 全树 skip-worktree 无法提交）；
+  golden/dev MANIFEST 按 sanctioned 工具重建（12 种子内容零变化，CRLF 证明）；
+  test_m1/test_m6 spec_hash 按 01 v2 §6 重登记；pyproject `>=3.11`→`>=3.12`。
+- 基线五门：run_evals **233/233 PASS exit 0**（登记时点实跑）；ci_isolation OK。
+- 阶段 a 点火：动态工作流 `dwfrun-8ab46deb`（4 域研究员 GLM-5.3-Flash 并行 → 汇总 →
+  独立复核 → 修订+python 机械校验），目标产出 docs/theory/ 六件（A-1..A-3）。
+
+**悬留/待办（如实登记）**：A-4 owner 批示门未过（不可代签）；M1-agent-core.md 冻结后
+内容漂移待 owner 复核（R-2）；Higress/LLM 真实模型凭据仍缺（真实注入验证待凭据）；
+git stat 缓存 341 文件 ` M` 噪音（内容 diff 为空，提交以内容为准）。
