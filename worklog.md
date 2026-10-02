@@ -438,3 +438,19 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
 **悬留/待办**：①3 万次判定 + D-7 报告（工作流运行中，完成后验证提交）；②A-4/B-4
 批示门未过；③M1 spec 漂移 R-2 待复核；④Higress 凭据缺；⑤gen_scenario.py 未实现；
 ⑥ui/ 三项迭代待办。
+
+## 2026-10-02 · 判定 v1 超时中止 → v2 小分块修订（打捞基建）
+
+- **v1（dwfrun-61d550b5）失败**：chunk 1（6000 run）超过 world.run 45 分钟超时点被
+  中止（实测聚合速率约 1 run/s，6000 run 需 ~70 分钟 > 45 分钟超时）。已完成部分
+  经 `arena/harvest_runs.py` 从 run 目录 eval.json **打捞回 2872 个 run**（bad=0），
+  写入 partial——无算力浪费。
+- **v2（dwfrun-883705b3，AmendWorkflow 修订）**：①分块 6000→2000（15 块，
+  seeds 10000-39999）；②每块 world.run 包 try/catch，超时只打捞续跑不中止；
+  ③每块前后 harvest 两个 runs root；④补跑机制：去重计数 <30000 时按
+  seeds 40000+ 补块（上限 8 块）；⑤workers 12→24；⑥merge 按 run_id 去重。
+- **工具链提交** 1f4b474：harvest_runs.py + converge run_id 种子唯一化 + merge 去重。
+- **事故记账**：本日一次 `git commit` 误吞其他会话（chenmai8）暂存变更约 9400 行，
+  已软撤销并只重提 peidian-agent 7 文件（78058c7）；对方变更还原为未暂存状态，
+  内容无损。教训：monorepo 并发会话下，提交必须显式 `git add <路径>` 且提交后
+  `git show --stat` 自查。
