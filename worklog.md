@@ -469,3 +469,25 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
   单 run CPU 约 2.5s——3 万次全程约 5-6 小时，符合 thresholds budget（12h）。
 - **计划**：6 块完成 → harvest → merge 判定 → D-7 报告（数字逐位对 JSON）→ 独立
   复核 → 提交 → 终门禁。
+
+## 2026-10-02 · D-7 完成 · CONVERGED · 阶段 (a)/(b)/(c)/(d) 全部收口
+
+- **D-7 报告**（commit 7454932，convergence-report.md）：GLM-5.3-Flash 子代理工作流
+  dwfrun-a437fa3f 起草 + 独立复核 → **29946 run、0 errors，三条判据全过**：
+  - 红线 0/29946 违规，单侧 95% 上界 0.00010003 ≤ 0.0003（`converge-judgment.json`）
+  - 收益 0.919709 ≥ 冻结基线 0.6735
+  - 前/后窗各 1 万次，六特征漂移 p 值 0.83/0.77/0.98/1.0/1.0/1.0 全过 α=0.01
+- **实跑 29946 < 预算 30000（差 54，0.18%）**：报告如实登记为非判据事实——红线随 N 放宽
+  不受影响，补跑 54 次即可对齐预算。
+- **终门禁全绿**：evals 233/233 / isolation zero / dsl 25/25 / fault 15/15 / arena 24/24。
+- **整体交付链**（owner 批准的整条链路）：
+  - 阶段 (a) 四域理论卷六件（dwfrun-8ab46deb）
+  - 阶段 (b) 行为契约草案 docs/contracts/agent-purpose-contract.md
+  - 阶段 (c) 模块图 docs/contracts/module-map.md + evidence/owner-gates.md
+  - 阶段 (d) ParkDSL v1.1（4.1）+ arena 编排层 + fault 引擎 15 类 + 故障库 11 条（4.2/4.3）
+  - 阶段 (d) 场景库 20 个入库（4.4）+ 多进程批跑 + 性能优化（4.5）
+  - 人类体验模式：CLI/serve/全新 ui/ + 专家审查物料（4.6-4.8）
+  - 100 次校准 + 阈值冻结 v1.0（owner 批准，commit 78058c7）
+  - D-7 报告（commit 7454932）
+- **悬留（owner 后续门）**：①A-4/B-4 批示门未过；②M1 spec 漂移 R-2 待复核；③Higress
+  凭据缺（真实 LLM 路径未启用）；④gen_scenario.py 未实现；⑤ui/ 三项迭代待办。
