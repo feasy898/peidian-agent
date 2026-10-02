@@ -40,6 +40,15 @@ from fault.park_adapter import park_to_topology  # noqa: E402
 from fault.topology import KIND_LOAD  # noqa: E402
 from arena.faultlib import FaultLibError, load_fault_library  # noqa: E402
 
+# 可选潮流引擎（pandapower；未安装时优雅降级为纯信号仿真）
+try:
+    from arena.powerflow import PowerFlowEngine, WeatherModel
+    POWERFLOW_AVAILABLE = True
+except ImportError:
+    PowerFlowEngine = None
+    WeatherModel = None
+    POWERFLOW_AVAILABLE = False
+
 __all__ = ["ArenaEngine", "ScenarioRejected", "engine_type_of"]
 
 # DSL kind → fault 引擎类型。规则：kind 大写即引擎类型；唯一别名 overload→TX_OVERLOAD
@@ -129,7 +138,8 @@ class ArenaEngine:
     def __init__(self, config: dict, *, seed: int | None = None,
                  agent_enabled: bool | None = None, run_id: str | None = None,
                  runs_root: Path | str | None = None,
-                 idle_dt: float = 60.0, active_dt: float = 1.0) -> None:
+                 idle_dt: float = 60.0, active_dt: float = 1.0,
+                 use_powerflow: bool | None = None) -> None:
         errs = dslv.validate_dsl(config, origin="<scenario>")
         if errs:
             raise ScenarioRejected([e.line() for e in errs])
@@ -152,6 +162,21 @@ class ArenaEngine:
         self.engine = Engine(topo=self.topo, seed=self.seed, agent_enabled=self.agent_enabled,
                              criteria=self.faultlib.criteria,
                              target_criteria=self._target_criteria(config))
+
+        # 可选潮流引擎（真实电压/负载率；未安装 pandapower 或显式关闭时用纯信号）
+        if use_powerflow is None:
+            use_powerflow = POWERFLOW_AVAILABLE
+        self.use_powerflow = use_powerflow and POWERFLOW_AVAILABLE
+        self.powerflow = None
+        self.weather = None
+        self.last_powerflow = None
+        if self.use_powerflow:
+            try:
+                self.powerflow = PowerFlowEngine.from_dsl(config)
+                self.weather = WeatherModel()
+            except Exception:
+                self.use_powerflow = False
+                self.powerflow = None
 
         self.faults: dict[str, dict] = {
             f["id"]: f for f in (config.get("faults") or []) if isinstance(f, dict) and f.get("id")
@@ -309,6 +334,13 @@ class ArenaEngine:
         snap = self.engine.state_snapshot()
         anomalies = snap.get("anomalies") or {}
         snap["anomalies"] = {f"{k[0]}@{k[1]}": v for k, v in anomalies.items()}
+        # 潮流增强结果（真实电压/负载率）
+        if self.last_powerflow is not None:
+            snap["powerflow"] = {
+                "converged": self.last_powerflow.converged,
+                "bus_v_pu": {k: round(v, 4) for k, v in self.last_powerflow.bus_v_pu.items()},
+                "trafo_loading_pct": {k: round(v, 1) for k, v in self.last_powerflow.trafo_loading_pct.items()},
+            }
         return snap
 
     def _outage_kw_now(self) -> float:
@@ -362,6 +394,15 @@ class ArenaEngine:
             self._accumulate_quality(dt)
             self._drain_human_queue()
             steps += 1
+            # 潮流增强：用 pandapower 算真实电压/负载率（可选；有故障信号时仍走 fault 引擎）
+            if self.use_powerflow and self.powerflow is not None:
+                try:
+                    self.last_powerflow = self.powerflow.solve(
+                        sim_s=self.engine.sim_s,
+                        switch_states=self.engine.executor.switch_states,
+                        weather=self.weather)
+                except Exception:
+                    self.last_powerflow = None
             # 动作恶化检测：本拍新发生了 ops 动作且失电负荷·秒增量 > 0
             actions_now = len(self.engine.stream.to_list(channel="ops"))
             if actions_now > actions_before and self._outage_kws > outage_before + 1e-9:
