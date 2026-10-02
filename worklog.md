@@ -454,3 +454,18 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
   已软撤销并只重提 peidian-agent 7 文件（78058c7）；对方变更还原为未暂存状态，
   内容无损。教训：monorepo 并发会话下，提交必须显式 `git add <路径>` 且提交后
   `git show --stat` 自查。
+
+## 2026-10-02 · 判定 v2 再次中止 → 改为直接批跑执行（执行台账）
+
+- **v2（dwfrun-883705b3）第二次失败**：8 个 chunk（c1-c8，seeds 10000-25999）实际
+  **全部跑完**（日志 exit=1 只是「2000 run 时红线 3/N 上界必然不达标」的判定退出码，
+  partial 均已正常写入）；致命点是 chunk 间 harvest 扫盘超过 world.run 的 5 分钟
+  超时（run 目录随批增长 + 24 worker IO 争抢）。已打捞：**unique 20434 run、0 error**。
+- **执行方式切换**：判定输入（thresholds.yaml frozen + 20 场景 + converge.py）在
+   judgment 开始前已全部冻结入库（git 可证），执行是确定性的——剩余批次不再绕道
+  工作流（world.run 超时属基础设施限制），改为主会话直接后台批跑：3 组并行
+  （seeds 26000-37999，6×2000，workers 16/组），组日志 runtime/judge-group-{a,b,c}.log。
+- **速率实测**：本机 64 核但有效算力约 4 核（48 worker 超卖），聚合约 1.4 run/s、
+  单 run CPU 约 2.5s——3 万次全程约 5-6 小时，符合 thresholds budget（12h）。
+- **计划**：6 块完成 → harvest → merge 判定 → D-7 报告（数字逐位对 JSON）→ 独立
+  复核 → 提交 → 终门禁。
