@@ -170,7 +170,8 @@ def run_batch(runs: int, seed_base: int, files: list[Path],
     jobs = []
     for i in range(runs):
         f, cfg = configs[i % len(configs)]
-        jobs.append((cfg, seed_base + i, f"conv-{i:06d}", str(runs_root), f.name, agent_on))
+        seed = seed_base + i
+        jobs.append((cfg, seed, f"conv-{seed}", str(runs_root), f.name, agent_on))
     if workers > 1:
         import multiprocessing as mp
         with mp.Pool(processes=workers) as pool:
@@ -335,6 +336,8 @@ def main(argv=None) -> int:
     if args.merge:
         mdir = Path(args.merge)
         merged: list[dict] = []
+        seen_ids: set[str] = set()
+        dupes = 0
         for p in sorted(mdir.glob("partial-*.json")):
             try:
                 part = json.loads(p.read_text(encoding="utf-8"))
@@ -342,7 +345,16 @@ def main(argv=None) -> int:
                 print(f"WARN: partial 解析失败，跳过 {p.name}")
                 continue
             if isinstance(part, list):
-                merged.extend(part)
+                for item in part:
+                    rid = str(item.get("run_id", ""))
+                    if rid and rid in seen_ids:
+                        dupes += 1
+                        continue
+                    if rid:
+                        seen_ids.add(rid)
+                    merged.append(item)
+        if dupes:
+            print(f"NOTE: 按 run_id 去重丢弃 {dupes} 条重复记录")
         if not merged:
             print(f"NO PARTIALS: {mdir} 无可用 partial-*.json")
             return 2
