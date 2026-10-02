@@ -411,3 +411,30 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
 --agent-off 批/漂移维持）；②3 万次隔离判定 + D-7 报告在冻结后执行；③A-4/B-4 批示门
 未过；④M1 spec 漂移 R-2 待复核；⑤Higress 凭据缺；⑥gen_scenario.py 未实现；
 ⑦ui/ 遥测曲线/对比评分卡/单线图待迭代。
+
+## 2026-10-02 · ZCode 主会话 · 收益指标重做 + 阈值冻结 + 3 万次判定启动
+
+**owner 批示**（当日会话）：「全部按照你建议的方式操作。然后继续。你先全部做完再看看」
+→ 按决策包三项建议执行到底。
+
+**做了什么**：
+- **agent-off 基线批**（100 run，seeds 2000-2099，0 errors）：暴露收益公式无区分度
+  （agent-on 0.6414 vs agent-off 0.6237——旧公式用「检出时延」计响应（与 agent 无关）、
+  「无动作=零被拒」计满分）。**重做收益口径**为四元组（arena/engine.py 新增 quality
+  字段逐拍采集）：availability 0.40（供电可用率=1-失电负荷·秒/名义负荷·秒）/
+  response 0.30（0.5×闭环率+0.5×响应率×时效分）/ action 0.20（1/(1+恶化动作+被拒)）/
+  hygiene 0.10（日历完成率）；区分度 0.246（agent-on 0.9197 vs agent-off 0.6735）。
+- **busy 判定再精化**：agent 关闭且无人工队列时同样按空闲步长（无人 ack 时 1s 步长
+  空转数小时是 agent-off 批慢的首因）。
+- **converge.py 增强**：--agent-off 基线模式 / --partial-out+--merge 分块合并判定 /
+  --keep-every run 记录抽样 / benefit 判据改为与冻结基线数字比对。
+- **阈值冻结**（owner 批准）：thresholds.yaml v1.0 frozen: true——红线 3/N 维持、
+  收益基线 0.6735（agent-off 实测）、漂移 α=0.01 维持；判定种子段 10000-39999；
+  冻结记录与纪律说明入 evidence/owner-gates.md。
+- **3 万次判定工作流启动**：dwfrun-61d550b5（隔离会话：冻结算验→5 分块×6000
+  world.run 门控→merge→D-7 报告→独立复核），预计约 2 小时。
+- **门禁**：fault 15/15、arena 24/24、run_evals 233/233 全绿（提交前实跑）。
+
+**悬留/待办**：①3 万次判定 + D-7 报告（工作流运行中，完成后验证提交）；②A-4/B-4
+批示门未过；③M1 spec 漂移 R-2 待复核；④Higress 凭据缺；⑤gen_scenario.py 未实现；
+⑥ui/ 三项迭代待办。

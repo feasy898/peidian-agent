@@ -13,8 +13,8 @@
   },
   {
    "criterion": "benefit",
-   "mean_score": 0.919749,
-   "baseline_score": 0.908813,
+   "mean_score": 0.673488,
+   "baseline_score": 0.6733,
    "baseline_kind": "reference-window",
    "comparator": ">=",
    "tolerance": 0.0,
@@ -30,32 +30,32 @@
     {
      "feature": "escalate_rate",
      "kind": "mean",
-     "mean_first": 0.2,
-     "mean_second": 0.2,
+     "mean_first": 0.0,
+     "mean_second": 0.0,
      "p": 1.0,
      "pass": true
     },
     {
      "feature": "restore_success_rate",
      "kind": "mean",
-     "mean_first": 1.7,
-     "mean_second": 1.7,
+     "mean_first": 0.0,
+     "mean_second": 0.0,
      "p": 1.0,
      "pass": true
     },
     {
      "feature": "mean_detect_latency_s",
      "kind": "mean",
-     "mean_first": 3502.4,
-     "mean_second": 3502.4,
+     "mean_first": 3610.8,
+     "mean_second": 3610.8,
      "p": 1.0,
      "pass": true
     },
     {
      "feature": "action_mix.agent_actions",
      "kind": "proportion",
-     "first": 100,
-     "second": 100,
+     "first": 0,
+     "second": 0,
      "p": 1.0,
      "pass": true
     },

@@ -37,6 +37,7 @@ from fault.dsl import FAULT_TYPES  # noqa: E402
 from fault.engine import Engine  # noqa: E402
 from fault.dsl import FaultRejected  # noqa: E402
 from fault.park_adapter import park_to_topology  # noqa: E402
+from fault.topology import KIND_LOAD  # noqa: E402
 from arena.faultlib import FaultLibError, load_fault_library  # noqa: E402
 
 __all__ = ["ArenaEngine", "ScenarioRejected", "engine_type_of"]
@@ -103,6 +104,7 @@ class RunResult:
     latency: dict[str, list[float]]
     events_total: int
     paths: dict[str, str]
+    quality: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -116,6 +118,7 @@ class RunResult:
             "gateway": self.gateway,
             "latency": self.latency,
             "events_total": self.events_total,
+            "quality": self.quality,
             "paths": self.paths,
         }
 
@@ -173,6 +176,10 @@ class ArenaEngine:
         self._human_queue: list[tuple[float, dict]] = []
         self.pause_hook: Any = None
         self.human_log: list[dict] = []
+        # 质量指标累加器（供电可用率/动作恶化，见 _finalize.quality）
+        self._outage_kws = 0.0            # 失电负荷·秒（kW·s）
+        self._total_load_kws = 0.0        # 名义负荷·秒（Σ负荷 × 时长）
+        self._worsening_actions = 0       # 执行后失电负荷增加的动作数
 
     # ================================================================ 注入计划（D-2 第一步）
     def _target_criteria(self, config: dict) -> dict:
@@ -304,6 +311,20 @@ class ArenaEngine:
         snap["anomalies"] = {f"{k[0]}@{k[1]}": v for k, v in anomalies.items()}
         return snap
 
+    def _outage_kw_now(self) -> float:
+        """当前失电负荷 kW（负荷元件所挂母线不带电者累加 base_kw）。"""
+        states = self.engine.executor.switch_states
+        energ = self.engine.topo.energized(states)
+        total = 0.0
+        for e in self.engine.topo.by_kind(KIND_LOAD):
+            bus = self.engine.topo.get(e.at) if e.at else None
+            if bus is None or bus.id not in energ:
+                total += float(e.attrs.get("base_kw", 0.0))
+        return total
+
+    def _accumulate_quality(self, dt: float) -> None:
+        self._outage_kws += self._outage_kw_now() * dt
+
     def run(self) -> RunResult:
         dur = float(self.scenario.get("duration_sim_s", 0) or 0)
         # 只排未来的日历事件（允许人工终止后二次进入 run 收口，不重放已触发事件）
@@ -322,21 +343,29 @@ class ArenaEngine:
             if nxt_inj is not None:
                 nxt = min(nxt, nxt_inj)
             horizon = nxt - now
-            # 忙碌判定：存在**未确认**的活动异常时才走细步长（诊断/处置窗口）。
-            # 全部异常已 ack（派工待消缺）时，消缺期内不会产生新状态——按空闲大步长
-            # 跳到下一事件/注入/时限点（repair 到期由 _advance_repairs 逐拍检查，
-            # 步长粒度只影响到期时刻的量化误差）。确定性与状态机语义不变。
+            # 忙碌判定：存在**未确认**的活动异常、且存在可能处置它的主体时才走细步长
+            # （agent 在线或人工队列有待执行动作）。全部异常已 ack、或 agent 关闭且
+            # 无人工介入时，下一状态变化只可能来自日历/注入/repair 时限——按空闲大步长
+            # 跳过去（repair 到期由 _advance_repairs 逐拍检查，步长只影响到期量化误差）。
             unacked = [a for a in self.engine.detector.active.values()
                        if a.status == "active" and not a.acked]
-            busy = bool(unacked)
+            responder_live = self.agent_enabled or bool(self._human_queue)
+            busy = bool(unacked) and responder_live
             dt = self.active_dt if (busy or horizon <= self.active_dt) else self.idle_dt
             dt = max(min(dt, horizon, dur - now), 1e-3)
             self.engine.dt = dt
             detected_before = len(self.engine.stream.to_list(channel="fault",
                                                              etype="fault.detected"))
+            outage_before = self._outage_kws
+            actions_before = len(self.engine.stream.to_list(channel="ops"))
             self.engine.tick()
+            self._accumulate_quality(dt)
             self._drain_human_queue()
             steps += 1
+            # 动作恶化检测：本拍新发生了 ops 动作且失电负荷·秒增量 > 0
+            actions_now = len(self.engine.stream.to_list(channel="ops"))
+            if actions_now > actions_before and self._outage_kws > outage_before + 1e-9:
+                self._worsening_actions += 1
             while pending and pending[0][0] <= self.engine.sim_s + 1e-9:
                 t, ev = pending.pop(0)
                 self._fire_calendar_event(t, ev)
@@ -444,6 +473,20 @@ class ArenaEngine:
         active_end = len(self.engine.detector.active)
 
         detect_lat, restore_lat = self._latencies(events)
+        respond_lat = self._respond_latencies(events)
+        total_load_kw = 0.0
+        for e in self.topo.by_kind(KIND_LOAD):
+            total_load_kw += float(e.attrs.get("base_kw", 0.0))
+        total_load_kws = total_load_kw * max(self.engine.sim_s, 1e-9)
+        quality = {
+            "outage_kws": round(self._outage_kws, 1),
+            "total_load_kws": round(total_load_kws, 1),
+            "availability": round(1.0 - min(1.0, self._outage_kws / max(total_load_kws, 1e-9)), 6),
+            "respond_latency_s": respond_lat,
+            "unresponded": max(0, len(detected) - len(respond_lat)),
+            "worsening_actions": self._worsening_actions,
+            "hygiene": round(len(self._fired_calendar) / max(len(self.calendar_times), 1), 6),
+        }
         summary = {
             "anomalies": {
                 "detected": len(detected),
@@ -491,6 +534,7 @@ class ArenaEngine:
             anomalies=summary["anomalies"], gateway=summary["gateway"],
             latency=summary["latency"],
             events_total=len(events),
+            quality=quality,
             paths={"run_dir": str(self.run_dir), "events": str(events_path)},
         )
         (self.run_dir / "eval.json").write_text(json.dumps(
@@ -517,6 +561,26 @@ class ArenaEngine:
                 if start is not None:
                     restore.append(round(sim_s - start, 3))
         return sorted(detect), sorted(restore)
+
+    def _respond_latencies(self, events: list[dict]) -> list[float]:
+        """响应时延 = 每个检出异常 → 其后的第一个 agent 动作（by=agent）。
+
+        无 agent 动作的检出不计入（调用方以 unresponded 体现）——这是把
+        「无响应」与「响应慢」区分开的关键口径。
+        """
+        out: list[float] = []
+        pending: list[float] = []   # 未响应的检出时刻
+        for e in events:
+            t = e.get("type")
+            payload = e.get("payload") or {}
+            sim_s = float(e.get("sim_s", 0) or 0)
+            if t == "fault.detected":
+                pending.append(sim_s)
+            elif (t == "action.executed" and (payload.get("by") == "agent")
+                  and payload.get("op") in ("open", "close", "ack")):
+                while pending and pending[0] <= sim_s + 1e-9:
+                    out.append(round(sim_s - pending.pop(0), 3))
+        return sorted(out)
 
 
 def _td(seconds: float):  # 延迟导入避免循环

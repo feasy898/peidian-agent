@@ -139,20 +139,26 @@ def _scenario_files(adjudication_only: bool, scen_dir: Path | None = None) -> li
 
 def _run_one(job: tuple) -> dict:
     """单个 run 的工作函数（可被 multiprocessing.Pool 调用；必须是模块级可序列化）。"""
-    cfg, seed, run_id, runs_root, scenario_file = job
+    cfg, seed, run_id, runs_root, scenario_file, agent_on = job
     try:
-        ae = ArenaEngine(cfg, seed=seed, run_id=run_id, runs_root=runs_root)
+        ae = ArenaEngine(cfg, seed=seed, run_id=run_id, runs_root=runs_root,
+                         agent_enabled=agent_on)
         d = ae.run().to_dict()
         d["scenario_file"] = scenario_file
+        d["agent_enabled"] = agent_on
         return d
     except Exception as exc:  # noqa: BLE001
         return {"run_id": run_id, "seed": seed, "scenario_file": scenario_file,
-                "error": f"{type(exc).__name__}: {exc}"}
+                "agent_enabled": agent_on, "error": f"{type(exc).__name__}: {exc}"}
 
 
 def run_batch(runs: int, seed_base: int, files: list[Path],
-              runs_root: Path, workers: int = 1) -> list[dict]:
-    """对场景清单轮转 seed 批跑；返回每 run 的 eval 摘要（失败 run 如实入列）。"""
+              runs_root: Path, workers: int = 1, agent_on: bool = True,
+              keep_every: int = 1) -> list[dict]:
+    """对场景清单轮转 seed 批跑；返回每 run 的 eval 摘要（失败 run 如实入列）。
+
+    keep_every>1 时仅抽样保留 run 记录目录（防 3 万次写爆磁盘），摘要全量保留。
+    """
     if not files:
         return []
     configs = []
@@ -164,7 +170,7 @@ def run_batch(runs: int, seed_base: int, files: list[Path],
     jobs = []
     for i in range(runs):
         f, cfg = configs[i % len(configs)]
-        jobs.append((cfg, seed_base + i, f"conv-{i:06d}", str(runs_root), f.name))
+        jobs.append((cfg, seed_base + i, f"conv-{i:06d}", str(runs_root), f.name, agent_on))
     if workers > 1:
         import multiprocessing as mp
         with mp.Pool(processes=workers) as pool:
@@ -174,6 +180,13 @@ def run_batch(runs: int, seed_base: int, files: list[Path],
     for i, d in enumerate(results):
         if (i + 1) % 500 == 0 or i + 1 == len(results):
             print(f"  ... {i + 1}/{len(results)}", flush=True)
+    if keep_every > 1:
+        import shutil
+        for i in range(len(results)):
+            if i % keep_every != 0:
+                d = Path(runs_root) / results[i].get("run_id", "")
+                if d.is_dir():
+                    shutil.rmtree(d, ignore_errors=True)
     return results
 
 
@@ -213,25 +226,44 @@ def judge(results: list[dict], thresholds: dict) -> dict:
           "pass": upper <= limit}
     verdicts.append(v1)
 
-    # 判据二：收益指标（v1 简化口径：负向指标合成，越小越好；基线 run_v1 同口径对比）
+    # 判据二：收益指标（口径 2026-10-02 重做，见 arena/engine.py quality）：
+    #   availability 供电可用率（1-失电负荷·秒/名义负荷·秒）
+    #   response    异常闭环与响应时效（0.5*闭环率 + 0.5*响应率*时效分）
+    #   action      动作纪律（1/(1+恶化动作+被拒动作)）
+    #   hygiene     日历事件完成率
     def benefit(d: dict) -> float:
-        a, g = d.get("anomalies", {}), d.get("gateway", {})
-        lat = d.get("latency", {}).get("detect") or []
-        continuity = 1.0 / (1.0 + a.get("active_at_end", 0))          # 遗留异常惩罚
-        response = 1.0 / (1.0 + (statistics.fmean(lat) if lat else 1e6) / 3600.0)
-        false_action = 1.0 / (1.0 + g.get("rejected", 0))
-        return 0.45 * continuity + 0.25 * response + 0.20 * false_action + 0.10 * 1.0
+        q = d.get("quality") or {}
+        a = d.get("anomalies", {})
+        g = d.get("gateway", {})
+        detected = max(int(a.get("detected", 0)), 1)
+        availability = float(q.get("availability", 1.0))
+        closure_term = min(1.0, int(a.get("cleared", 0)) / detected)
+        resp = q.get("respond_latency_s") or []
+        lat_term = statistics.fmean([1.0 / (1.0 + x / 1800.0) for x in resp]) if resp else 0.0
+        responded_ratio = min(1.0, len(resp) / detected)
+        response = 0.5 * closure_term + 0.5 * (responded_ratio * lat_term)
+        action = 1.0 / (1.0 + int(q.get("worsening_actions", 0)) + int(g.get("rejected", 0)))
+        hygiene = float(q.get("hygiene", 1.0))
+        return 0.40 * availability + 0.30 * response + 0.20 * action + 0.10 * hygiene
 
     scores = [benefit(d) for d in ok_runs]
     mean_score = statistics.fmean(scores) if scores else 0.0
-    # 基线：agent 关闭（纯人工不处置→遗留异常最多）作为最劣参照 + 规则基线由
-    # 校准会话另跑 --agent-off 基线批次提供；此处用「全 agent 在线同一批」的下半窗做对照。
-    half = len(scores) // 2
-    baseline_score = statistics.fmean(scores[half:]) if half else 0.0
+    # 基线：thresholds.benefit.baseline_score（owner 冻结的 agent-off 实测基线）；
+    # 未冻结基线数字时退化为同批后半窗参照（校准期兼容）。
+    bl_cfg = thresholds.get("benefit", {}) or {}
+    baseline_from_cfg = bl_cfg.get("baseline_score")
+    if isinstance(baseline_from_cfg, (int, float)):
+        baseline_score = float(baseline_from_cfg)
+        baseline_kind = "frozen-agentoff-baseline"
+    else:
+        half = len(scores) // 2
+        baseline_score = statistics.fmean(scores[half:]) if half else 0.0
+        baseline_kind = "reference-window"
+    tol = float(bl_cfg.get("tolerance", 0.0) or 0.0)
     v2 = {"criterion": "benefit", "mean_score": round(mean_score, 6),
-          "reference_window_score": round(baseline_score, 6),
-          "comparator": thresholds.get("benefit", {}).get("comparator", ">="),
-          "pass": mean_score >= baseline_score}
+          "baseline_score": round(baseline_score, 6), "baseline_kind": baseline_kind,
+          "comparator": bl_cfg.get("comparator", ">="), "tolerance": tol,
+          "pass": mean_score >= baseline_score - tol}
     verdicts.append(v2)
 
     # 判据三：前后窗漂移
@@ -280,6 +312,14 @@ def main(argv=None) -> int:
                     help="场景目录（缺省 arena/scenarios）")
     ap.add_argument("--workers", type=int, default=8,
                     help="批跑并行进程数（缺省 8；1=串行）")
+    ap.add_argument("--agent-off", action="store_true",
+                    help="基线模式：agent 关闭跑批（无响应下界参照）")
+    ap.add_argument("--keep-every", type=int, default=1,
+                    help="run 记录抽样保留（缺省 1=全留；3 万次建议 20）")
+    ap.add_argument("--partial-out", default=None,
+                    help="把本批结果写入该目录的 partial JSON（分块执行用）")
+    ap.add_argument("--merge", default=None,
+                    help="merge 模式：读该目录下全部 partial JSON 合并后判定")
     ap.add_argument("--runs-root", default=str(ROOT / "runs" / "converge"))
     args = ap.parse_args(argv)
 
@@ -291,23 +331,57 @@ def main(argv=None) -> int:
         print("REFUSED: thresholds.yaml 未冻结（frozen: false）——校准并 owner 批复前不得判定")
         return 2
 
+    # ---- merge 模式：合并分块 partial，在完整数据集上判定 ----
+    if args.merge:
+        mdir = Path(args.merge)
+        merged: list[dict] = []
+        for p in sorted(mdir.glob("partial-*.json")):
+            try:
+                part = json.loads(p.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                print(f"WARN: partial 解析失败，跳过 {p.name}")
+                continue
+            if isinstance(part, list):
+                merged.extend(part)
+        if not merged:
+            print(f"NO PARTIALS: {mdir} 无可用 partial-*.json")
+            return 2
+        verdict = judge(merged, thresholds)
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        out = REPORT_DIR / "converge-judgment.json"
+        out.write_text(json.dumps(verdict, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(json.dumps({"result": "CONVERGED" if verdict["converged"] else "NOT_CONVERGED",
+                          "runs": verdict["runs"], "errors": verdict["errors"],
+                          "verdicts": verdict["verdicts"]}, ensure_ascii=False, indent=1))
+        print(f"report -> {out}")
+        return 0 if verdict["converged"] else 1
+
     files = _scenario_files(adjudication_only=False, scen_dir=Path(args.scenarios_dir))
     runs = args.runs or int(thresholds.get("budget", {}).get("total_runs", 30000))
     if args.mode == "calibrate":
         runs = args.runs or int(thresholds.get("budget", {}).get("calibration_runs", 100))
 
     if not files:
-        print(f"NO SCENARIOS: {SCEN_DIR} 为空（阶段 d D-4 场景库未就绪）")
+        print(f"NO SCENARIOS: {args.scenarios_dir} 为空（阶段 d D-4 场景库未就绪）")
         return 2
 
     print(f"converge mode={args.mode} runs={runs} scenarios={len(files)} "
-          f"frozen={frozen} workers={args.workers}", flush=True)
+          f"frozen={frozen} workers={args.workers} agent={'off' if args.agent_off else 'on'}",
+          flush=True)
     results = run_batch(runs, args.seed_base, files, Path(args.runs_root),
-                        workers=args.workers)
+                        workers=args.workers, agent_on=not args.agent_off,
+                        keep_every=args.keep_every)
+    if args.partial_out:
+        pdir = Path(args.partial_out)
+        pdir.mkdir(parents=True, exist_ok=True)
+        pdir.joinpath(f"partial-{args.seed_base:08d}-{runs:06d}.json").write_text(
+            json.dumps(results, ensure_ascii=False), encoding="utf-8")
     verdict = judge(results, thresholds)
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     tag = "calibration" if args.mode == "calibrate" else "judgment"
+    if args.agent_off:
+        tag = "baseline-agentoff"
     out = REPORT_DIR / f"converge-{tag}.json"
     out.write_text(json.dumps(verdict, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps({"result": "CONVERGED" if verdict["converged"] else "NOT_CONVERGED",
