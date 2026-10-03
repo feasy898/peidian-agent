@@ -425,8 +425,12 @@ class ArenaEngine:
                 detected_now = len(self.engine.stream.to_list(
                     channel="fault", etype="fault.detected")) - detected_before
                 if detected_now > 0:
+                    detected_events = self.engine.stream.to_list(
+                        channel="fault", etype="fault.detected")
+                    new_event_ids = {e["payload"]["anomaly_id"]
+                                     for e in detected_events[-detected_now:]}
                     new_anoms = [a for a in self.engine.detector.active.values()
-                                 if a.status == "active"][:detected_now]
+                                 if a.anomaly_id in new_event_ids]
                     for a in new_anoms:
                         try:
                             entry = self.faultlib.entry_for(a.hint) if self.faultlib else None
@@ -458,8 +462,12 @@ class ArenaEngine:
                 detected_now = len(self.engine.stream.to_list(
                     channel="fault", etype="fault.detected")) - detected_before
                 if detected_now > 0:
+                    detected_events = self.engine.stream.to_list(
+                        channel="fault", etype="fault.detected")
+                    new_event_ids = {e["payload"]["anomaly_id"]
+                                     for e in detected_events[-detected_now:]}
                     self.pause_hook([a for a in self.engine.detector.active.values()
-                                     if a.status == "active"])
+                                     if a.anomaly_id in new_event_ids])
         self._snapshots.append({"sim_s": round(self.engine.sim_s, 3),
                                 "snapshot": self._snap()})
         return self._finalize()
