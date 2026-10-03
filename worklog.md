@@ -491,3 +491,44 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
   - D-7 报告（commit 7454932）
 - **悬留（owner 后续门）**：①A-4/B-4 批示门未过；②M1 spec 漂移 R-2 待复核；③Higress
   凭据缺（真实 LLM 路径未启用）；④gen_scenario.py 未实现；⑤ui/ 三项迭代待办。
+
+## 2026-10-02 · 迭代第2轮：对照六条核心目标的差距弥合（4 commits）
+
+**触发**：owner 提出 6 条核心目的（DSL/模拟真实性/真实案例/Agent 行为/度量/人类可理解），
+自评均分 5/10，目标2（仿真真实性 3/10）和目标4（Agent 智能 4/10）为量级性差距。
+
+**交付**（commits 745b014 → 000c272 → 4fb74ee → 59ba215）：
+
+### 目标2：仿真真实性（3→6/10）
+- **pandapower 潮流内核**（arena/powerflow.py）：
+  - ParkDSL → fault.topology → pandapower 网络 → 牛顿法潮流
+  - 真实电压降（0.970-0.990 pu）替代拓扑连通性阶跃（0/1）
+  - 24h 日负荷形状插值（10am factory=0.95 → 399kW 而非恒定 420kW）
+  - 气象模型（温度影响负荷/PV；辐照度影响PV出力）
+- **隔离开关/转供**（关键修复，实测三场景全部物理正确）：
+  - SG-B00 OPEN → B 侧负荷归零（隔离正确）
+  - +CP-01 CLOSE → B 负荷恢复，TX-A01 从 61%→91%（承接全负荷）
+  - BUS-A2 电压 0.970→0.958 pu（真实电压降）
+  - 修复关键 bug：同一变压器双端开关聚合（任一 OPEN 即断开）+ 默认状态取 normally
+
+### 目标3：真实数据（5→7/10）
+- **SimBench 基准数据集接入**（arena/data/）：
+  - 真实测量的全年 15min×35136 点负荷/光伏曲线
+  - 6 条标准 24h 形状 + 17 条 SimBench 原始细分剖面
+  - 来源标注/许可（ODC-BY 1.0）/处理链完整
+
+### 目标4：Agent 智能化（4→6/10）
+- **LLM 推理式诊断代理**（arena/llm_agent.py）：
+  - OpenAI 兼容 API（BigModel GLM 等）；环境变量认证
+  - 异常+遥测+故障库知识 → LLM → 结构化诊断（diagnosis/action/reasoning/confidence）
+  - 无 key 时优雅回退 mock（规则化剧本）
+  - 已集成到 arena engine（agent.llm_diagnosis 事件追加到事件流）
+
+### 目标6：人类可理解（5→7/10）
+- **SVG 单线图生成器**（arena/sld.py）：
+  - IEC 60617 简化符号（母线/变压器/开关/负荷/光伏/储能/充电桩）
+  - 按电压等级分层布局 + 状态着色（正常/故障/失电）
+  - serve.py 新增 /api/sld 端点（SVG 直出）
+
+### grok CLI 评审
+- 网络不可达（cli-chat-proxy.grok.com 直连+代理均失败），已记录到 runtime/grok-network-diagnosis.txt
