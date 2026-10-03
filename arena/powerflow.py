@@ -90,11 +90,14 @@ class PowerFlowEngine:
         self._trafo_map: dict[str, int] = {}     # ParkDSL trafo_id -> pp trafo index
         self._load_map: dict[str, int] = {}      # ParkDSL load_id -> pp load index
         self._sgen_map: dict[str, int] = {}      # ParkDSL pv_id -> pp sgen index
-        self._sw_map: dict[str, int] = {}        # ParkDSL switch_id -> pp switch index
+        self._sw_map: dict[str, int] = {}        # ParkDSL switch_id -> pp switch index or (type, idx)
         self._shapes: dict[str, list] = {}
         self._load_profiles: dict[str, str] = {}  # load_id -> profile name
         self._load_peak_kw: dict[str, float] = {}
         self._pv_cap_kw: dict[str, float] = {}
+        self._trafo_sn_mva: dict[str, float] = {} # trafo name -> original sn_mva
+        self._isolated_buses: set[int] | None = None  # OPEN 开关导致的孤立母线
+        self._sw_normally: dict[str, str] = {}    # switch_id -> normally state (OPEN/CLOSED)
 
     # ================================================================ 构建网络
     def build_from_export(self, export: dict) -> None:
@@ -150,6 +153,7 @@ class PowerFlowEngine:
                 vk_percent=6.0, vkr_percent=0.5, pfe_kw=0.3, i0_percent=0.1,
                 name=e.id, index=len(net.trafo))
             self._trafo_map[e.id] = idx
+            self._trafo_sn_mva[e.id] = sn_mva
 
         # ---- 3. Line（跳过中间开关，直接连接两端母线）
         for e in topo.elements():
@@ -179,6 +183,8 @@ class PowerFlowEngine:
                 continue
             frm = self._bus_map.get(e.frm)
             to = self._bus_map.get(e.to)
+            normally = str(e.attrs.get("normally", "CLOSED"))
+            self._sw_normally[e.id] = normally
             if frm is not None and to is not None:
                 # bus-to-bus 联络开关（coupler）
                 idx = pp.create_switch(net, bus=frm, element=to, et="b",
@@ -310,17 +316,88 @@ class PowerFlowEngine:
         for vid, idx in self._sgen_map.items():
             net.sgen.at[idx, "p_mw"] = self._pv_cap_kw[vid] / 1000.0 * pv_factor
 
-        # ---- 3. 开关状态：联络开关直接切换；隔离开关控制对应 line/trafo 的 in_service
+        # ---- 3. 开关状态 + 真实连通性隔离
+        self._isolated_buses = set()
+        # 先聚合每个 line/trafo 的所有开关状态（任一 OPEN 即断开——同一变压器可能
+        # 有 HV 侧和 LV 侧两个隔离开关，如 SG-B00/SG-B01 对 TX-B01）
+        elem_states: dict[tuple, bool] = {}   # (etype, idx) -> all_closed
         for sid, target in self._sw_map.items():
-            state = switch_states.get(sid, "CLOSED")
+            default_state = self._sw_normally.get(sid, "CLOSED")
+            state = switch_states.get(sid, default_state)
             if isinstance(target, tuple):
-                etype, idx = target
-                if etype == "line":
-                    net.line.at[idx, "in_service"] = state == "CLOSED"
-                elif etype == "trafo":
-                    net.trafo.at[idx, "in_service"] = state == "CLOSED"
+                key = target
+                elem_states[key] = elem_states.get(key, True) and (state == "CLOSED")
             else:
                 net.switch.at[target, "closed"] = state == "CLOSED"
+
+        # 应用聚合状态
+        for (etype, idx), all_closed in elem_states.items():
+            if etype == "trafo":
+                net.trafo.at[idx, "in_service"] = all_closed
+            elif etype == "line":
+                net.line.at[idx, "in_service"] = all_closed
+
+        # BFS 连通性（自实现：从 slack 出发，跳过 in_service=False 的 line/trafo/switch）
+        slack_buses = set(net.ext_grid.bus.tolist())
+        reachable = set(slack_buses)
+        queue = list(slack_buses)
+        while queue:
+            cur = queue.pop(0)
+            # 线路连接
+            for lid, lidx in self._line_map.items():
+                if not net.line.at[lidx, "in_service"]:
+                    continue
+                fb, tb = int(net.line.at[lidx, "from_bus"]), int(net.line.at[lidx, "to_bus"])
+                if fb == cur and tb not in reachable:
+                    reachable.add(tb); queue.append(tb)
+                elif tb == cur and fb not in reachable:
+                    reachable.add(fb); queue.append(fb)
+            # 变压器连接
+            for tid, tidx in self._trafo_map.items():
+                if not net.trafo.at[tidx, "in_service"]:
+                    continue
+                hb, lb = int(net.trafo.at[tidx, "hv_bus"]), int(net.trafo.at[tidx, "lv_bus"])
+                if hb == cur and lb not in reachable:
+                    reachable.add(lb); queue.append(lb)
+                elif lb == cur and hb not in reachable:
+                    reachable.add(hb); queue.append(hb)
+            # 联络开关连接
+            for sid, target in self._sw_map.items():
+                if isinstance(target, int):
+                    sw_closed = bool(net.switch.at[target, "closed"])
+                    if not sw_closed:
+                        continue
+                    b1, b2 = int(net.switch.at[target, "bus"]), int(net.switch.at[target, "element"])
+                    if b1 == cur and b2 not in reachable:
+                        reachable.add(b2); queue.append(b2)
+                    elif b2 == cur and b1 not in reachable:
+                        reachable.add(b1); queue.append(b1)
+        self._isolated_buses = {b for b in net.bus.index if b not in reachable}
+
+        # 孤立母线处理：置零负荷/PV + 母线 in_service=False（防 NaN）
+        for bus_idx in self._isolated_buses:
+            net.bus.at[bus_idx, "in_service"] = False
+            for lid, lidx in self._load_map.items():
+                if int(net.load.at[lidx, "bus"]) == bus_idx:
+                    net.load.at[lidx, "p_mw"] = 0
+                    net.load.at[lidx, "q_mvar"] = 0
+                    net.load.at[lidx, "in_service"] = False
+            for vid, sidx in self._sgen_map.items():
+                if int(net.sgen.at[sidx, "bus"]) == bus_idx:
+                    net.sgen.at[sidx, "p_mw"] = 0
+                    net.sgen.at[sidx, "in_service"] = False
+            # 恢复非孤立母线上的元素 in_service
+        for lid, lidx in self._load_map.items():
+            bus_idx = int(net.load.at[lidx, "bus"])
+            if bus_idx not in self._isolated_buses:
+                net.load.at[lidx, "in_service"] = True
+        for vid, sidx in self._sgen_map.items():
+            bus_idx = int(net.sgen.at[sidx, "bus"])
+            if bus_idx not in self._isolated_buses:
+                net.sgen.at[sidx, "in_service"] = True
+        for b in net.bus.index:
+            if b not in self._isolated_buses:
+                net.bus.at[b, "in_service"] = True
 
         # ---- 4. 短路故障注入（v2：用 pandapower short-circuit）
         # 当前 v1：短路仍由 telemetry 叠加信号；pandapower 短路计算在后续版本接入
