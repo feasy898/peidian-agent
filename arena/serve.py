@@ -33,6 +33,8 @@ if str(ROOT) not in sys.path:
 
 from arena.engine import ArenaEngine, ScenarioRejected, load_scenario  # noqa: E402
 from arena.faultlib import load_fault_library  # noqa: E402
+from arena.sld import generate_sld  # noqa: E402
+import dsl.validate as dslv  # noqa: E402
 
 UI_DIR = ROOT / "ui"
 
@@ -132,6 +134,26 @@ class Handler(BaseHTTPRequestHandler):
                       "class": v.get("class", ""), "detection": v.get("detection", {})}
                      for k, v in sorted(lib.entries.items())]
             return _json(self, 200, {"faults": items})
+        if path == "/api/sld":
+            # SVG 单线图（可带 ?scenario=S-201&switch.CP-01=OPEN）
+            q = parse_qs(u.query)
+            scen = (q.get("scenario") or ["park-arena-01"])[0]
+            src = ROOT / "arena" / "scenarios" / (scen if scen.endswith(".yaml") else scen + ".yaml")
+            if not src.exists():
+                src = ROOT / "dsl" / "examples" / (scen if scen.endswith(".yaml") else scen + ".yaml")
+            if not src.exists():
+                return _json(self, 404, {"error": f"场景不存在: {scen}"})
+            cfg = load_scenario(src)
+            export = dslv.build_export(cfg, "<sld>")
+            sw = {k[7:]: v[0] for k, v in q.items() if k.startswith("switch.")}
+            svg = generate_sld(export, switch_states=sw)
+            body = svg.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path.startswith("/api/runs/"):
             parts = path.strip("/").split("/")
             run_id = parts[2]
