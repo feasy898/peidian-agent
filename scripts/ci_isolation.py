@@ -42,6 +42,12 @@ SCAN_DIRS = (
     "skills",
     "prompts",
     "assets",
+    "arena",
+    "fault",
+    "dsl",
+    "docs",
+    "web",
+    "ui",
 )
 
 _TEXT_SUFFIXES = frozenset({
@@ -93,6 +99,19 @@ def run_isolation(root: Path | None = None) -> list:
     return hits
 
 
+def count_scannable_files(root: Path) -> int:
+    """统计 SCAN_DIRS 下可扫描文件总数（自检用）。"""
+    total = 0
+    for name in SCAN_DIRS:
+        base = root / name
+        if not base.exists():
+            continue
+        for path in base.rglob("*"):
+            if path.is_file():
+                total += 1
+    return total
+
+
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description="holdout 隔离断言（命中即验收作废）")
     parser.add_argument("--root", type=Path, default=None, help="仓库根目录（默认：脚本位置推断）")
@@ -104,7 +123,12 @@ def main(argv: list | None = None) -> int:
         for hit in hits:
             print(f"  {hit.rel_path}:{hit.line_no}: matched={hit.matched!r} :: {hit.line_text}")
         return 1
-    print(f"ISOLATION OK: pattern={ISOLATION_PATTERN!r} zero hits in {', '.join(SCAN_DIRS)}")
+    root = args.root or repo_root_from_script()
+    file_count = count_scannable_files(root.resolve())
+    if file_count == 0:
+        print("ISOLATION SELF-CHECK FAILED: zero files scanned (SCAN_DIRS empty or missing)")
+        return 2
+    print(f"ISOLATION OK: pattern={ISOLATION_PATTERN!r} zero hits in {', '.join(SCAN_DIRS)} ({file_count} files)")
     return 0
 
 
