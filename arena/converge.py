@@ -360,7 +360,7 @@ def main(argv=None) -> int:
             return 2
         verdict = judge(merged, thresholds)
         REPORT_DIR.mkdir(parents=True, exist_ok=True)
-        out = REPORT_DIR / "converge-judgment.json"
+        out = REPORT_DIR / "converge-merged.json"
         out.write_text(json.dumps(verdict, ensure_ascii=False, indent=1), encoding="utf-8")
         print(json.dumps({"result": "CONVERGED" if verdict["converged"] else "NOT_CONVERGED",
                           "runs": verdict["runs"], "errors": verdict["errors"],
@@ -368,10 +368,19 @@ def main(argv=None) -> int:
         print(f"report -> {out}")
         return 0 if verdict["converged"] else 1
 
-    files = _scenario_files(adjudication_only=False, scen_dir=Path(args.scenarios_dir))
-    runs = args.runs or int(thresholds.get("budget", {}).get("total_runs", 30000))
     if args.mode == "calibrate":
+        files = _scenario_files(adjudication_only=False, scen_dir=Path(args.scenarios_dir))
         runs = args.runs or int(thresholds.get("budget", {}).get("calibration_runs", 100))
+    else:
+        # judge / 其他模式：必须为纯 ADJ- 目录
+        all_yaml = sorted(Path(args.scenarios_dir).glob("*.yaml"))
+        non_adj = [f for f in all_yaml if not f.stem.startswith(ADJ_PREFIX)]
+        if non_adj:
+            print(f"REFUSED: {args.mode} mode requires ADJ- only directory, "
+                  f"found non-ADJ- files: {non_adj}")
+            return 2
+        files = [f for f in all_yaml if f.stem.startswith(ADJ_PREFIX)]
+        runs = args.runs or int(thresholds.get("budget", {}).get("total_runs", 30000))
 
     if not files:
         print(f"NO SCENARIOS: {args.scenarios_dir} 为空（阶段 d D-4 场景库未就绪）")
