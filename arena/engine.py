@@ -49,6 +49,13 @@ except ImportError:
     WeatherModel = None
     POWERFLOW_AVAILABLE = False
 
+# 可选 LLM 推理诊断代理（目标4：Agent 智能化）
+try:
+    from arena.llm_agent import LLMDiagnosisAgent, LLM_AVAILABLE
+except ImportError:
+    LLMDiagnosisAgent = None
+    LLM_AVAILABLE = False
+
 __all__ = ["ArenaEngine", "ScenarioRejected", "engine_type_of"]
 
 # DSL kind → fault 引擎类型。规则：kind 大写即引擎类型；唯一别名 overload→TX_OVERLOAD
@@ -177,6 +184,15 @@ class ArenaEngine:
             except Exception:
                 self.use_powerflow = False
                 self.powerflow = None
+
+        # 可选 LLM 推理诊断（目标4；无 key 时 enabled=False，mock 回退）
+        self.llm_agent = None
+        if LLM_AVAILABLE and LLMDiagnosisAgent is not None:
+            try:
+                self.llm_agent = LLMDiagnosisAgent()
+            except Exception:
+                self.llm_agent = None
+        self.llm_diagnoses: list[dict] = []
 
         self.faults: dict[str, dict] = {
             f["id"]: f for f in (config.get("faults") or []) if isinstance(f, dict) and f.get("id")
@@ -403,6 +419,30 @@ class ArenaEngine:
                         weather=self.weather)
                 except Exception:
                     self.last_powerflow = None
+
+            # LLM 增强诊断：新检出的异常追加 LLM 推理诊断步骤（目标4）
+            if self.llm_agent is not None and self.llm_agent.enabled:
+                detected_now = len(self.engine.stream.to_list(
+                    channel="fault", etype="fault.detected")) - detected_before
+                if detected_now > 0:
+                    new_anoms = [a for a in self.engine.detector.active.values()
+                                 if a.status == "active"][:detected_now]
+                    for a in new_anoms:
+                        try:
+                            entry = self.faultlib.entry_for(a.hint) if self.faultlib else None
+                            diag = self.llm_agent.diagnose(
+                                anomaly={"hint": a.hint, "target": a.target,
+                                         "severity": a.severity,
+                                         "evidence": a.evidence},
+                                telemetry=self.engine.sample or {},
+                                fault_entry=entry)
+                            diag["anomaly_id"] = a.anomaly_id
+                            diag["sim_s"] = round(self.engine.sim_s, 3)
+                            self.llm_diagnoses.append(diag)
+                            self.engine.stream.append("agent", "agent.llm_diagnosis", diag,
+                                                      sim_s=self.engine.sim_s)
+                        except Exception as exc:
+                            logger.warning("LLM diagnosis failed for %s: %s", a.hint, exc)
             # 动作恶化检测：本拍新发生了 ops 动作且失电负荷·秒增量 > 0
             actions_now = len(self.engine.stream.to_list(channel="ops"))
             if actions_now > actions_before and self._outage_kws > outage_before + 1e-9:
@@ -527,6 +567,8 @@ class ArenaEngine:
             "unresponded": max(0, len(detected) - len(respond_lat)),
             "worsening_actions": self._worsening_actions,
             "hygiene": round(len(self._fired_calendar) / max(len(self.calendar_times), 1), 6),
+            "llm_diagnoses": self.llm_diagnoses,
+            "llm_stats": self.llm_agent.stats() if self.llm_agent else {"enabled": False},
         }
         summary = {
             "anomalies": {
