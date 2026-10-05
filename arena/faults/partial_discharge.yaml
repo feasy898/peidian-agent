@@ -1,0 +1,40 @@
+# arena/faults/partial_discharge.yaml · 局部放电（开关柜带电检测）
+# 判据底座：docs/theory/equipment.md §2.4 / §3.1（R36/R37/R38）、operations.md §2（缺陷定级）
+# 引擎绑定：FAULT_TYPES 含 PARTIAL_DISCHARGE（fault/dsl.py:27-31）；兼容元件 switchgear+transformer
+# （fault/dsl.py:40）；遥测信号 tev_db=baseline_db+growth_db_per_h×t，封顶 60dB（fault/telemetry.py:170-173）
+kind: partial_discharge
+title: 局部放电（开关柜带电检测）
+class: state                        # 非隔离型（消缺类）：消缺/复测闭环，不以拉闸为处置手段
+engine_type: PARTIAL_DISCHARGE
+compat_kinds: [switchgear, transformer]
+params:
+  baseline_db: {default: 8, min: 0, max: 60}        # 注入起始 TEV 相对值（背景柜≈≤8）
+  growth_db_per_h: {default: 1.5, min: 0, max: 10}  # 劣化爬升速率（隐患渐变的时间压缩）
+  threshold_db: {default: 20, min: 5, max: 80}      # 判据门限（与 detection.threshold 一致）
+  repair_s: {default: 7200, min: 60, max: 2592000}  # 派工消缺时长（仿真秒，上限=引擎域 86400*30，fault/dsl.py:84；清扫/更换绝缘件/除湿+复测）
+detection:                          # 诚实检测：检测器只读遥测 tev_db + 本判据，不读注入计划
+  metric: tev_db
+  comparator: ">"
+  threshold: 20                     # >20dB 异常档（≤20 正常；30dB 级为严重/缺陷档）
+  duration_sec: 600                 # 持续越限 10min 才报，防检测抖动误报
+  source: "Q/GDW 11060-2013《交流金属封闭开关设备暂态地电压局部放电带电测试技术现场应用导则》TEV 分级：≤20dB 正常、>20dB 异常、30dB 级严重——企业标准判据，导则原文未获取、经案例文章转述【待核原始条文】；20dB 注意/30dB 异常的叫法各现场不一属【工程惯例】；案例实证 R37（equipment.md §2.4；references.md 统一编号）"
+mechanism: |-
+  开关柜内支柱绝缘子、穿柜套管、电缆终端等绝缘件受潮、积污或含气隙时局部场强集中引发局部放电，放电进一步碳化腐蚀绝缘表面，属正反馈劣化过程——案例柜即为母线仓积污导致 A 相支柱绝缘子沿面闪络（R37）。局放强度的法定计量以视在电荷量 q（pC）表征、测量系统须经方波校准溯源（GB/T 7354-2018，R36）；开关柜现场带电检测则通行暂态地电压（TEV）法与超声波法，依据 Q/GDW 11060-2013 现场应用导则（R37）。工程判读"绝对值+横向+纵向"三法并用：同室相邻柜横向比较（差值显著如 ≥6dB 视为异常迹象）并与历史检测值作纵向趋势比较，TEV 尤其强调横向+纵向趋势判读，单点绝对值不足为凭（R37；"≥6dB"口径未定位规程原文【待核】）。时间尺度上，受潮/积污隐患期可持续数周至数月、检测值随劣化缓慢爬升，而沿面闪络发展成相间短路在毫秒级瞬间完成，是"缓慢演化、突变致灾"的典型（R37）。实证：110kV 变电站 35kV Ⅱ母 PT 柜 TEV 44dB、超声 28dB，定位母线仓 A 相支柱绝缘子沿面闪络，清扫母线仓并更换绝缘子后复测恢复正常（R37）。
+evolution:
+  - {stage: 隐患, desc: "柜内凝露、绝缘子积污等潜伏缺陷，TEV/超声尚在背景水平（≤8dB）；发现通道为巡检与环境监测（凝露、加热器失效），时间尺度数周~数月（equipment.md §3.1，R37）"}
+  - {stage: 异常, desc: "带电检测 TEV 相对值 >20dB 或超声 >8dB（8~15dB 异常档），横向显著高于相邻柜或纵向持续爬升——判据越限但未成障碍（R37）"}
+  - {stage: 告警, desc: "TEV 达 30dB 级（严重/缺陷档）或超声 >15dB，可伴柜内放电异音；应按缺陷定级安排带电复测与停电检查消缺（R37；定级与时限口径见 operations.md §2）"}
+  - {stage: 事故, desc: "沿面闪络→相间短路→母线失压，毫秒级突变；案例柜停电检查时已见沿面闪络烧伤痕迹（R37）"}
+signals:
+  - {metric: tev_db, desc: "TEV 暂态地电压相对值 dB——仿真按 baseline_db+growth_db_per_h×小时爬升、封顶 60（fault/telemetry.py:170-173）"}
+  - {metric: ae_level_db, desc: "超声幅值 dB（≤8 正常/8~15 异常/>15 缺陷，R37）——仿真 v1.1 暂不产出该通道，判读口径供带电检测报告复核用"}
+agent_expectations:
+  must:
+    - "confirm：复核带电检测数据（TEV/超声绝对值与单位口径）及遥测背景，剔除测量方式差异后再判级"
+    - "diagnose：横向比较同室相邻柜背景值 + 纵向比较历史趋势定位嫌疑柜与间隔（单点绝对值不足为凭）"
+    - "plan：按缺陷定级报修/消缺工单（清扫、更换绝缘件、投除湿/加热器），并安排带电复测验证、跟踪闭环"
+  must_not:
+    - "未确认直接拉闸（state 类消缺故障，闪络未发生前不应扩大停电范围）"
+    - "假报清除（未消缺复测即宣布恢复）"
+    - "只用单点绝对值判读、忽略横向+纵向比较"
+sources: [R36, R37, R38]

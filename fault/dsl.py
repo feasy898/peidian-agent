@@ -1,18 +1,22 @@
 # -*- coding: utf-8 -*-
-"""fault.dsl · 故障 DSL：四类故障事件的定义 / 校验 / YAML 序列化。
+"""fault.dsl · 故障 DSL：四类既有白名单 + v1.1 论文故障库 11 类的定义/校验/YAML 序列化。
 
-四类白名单（越界即拒，SPEC 来源：owner 夜班令线3-1/3-2）：
+既有白名单（越界即拒，SPEC 来源：owner 夜班令线3-1/3-2）：
   SHORT_CIRCUIT 短路   LINE_BREAK 断线   TX_OVERLOAD 变压器过载   PV_TRIP 光伏脱网
 
-元件 ID 引用线1拓扑 DSL 约定（ontology/seed.yaml 同名口径；worker-A dsl/ 落位后
-以其生成物为准，本模块只依赖 fault.topology.Topology 读取面）。
+v1.1 扩展（2026-10-01 · 阶段 d）：11 类通用信号故障——注入=信号规则，检测=阈值/
+持续时间判据（诚实检测：检测器只读遥测与判据，不读注入计划）。判据出处见
+arena/faults/<kind>.yaml 与 docs/theory/（R 编号）。
+
+元件 ID 引用线1拓扑 DSL 约定（ontology/seed.yaml 同名口径；dsl/ 落位后以其生成物为准，
+本模块只依赖 fault.topology.Topology 读取面）。
 """
 from __future__ import annotations
 
 import copy
 import yaml
 
-from .topology import KIND_LINE, KIND_PV, KIND_TX, KIND_BUS, Topology
+from .topology import KIND_LINE, KIND_PV, KIND_TX, KIND_BUS, KIND_SW, KIND_LOAD, Topology
 
 __all__ = [
     "FAULT_TYPES", "COMPAT_KINDS", "PARAM_SPECS", "DEFAULT_PARAMS",
@@ -20,7 +24,11 @@ __all__ = [
     "fault_to_yaml",
 ]
 
-FAULT_TYPES = ("SHORT_CIRCUIT", "LINE_BREAK", "TX_OVERLOAD", "PV_TRIP")
+FAULT_TYPES = ("SHORT_CIRCUIT", "LINE_BREAK", "TX_OVERLOAD", "PV_TRIP",
+               "PARTIAL_DISCHARGE", "TEMPERATURE_RISE", "HARMONIC",
+               "THREE_PHASE_UNBALANCE", "OVER_LIMIT", "PROTECTION_MALOPERATION",
+               "TRANSFORMER_FAULT", "DC_GROUND_FAULT", "PHASE_LOSS",
+               "SINGLE_PHASE_GROUND", "ENVIRONMENTAL")
 
 # 类型-元件类别兼容矩阵（越界组合直接拒绝）
 COMPAT_KINDS: dict[str, frozenset] = {
@@ -28,10 +36,22 @@ COMPAT_KINDS: dict[str, frozenset] = {
     "LINE_BREAK": frozenset({KIND_LINE}),
     "TX_OVERLOAD": frozenset({KIND_TX}),
     "PV_TRIP": frozenset({KIND_PV}),
+    # v1.1 扩展：通用信号故障（信号层 fault.telemetry / 判据层 fault.detect）
+    "PARTIAL_DISCHARGE": frozenset({KIND_SW, KIND_TX}),
+    "TEMPERATURE_RISE": frozenset({KIND_SW}),
+    "HARMONIC": frozenset({KIND_BUS, KIND_LOAD}),
+    "THREE_PHASE_UNBALANCE": frozenset({KIND_BUS, KIND_TX, KIND_LOAD}),
+    "OVER_LIMIT": frozenset({KIND_LINE, KIND_BUS}),          # TX 越限走 TX_OVERLOAD
+    "PROTECTION_MALOPERATION": frozenset({KIND_TX, KIND_LINE}),
+    "TRANSFORMER_FAULT": frozenset({KIND_TX}),
+    "DC_GROUND_FAULT": frozenset({KIND_BUS}),                # DC 屏挂接母线（演示简化）
+    "PHASE_LOSS": frozenset({KIND_LOAD, KIND_LINE}),
+    "SINGLE_PHASE_GROUND": frozenset({KIND_BUS, KIND_LINE}),
+    "ENVIRONMENTAL": frozenset({KIND_BUS}),                  # 环境量挂接母线（演示简化）
 }
 
 # 参数规格：name -> (类型, 约束说明, 校验函数(v,s)->bool, 默认值)
-PARAM_SPECS: dict[str, tuple] = {
+PARAM_SPECS: dict[str, dict] = {
     "SHORT_CIRCUIT": {
         "phase": (str, "single|two|three",
                   lambda v, s: v in ("single", "two", "three"), "three"),
@@ -55,6 +75,62 @@ PARAM_SPECS: dict[str, tuple] = {
         "reason": (str, "over_voltage|over_frequency|island|equipment",
                    lambda v, s: v in ("over_voltage", "over_frequency", "island",
                                       "equipment"), "over_voltage"),
+    },
+    # ---- v1.1 扩展（schema 与 arena/faults/<kind>.yaml 对齐）----
+    "PARTIAL_DISCHARGE": {
+        "baseline_db": ((int, float), "[0,60]", lambda v, s: 0 <= float(v) <= 60, 8),
+        "growth_db_per_h": ((int, float), "[0,10]", lambda v, s: 0 <= float(v) <= 10, 1.5),
+        "threshold_db": ((int, float), "[5,80]", lambda v, s: 5 <= float(v) <= 80, 20),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 7200),
+    },
+    "TEMPERATURE_RISE": {
+        "ambient_c": ((int, float), "[-20,50]", lambda v, s: -20 <= float(v) <= 50, 30),
+        "rise_k_per_h": ((int, float), "[0,60]", lambda v, s: 0 <= float(v) <= 60, 12),
+        "limit_c": ((int, float), "[40,200]", lambda v, s: 40 <= float(v) <= 200, 90),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 14400),
+    },
+    "HARMONIC": {
+        "thdu_pct": ((int, float), "[0,30]", lambda v, s: 0 <= float(v) <= 30, 6.5),
+        "dominant_order": (int, "[2,25]", lambda v, s: 2 <= int(v) <= 25, 5),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 21600),
+    },
+    "THREE_PHASE_UNBALANCE": {
+        "unbalance_pct": ((int, float), "[0,30]", lambda v, s: 0 <= float(v) <= 30, 4.5),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 21600),
+    },
+    "OVER_LIMIT": {
+        "load_ratio": ((int, float), "(0.8,3]", lambda v, s: 0.8 < float(v) <= 3.0, 1.15),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 10800),
+    },
+    "PROTECTION_MALOPERATION": {
+        "mode": (str, "spurious_trip|failure_to_trip|signal_error",
+                 lambda v, s: v in ("spurious_trip", "failure_to_trip", "signal_error"),
+                 "signal_error"),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 21600),
+    },
+    "TRANSFORMER_FAULT": {
+        "target_oil_temp_c": ((int, float), "[50,160]", lambda v, s: 50 <= float(v) <= 160, 95),
+        "rise_k_per_h": ((int, float), "[0,60]", lambda v, s: 0 <= float(v) <= 60, 6),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 28800),
+    },
+    "DC_GROUND_FAULT": {
+        "insulation_kohm": ((int, float), "(0,100]", lambda v, s: 0 < float(v) <= 100, 8),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 14400),
+    },
+    "PHASE_LOSS": {
+        "current_dev_pct": ((int, float), "[0,100]", lambda v, s: 0 <= float(v) <= 100, 25),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 14400),
+    },
+    "SINGLE_PHASE_GROUND": {
+        "phase_voltage_pu": ((int, float), "[1.0,2.0]", lambda v, s: 1.0 <= float(v) <= 2.0, 1.73),
+        "allowed_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400, 7200),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 14400),
+    },
+    "ENVIRONMENTAL": {
+        "mode": (str, "high_temp|smoke|water",
+                 lambda v, s: v in ("high_temp", "smoke", "water"), "high_temp"),
+        "room_temp_c": ((int, float), "[20,80]", lambda v, s: 20 <= float(v) <= 80, 42),
+        "repair_s": ((int, float), ">0", lambda v, s: 0 < float(v) <= 86400 * 30, 7200),
     },
 }
 

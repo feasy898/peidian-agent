@@ -1,0 +1,39 @@
+# arena/faults/harmonic.yaml · 谐波超标（整流型负荷/电力电子）
+# 判据底座：docs/theory/equipment.md §2.2.2 / §3.7（R32，GB/T 14549-1993 限值经 vfe.ac.cn 通道实测核验）
+# 引擎绑定：FAULT_TYPES 含 HARMONIC（fault/dsl.py:27-31）；兼容元件 bus+load（fault/dsl.py:42）；
+# 遥测信号 thdu_pct（阶跃置值）+ dominant_order（fault/telemetry.py:179-181）
+kind: harmonic
+title: 谐波超标（整流型负荷）
+class: state                        # 非隔离型（消缺类）：负荷侧溯源与治理，不以拉闸为处置手段
+engine_type: HARMONIC
+compat_kinds: [bus, load]
+params:
+  thdu_pct: {default: 6.5, min: 0, max: 30}         # 注入的电压总谐波畸变率（默认已越 0.4kV 5%/10kV 4% 限值）
+  dominant_order: {default: 5, min: 2, max: 25}     # 主导谐波次数（6 脉波整流特征 5/7/11/13 次）
+  repair_s: {default: 21600, min: 60, max: 2592000} # 派工治理时长（仿真秒，上限=引擎域 86400*30，fault/dsl.py:95；负荷调度/滤波治理+复测）
+detection:                          # 诚实检测：检测器只读遥测 thdu_pct + 本判据
+  metric: thdu_pct
+  comparator: ">"
+  threshold: 4                      # 取 10kV 母线口径（较严值）；0.4kV 母线按 5% 口径覆盖判读
+  duration_sec: 600                 # 持续越限 10min 才报，防投切瞬态误报
+  source: "GB/T 14549-1993《电能质量 公用电网谐波》各电压等级 THDu 限值：0.38kV ≤5%、6~10kV ≤4%、35~66kV ≤3%、110kV ≤2%（220kV 参照 110kV）【标准条文】（R32；本次经 vfe.ac.cn 汇总页实测核验）；配套测量窗口与取值统计（如 95% 概率大值）口径【待核-测量方法】（equipment.md 待核 #11）"
+mechanism: |-
+  充电桩、UPS、光伏逆变器等整流/电力电子负荷是园区谐波的主要来源，负荷构成变化（如充电桩占用率爬升）即"正常营业"下最常见的谐波演化驱动（equipment.md §3.7，R32）。6 脉波整流桥的特征谐波为 6k±1 次（5、7、11、13…），充电桩/UPS 整流前端多以 5、7 次为主导——此为电力电子教科书通识，本卷参考文献未单列出处，不冒标标准号。谐波电压由谐波电流流经系统阻抗产生；允许注入电网的谐波电流按公共连接点（PCC）短路容量与用电协议容量折算（GB/T 14549-1993 附录口径，建库判读提一句即可、不逐值计算）。GB/T 14549-1993 规定各级电压 THDu 限值：0.38kV ≤5%、6~10kV ≤4%、35~66kV ≤3%、110kV ≤2%（R32）。危害路径：谐波电流流经并联电容器引起过流/鼓肚，特定参数下发生谐振放大，并致敏感负荷脱扣（equipment.md §3.7）。
+evolution:
+  - {stage: 隐患, desc: "充电桩/UPS/逆变器群投入，背景 THDu 升高但仍在限值内；负荷构成变化是主要驱动（equipment.md §3.7）"}
+  - {stage: 异常, desc: "THDu 逼近限值（0.4kV 母线 5%、10kV 母线 4%），5/7/11/13 次特征谐波占比抬升（R32）"}
+  - {stage: 告警, desc: "THDu 越限（按电压等级 >4% 或 >5%），电能质量监测装置超标告警；判读应配套测量窗口与取值统计口径【待核-测量方法】（R32，equipment.md 待核 #11）"}
+  - {stage: 事故, desc: "电容器过流鼓肚、谐振放大、敏感负荷脱扣（equipment.md §3.7）"}
+signals:
+  - {metric: thdu_pct, desc: "电压总谐波畸变率 %——阶跃置值（fault/telemetry.py:180），按母线电压等级对照 GB/T 14549 限值判读"}
+  - {metric: dominant_order, desc: "主导谐波次数（整型）——5/7/11/13 次指向 6 脉波整流来源（教科书通识），用于溯源充电桩/UPS/逆变器群"}
+agent_expectations:
+  must:
+    - "confirm：复核 THDu 与主导谐波次数遥测，核对电压等级对应限值口径（0.38kV 5%/10kV 4%）与测量窗口口径"
+    - "diagnose：溯源整流型负荷来源（充电桩占用率变化、UPS、逆变器群），按特征次数（5/7/11/13 次）判断来源类型并横向比较各母线"
+    - "plan：负荷侧治理（充电分时调度、错峰）、加装滤波/APF 建议，超标报修/消缺工单并跟踪复测；允许注入电流按 PCC 短路容量折算口径提示一句即可，无需逐值计算"
+  must_not:
+    - "未确认直接拉闸（state 类消缺故障，先负荷侧溯源治理）"
+    - "假报清除（未治理复测即宣布恢复）"
+    - "套错限值口径（10kV 母线误用 5%、0.4kV 母线误用 4%）"
+sources: [R32]

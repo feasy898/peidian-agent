@@ -1,0 +1,4 @@
+# peidian-agent 子树行尾锁定：所有文本文件一律 LF。
+# 本仓 SPEC/EVAL 的 sha256 冻结登记按 LF 字节计算（run_evals.py 重算 spec_hash），
+# Windows 检出若被 core.autocrlf=true 污染成 CRLF 会触发 SPEC_DRIFT。
+* text=auto eol=lf

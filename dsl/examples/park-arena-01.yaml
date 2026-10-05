@@ -1,0 +1,175 @@
+# examples/park-arena-01.yaml · 练习场样例（v1.1 三节示范：faults/calendar/scenario）
+# 基底 = park-medium-01（星辰智造产业园），叠加阶段 d 练习场三节。
+# 判据出处 R31–R50 = docs/theory/equipment.md 参考文献（GB/DL 标准 + 事故案例）。
+# 校验：python dsl/validate.py validate dsl/examples/park-arena-01.yaml
+api: parkdsl/1
+park:
+  id: PARK-202
+  name: 星辰智造产业园（练习场配置）
+  description: |-
+    与 park-medium-01 同拓扑的练习场配置：叠加 faults 故障库引用、calendar 业务日历、
+    scenario 倍速场景。用于 arena 引擎端到端试跑与人机对比演示。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# v1.1 · faults：故障库引用条（kind ∈ arena/faults 库；criteria_ref → docs/theory/references.md）
+# ============================================================================
+faults:
+  - id: F-PD-01                                   # 局部放电（开关柜带电检测）
+    kind: partial_discharge
+    target: SG-A01
+    severity: warn
+    criteria_ref: R37                             # 35kV 开关柜局放案例（TEV/超声分级）
+    detection: {metric: tev_db, threshold: 20, comparator: ">", duration_sec: 600, window: trend}
+    note: TEV 横向+纵向趋势判读；>20dB 注意 / >30dB 异常（Q/GDW 11060-2013 分级；案例实测缺陷柜 44dB）
+  - id: F-TEMP-01                                 # 触头温升过热
+    kind: temperature_rise
+    target: SG-A00
+    severity: alarm
+    criteria_ref: R35                             # GB/T 11022-2020（环温 40℃ 基准、温升限值表）
+    detection: {metric: contact_temp_c, threshold: 90, comparator: ">", duration_sec: 300}
+    note: 无线测温工程三级：预警 70~80 / 告警 90~100 / 跳闸 110~120℃（GB/T 11022 表 3 逐值待核）
+  - id: F-HARM-01                                 # 谐波畸变
+    kind: harmonic
+    target: BUS-A2
+    severity: warn
+    criteria_ref: R32                             # GB/T 14549-1993（0.38kV THDu ≤5%）
+    detection: {metric: thdu_pct, threshold: 5, comparator: ">", duration_sec: 900}
+    note: 充电桩整流型负荷特征谐波；阈值按 0.4kV 档
+  - id: F-UNBAL-01                                # 三相不平衡
+    kind: three_phase_unbalance
+    target: BUS-B2
+    severity: warn
+    criteria_ref: R33                             # GB/T 15543-2008（负序不平衡 ≤2% / 短时 4%）
+    detection: {metric: neg_seq_unbalance_pct, threshold: 2, comparator: ">", duration_sec: 900}
+    note: 单相负荷分配不均；Yyn0 配变留意中性线电流
+  - id: F-OVL-01                                  # 变压器重过载（引擎原生 TX_OVERLOAD）
+    kind: overload
+    target: TX-B01
+    severity: warn
+    criteria_ref: R39                             # DL/T 572-2021（变压器运行规程）
+    detection: {metric: load_rate, threshold: 1.0, comparator: ">", duration_sec: 600}
+    note: 负载率 >1.0 重过载 P0（REG-TECH PHYS-TX-LOAD）；>0.80 预警为工程惯例（threshold.warn 事件）
+  - id: F-TXFAULT-01                              # 变压器本体故障（油温）
+    kind: transformer_fault
+    target: TX-A01
+    severity: accident
+    criteria_ref: R39
+    detection: {metric: oil_temp_c, threshold: 85, comparator: ">", duration_sec: 1800}
+    note: 顶层油温不宜经常超过 85℃；105℃ 跳闸口径（干变为温控器 130/150℃）
+  - id: F-SPGND-01                                # 小电流接地系统单相接地
+    kind: single_phase_ground
+    target: BUS-A1
+    severity: alarm
+    criteria_ref: R45                             # 中性点非有效接地系统特征（非故障相升 √3）
+    detection: {metric: phase_voltage_pu, threshold: 1.7, comparator: ">", duration_sec: 120}
+    note: 线电压仍对称、允许带故障运行一般 ≤2h；发展成相间短路必须退出
+  - id: F-DCGND-01                                # 直流系统接地（挂接 A 房 10kV 母线）
+    kind: dc_ground_fault
+    target: BUS-A1
+    severity: alarm
+    criteria_ref: R41                             # DL/T 1392-2014（直流绝缘监测装置）
+    detection: {metric: dc_insulation_kohm, threshold: 25, comparator: "<", duration_sec: 60}
+    note: 一点接地告警即查找；两点接地→保护误动/拒动风险；220V 系统约 25kΩ 为工程惯例
+  - id: F-ENV-01                                  # 环境类（高温，园区级）
+    kind: environmental
+    severity: warn
+    criteria_ref: R46                             # 十八项反措体系（环境安全）
+    detection: {metric: room_temp_c, threshold: 40, comparator: ">", duration_sec: 300}
+    note: 配电房温度 5~35℃ 运行区间、>40℃ 告警；水浸/烟感触发即联动告警
+  - id: F-PHLOSS-01                               # 缺相
+    kind: phase_loss
+    target: LD-A01
+    severity: alarm
+    criteria_ref: R33
+    detection: {metric: phase_current_dev_pct, threshold: 15, comparator: ">", duration_sec: 60}
+    note: 相电流差 >15% 告警为工程惯例；电机缺相堵转过流
+  - id: F-PVTRIP-01                               # 光伏脱网（既有引擎白名单类型，无 criteria_ref）
+    kind: pv_trip
+    target: PV-01
+    severity: info
+    detection: {metric: pv_output_kw, threshold: 0, comparator: "==", duration_sec: 300}
+    note: 判据见 fault/detect.py；消缺前异常保持、不假报清除
+
+# ============================================================================
+# v1.1 · calendar：业务日历（正常营业与管理变化的事件源）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 7, at: "14:00"}
+    - {id: CAL-DIESEL, type: preventive_test, every_days: 30, params: {item: diesel_start}}
+    - {id: CAL-UPS, type: preventive_test, every_days: 90, params: {item: ups_battery_capacity}}
+    - {id: CAL-OUTAGE, type: outage_plan, every_days: 365, params: {reason: "变压器预防性试验", notify_days_ahead: 7}}
+    - {id: CAL-BAODIAN, type: baodian, every_days: 90, params: {level: "一级"}}
+    - {id: CAL-95598, type: work_order_95598, params: {response_min: 45}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# ============================================================================
+# v1.1 · scenario：倍速场景 + 注入计划（D-1/D-2/D-3）
+# ============================================================================
+scenario:
+  seed: 202
+  duration_sim_s: 604800                          # 7 仿真日
+  clock_speed: 600                                # 每墙钟秒 = 600 仿真秒（10 分钟倍速）
+  description: 中等园区一周营业模拟：夜巡暴露局放隐患→充电桩启用谐波越限→B 变过载→A 变油温故障
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-PD-01, at_sim_s: 86400}           # 第 1 日夜巡后隐患显现（趋势型）
+    - {fault: F-HARM-01, at_sim_s: 180000}        # 第 3 日充电桩启用后谐波越限
+    - {fault: F-OVL-01, at_sim_s: 345600}         # 第 5 日 B 变负载率越限
+    - {fault: F-TXFAULT-01, at_sim_s: 518400}     # 第 6 日 A 变顶层油温持续爬升

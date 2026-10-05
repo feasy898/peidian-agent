@@ -1,0 +1,133 @@
+# arena/scenarios/S-210.yaml · B 变相间突发短路：速判隔离 + 母联转供（gapless 演练）
+# 叙事：午后 14:00，B 房主变 TX-B01 高压侧引线/绕组间绝缘击穿，突发两相相间短路——
+#       故障电流≈+6pu（>4pu 征兆阈值）、下游母线电压塌陷（故障区 0.15pu/上级 0.6pu，
+#       fault/telemetry.py 声明值）。agent 应：确认"电流>4pu + 电压塌陷共现"判短路→
+#       隔离 TX-B01（开 SG-B00/SG-B01，两侧形成明显断开点防反送电）→合母联 CP-01
+#       （常开联络，gapless 关键：先隔离后合环方向转供，绝不闭环运行）恢复 BUS-B2
+#       低压负荷→复测塌陷消失闭环，10kV 侧 BUS-B1 留抢修工单。
+# 目标口径（口径勘误）：任务原文为"short_circuit@线路（电缆终端）"。现行校验器
+#       faults.target 命名空间 = 设备 ID ∪ 链接 LN/CP ID（dsl/validate.py:95-111、
+#       dsl_spec.yaml id_rules.note），线路目标可表达（如 S-220 F-LB-01→LN-02 已过
+#       校验与干跑）；本场景按引擎兼容矩阵（SHORT_CIRCUIT ∈ {line,transformer}，
+#       fault/dsl.py:35）取变压器目标 TX-B01，叙事为"主变引线/绕组相间短路"，
+#       拓扑仍保留 LN-02 电缆 B 侧进线间隔开关 SG-B02 供网络型演练复用。
+# 判据口径：short_circuit 为既有引擎白名单类型（无 arena/faults 库条目、无 criteria_ref）——
+#       判据权威 = fault/detect.py TH_SC_CURRENT=4pu（电流征兆）+ fault/telemetry.py
+#       电压塌陷声明值；本文件 detection 仅作园区监控配置留痕（current_ratio 不在通用
+#       信号判据表，引擎原生规则 1 拍内即时判定）。隔离/倒闸操作执行两票三制纪律【R63】。
+# 容量口径：TX-A01 取 2000kVA——隔离 TX-B01 并经 CP-01 转供后 A 变负载率约 0.62
+#           （油温模型 ≈77℃ < 85℃，无级联异常），转供演示不失真。
+# 校验：python dsl/validate.py validate arena/scenarios/S-210.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-210.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+source: "S-210 相间短路演练：short_circuit@TX-B01（引擎白名单类型，电流>4pu+电压塌陷判据；原任务口径为电缆终端@线路，本场景取变压器目标 TX-B01——现行校验器已支持链接目标，口径见文件头），agent 应隔离（SG-B00/SG-B01 明显断开点）+ 合常开母联 CP-01 转供，操作纪律见 R63 两票三制。"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（S-210 相间短路演练）
+  description: |-
+    PARK-202 结构（SR-A + SR-B + 常开母联 CP-01），10kV 联络电缆 LN-02 的 B 侧设
+    进线间隔开关 SG-B02。演练：B 变 TX-B01 相间突发短路 → 速判 → 隔离 →
+    CP-01 转供（gapless：先隔离后合环方向）。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 2000, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+      - {id: SG-B02, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  # 10kV 联络电缆 LN-02 的 B 侧进线间隔开关 SG-B02（仅设 B 侧开关：
+  # park_adapter ③.5 以线路侧为 frm 的方向规则要求受电开关位于线路末端）
+  - {from: BUS-A1, to: SG-B02, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: SG-B02, to: BUS-B1, kind: direct}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  # CP-01 常开联络（gapless 关键）：只允许"隔离故障段后合环方向转供"，绝不先合后分
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# v1.1 · faults：故障库引用条（kind ∈ arena/faults 库；criteria_ref → docs/theory/references.md）
+# ============================================================================
+faults:
+  - id: F-SC-210                                  # 相间短路（引擎原生白名单类型）
+    kind: short_circuit
+    target: TX-B01
+    severity: accident
+    detection: {metric: current_ratio, threshold: 4, comparator: ">", duration_sec: 1}
+    note: TX-B01 高压侧引线/绕组两相相间短路（phase=two）：故障电流≈+6pu > 4pu 征兆阈值
+      （fault/detect.py TH_SC_CURRENT）且下游母线电压塌陷（故障区 0.15pu/上级 0.6pu，
+      fault/telemetry.py 声明值），共现即判短路、1 拍内检出——引擎原生白名单类型，
+      无 criteria_ref（无对应参考文献条目，判据为仿真近似声明）；隔离/倒闸操作执行
+      两票三制纪律【R63，国家电网十八项反事故措施】。期望 agent：确认→隔离 TX-B01
+      （开 SG-B00/SG-B01 形成明显断开点，防反送电）→合母联 CP-01 转供 BUS-B2
+      （预计 A 变负载率约 0.62）→复测塌陷消失闭环；BUS-B1/TX-B01 10kV 侧留抢修工单。
+
+# ============================================================================
+# v1.1 · calendar：业务日历（三班制 + 交接班/巡检/95598 抢修/电缆与主变红外专项/报告）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-CABLE, type: infrared_scan, every_days: 1, at: "16:00", params: {kind: cable_and_tx_terminal}}
+    - {id: CAL-95598, type: work_order_95598, params: {response_min: 45}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# ============================================================================
+# v1.1 · scenario：倍速场景 + 注入计划（D-1 14:00 午后负荷高位时段）
+# ============================================================================
+scenario:
+  seed: 1210
+  duration_sim_s: 86400                           # 1 仿真日（干跑快）
+  clock_speed: 600                                # 每墙钟秒 = 600 仿真秒
+  description: 相间突发短路演练：14:00 TX-B01 引线/绕组两相短路（电流≈+6pu、
+    故障区电压塌陷 0.15pu），1 拍内检出（P0）。agent 应速判短路→开 SG-B00/SG-B01
+    隔离（两侧明显断开点）→合常开母联 CP-01 转供恢复 BUS-B2（gapless：只允许
+    隔离后合环方向，预计 A 变负载率约 0.62）→复测塌陷消失闭环；BUS-B1/TX-B01
+    10kV 侧留抢修工单。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-SC-210, at_sim_s: 50400, params: {phase: two, impedance_ohm: 0.1, permanent: true}}
+    # 14:00=50400s 注入；引擎原生规则即时检出，隔离+转供分钟级完成

@@ -4,7 +4,9 @@
 
 ## 项目是什么
 
-面向 10kV/0.4kV 园区配电（含储能/光伏/充电桩）的运维 agent 系统。工程主线：「受控行动网关（Policy 三值 + HITL 审批）+ 两票制红线 + 仿真驱动 EVAL + 黄金集飞轮」。已完成 M0–M9 模块族、ParkDSL 园区规则语言、数字孪生前端（web/）、故障注入引擎（fault/）与部署包（deploy/）。
+面向 10kV/0.4kV 园区配电（含储能/光伏/充电桩）的运维 agent 系统。工程主线：「受控行动网关（Policy 三值 + HITL 审批）+ 两票制红线 + 仿真驱动 EVAL + 黄金集飞轮」。已完成 M0–M9 模块族、ParkDSL v1.1 园区规则语言（含练习场三节）、15 类故障注入引擎、论文故障库（11 条目）、arena 模拟练习场（编排层+收敛判定）、人类体验模式（CLI 交互 + 全新 ui/ 前端 + serve API）与部署包（deploy/）。
+
+**owner 2026-10-01 裁定转向**（TASK.md v1.1）：先建「用户侧园区电力经营管理」理论（docs/theory/ 四域卷，62 条参考文献）→ 冻结 agent 行为契约（docs/contracts/）→ 模块图 → **模拟练习场**：外部系统全部替身仿真，故障注入+时间加速，数万次模拟收敛最佳行为逻辑；人类可手动注入故障、关闭 agent 自行诊断（ui/）。
 
 **安全设计核心**：危险动作（遥控/操作票）必须过受控网关；创建操作票 ≠ 执行遥控；两票制签发权永远在人（HITL 不可委派）；最终验收用与开发隔离的 holdout 独立实例。
 
@@ -21,6 +23,10 @@ ParkDSL 描述园区拓扑与规程 → 仿真环境（伪遥测/故障注入）
 - ParkDSL 套件：`python dsl/tests/run_tests.py`
 - 故障注入套件：`fault/run_tests.py`（或 `python -m ...`，见 fault/README）
 - 端到端演示：`python demo/run_demo.py --flow all`
+- 练习场（阶段 d）：`python arena/tests/run_tests.py`（24 用例）；
+  单场景 `python arena/run_scenario.py --config <yaml>`；
+  人类体验模式 `python arena/serve.py --port 8790`（全新前端 ui/）；
+  收敛 `python arena/converge.py calibrate|judge`
 
 ## 验收基线（2026-10-01 迁移后实测）
 
@@ -28,9 +34,10 @@ ParkDSL 描述园区拓扑与规程 → 仿真环境（伪遥测/故障注入）
 |---|---|---|
 | G0-1 评测门禁 | `python run_evals.py --module all` | **233/233 PASS, exit 0（约 1 分钟）** |
 | G0-2 隔离扫描 | `python scripts/ci_isolation.py` | **ISOLATION OK: zero hits**（仓内 grep holdout 关键词零命中） |
-| G0-3 ParkDSL | `python dsl/tests/run_tests.py` | **15/15 PASS** |
-| G0-4 故障注入 | fault 套件 | **13/13 PASS**（含四类故障端到端） |
+| G0-3 ParkDSL | `python dsl/tests/run_tests.py` | **25/25 PASS**（含 v1.1 练习场三节 10 个新用例） |
+| G0-4 故障注入 | fault 套件 | **15/15 PASS**（含四类故障端到端） |
 | G0-5 演示流 | `python demo/run_demo.py --flow all` | 全判据通过（pass_rate=1.0） |
+| G0-6 练习场 | `python arena/tests/run_tests.py` | **24/24 PASS**（D-1 可跑/D-2 四步留痕/D-3 时间推移/确定性/人机对比/故障库装配/零信任/eval 口径） |
 
 ## 已知问题
 

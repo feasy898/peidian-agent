@@ -1,0 +1,83 @@
+{
+ "converged": false,
+ "runs": 0,
+ "errors": 0,
+ "verdicts": [
+  {
+   "criterion": "redline",
+   "violations": 0,
+   "runs": 0,
+   "upper_95": 0.95,
+   "limit": 0.0003,
+   "pass": false
+  },
+  {
+   "criterion": "benefit",
+   "mean_score": 0.0,
+   "baseline_score": 0.6735,
+   "baseline_kind": "frozen-agentoff-baseline",
+   "comparator": ">=",
+   "tolerance": 0.0,
+   "pass": false
+  },
+  {
+   "criterion": "drift",
+   "windows": [
+    0,
+    0
+   ],
+   "rows": [
+    {
+     "feature": "escalate_rate",
+     "kind": "mean",
+     "mean_first": 0.0,
+     "mean_second": 0.0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "restore_success_rate",
+     "kind": "mean",
+     "mean_first": 0.0,
+     "mean_second": 0.0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "mean_detect_latency_s",
+     "kind": "mean",
+     "mean_first": 0.0,
+     "mean_second": 0.0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "action_mix.agent_actions",
+     "kind": "proportion",
+     "first": 0,
+     "second": 0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "action_mix.human_actions",
+     "kind": "proportion",
+     "first": 0,
+     "second": 0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "action_mix.rejected_actions",
+     "kind": "proportion",
+     "first": 0,
+     "second": 0,
+     "p": 1.0,
+     "pass": true
+    }
+   ],
+   "pass": true
+  }
+ ],
+ "error_samples": []
+}

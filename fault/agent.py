@@ -28,6 +28,65 @@ SIGNATURES = {
     "PV_TRIP": "日照正常而出力≈0（装机 5% 以下）→ 光伏脱网",
 }
 
+# ---- v1.1 扩展签名（通用信号故障；判据出处见 fault/detect.DEFAULT_CRITERIA）----
+SIGNATURES.update({
+    "PARTIAL_DISCHARGE": "TEV 幅值持续超注意级（横向+纵向趋势）→ 局部放电",
+    "TEMPERATURE_RISE": "触头温度持续超告警级 → 温升过热",
+    "HARMONIC": "电压总谐波畸变率持续超限 → 谐波污染",
+    "THREE_PHASE_UNBALANCE": "负序不平衡度持续超限 → 三相不平衡",
+    "OVER_LIMIT": "线路/母线负载率持续超告警级 → 重载越限",
+    "PROTECTION_MALOPERATION": "保护装置告警信号持续在 → 保护异常（严禁自改定值）",
+    "TRANSFORMER_FAULT": "顶层油温持续超 85℃ 且非过载解释 → 变压器本体异常",
+    "DC_GROUND_FAULT": "直流绝缘电阻持续低于告警值 → 直流接地",
+    "PHASE_LOSS": "相电流偏差持续超限 → 缺相",
+    "SINGLE_PHASE_GROUND": "非故障相电压持续升高趋向 √3 倍 → 单相接地",
+    "ENVIRONMENTAL": "环境量越限（温度/烟感/水浸）→ 环境告警",
+})
+
+# v1.1 状态类处置剧本（非隔离型：遥控倒闸不能消除，须派工消缺；与 arena/faults
+# 库 agent_expectations 对齐）。隔离型（SINGLE_PHASE_GROUND/TRANSFORMER_FAULT）
+# 走既有隔离+转供路径。
+STATE_PLAYBOOK: dict[str, dict[str, str]] = {
+    "PARTIAL_DISCHARGE": {
+        "action": "确认告警→横向/纵向趋势判读→安排带电检测复查（TEV/超声）→报检修计划",
+        "never": "未确认直接拉闸；把趋势噪声当缺陷",
+    },
+    "TEMPERATURE_RISE": {
+        "action": "红外复测定位→负荷转移观察→上报检修（紧固/更换触头）",
+        "never": "不测温直接合闸送电",
+    },
+    "HARMONIC": {
+        "action": "溯源整流型负荷（充电桩/UPS）→评估滤波器/无功补偿→报整改工单",
+        "never": "投切电容器盲目补偿（可能谐振放大）",
+    },
+    "THREE_PHASE_UNBALANCE": {
+        "action": "核算单相负荷分配→挪负荷/换相→报整改工单；关注中性线电流",
+        "never": "忽视中性线过载风险",
+    },
+    "OVER_LIMIT": {
+        "action": "负荷转移/限控→报运行方式调整；持续观察负载率",
+        "never": "超限线路强行加负荷",
+    },
+    "PROTECTION_MALOPERATION": {
+        "action": "升级人工+报修；保护装置异常期间禁止依赖其跳闸",
+        "never": "自改保护定值（契约红线 R3，永久 DENY）",
+    },
+    "DC_GROUND_FAULT": {
+        "action": "告警即查找（支路巡检/平衡桥法）→两点接地风险升级人工",
+        "never": "在接地未查清前操作直流回路",
+    },
+    "PHASE_LOSS": {
+        "action": "定位缺相相别→影响侧停电检查→报抢修；电机缺相防堵转",
+        "never": "带故障电机连续运行",
+    },
+    "ENVIRONMENTAL": {
+        "action": "通风/排水/消防联动检查→必要时升级人工",
+        "never": "在 SF6/O2 不足环境派人进入（先通风）",
+    },
+}
+
+STATE_HINTS = frozenset(STATE_PLAYBOOK)
+
 
 class AgentResponder:
     """agent 反应引擎（人机对比开关 = self.enabled）。"""
@@ -83,6 +142,9 @@ class AgentResponder:
         if a.hint == "PV_TRIP":
             self._handle_pv(a, sim_s)
             return
+        if a.hint in STATE_HINTS:
+            self._handle_state(a, sim_s)
+            return
         # 4 影响分析
         zone = sorted(self.topo.zone(a.target))
         dead_now = [b for b in zone if self.topo.kind_of(b) == KIND_BUS
@@ -132,6 +194,36 @@ class AgentResponder:
                                        "消缺后手动复位并网"},
                    why="脱网故障无法遥控恢复，如实保留异常至人工消缺",
                    conclusion=f"{a.hint}@{a.target}：已确认告警并通知运维，无开关操作",
+                   sim_s=sim_s)
+
+    # ------------------------------------------------------------- v1.1 状态类异常（非隔离型）
+    def _handle_state(self, a: Anomaly, sim_s: float) -> None:
+        """v1.1 通用信号故障处置：遥控倒闸不能消除 → 确认+派工消缺+复测观察。
+
+        动作面只有 ack（派工确认）；repair 排期与消缺摘除由 engine._advance_repairs 负责。
+        每一步仍走 confirm→diagnose→judge（在 handle 前段）→plan→summary→verify 语义。
+        """
+        sample = self._sample_fn()
+        t = sample.get(a.target, {})
+        signal = {k: v for k, v in t.items() if k != "state"}
+        play = STATE_PLAYBOOK.get(a.hint, {})
+        action = play.get("action", "确认告警并派工消缺")
+        never = play.get("never", "越权操作")
+        self._step(a, "plan", "处置方案（非隔离型）", [a.target],
+                   {"switching": "none",
+                    "signal": signal,
+                    "why": f"{a.hint} 属状态量异常：遥控倒闸不能消除，策略=确认+派工消缺",
+                    "playbook": action, "must_not": never},
+                   why="隔离型动作（拉闸）对状态量故障无代价收益且扩大停电面，故不做网络操作",
+                   conclusion=f"处置路径：{action}", sim_s=sim_s)
+        r = self.executor.execute("ack", a.anomaly_id, by="agent",
+                                  reason=f"{a.hint} 告警确认，派工消缺", sim_s=sim_s)
+        self._step(a, "summary", "处置小结", [a.target],
+                   {"ack": r["result"], "signal": signal,
+                    "conclusion_note": f"异常保持至消缺完成（repair 排期由引擎推进）；"
+                                       f"红线提示：{never}"},
+                   why="非隔离型异常无法遥控恢复，如实保留异常至消缺；消缺完成由复测确认",
+                   conclusion=f"{a.hint}@{a.target}：已确认告警并派工，待消缺复测",
                    sim_s=sim_s)
 
     # ------------------------------------------------------------- 恢复规划

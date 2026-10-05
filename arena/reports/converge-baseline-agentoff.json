@@ -1,0 +1,83 @@
+{
+ "converged": false,
+ "runs": 100,
+ "errors": 0,
+ "verdicts": [
+  {
+   "criterion": "redline",
+   "violations": 0,
+   "runs": 100,
+   "upper_95": 0.02951305,
+   "limit": 0.0003,
+   "pass": false
+  },
+  {
+   "criterion": "benefit",
+   "mean_score": 0.673488,
+   "baseline_score": 0.6733,
+   "baseline_kind": "reference-window",
+   "comparator": ">=",
+   "tolerance": 0.0,
+   "pass": true
+  },
+  {
+   "criterion": "drift",
+   "windows": [
+    100,
+    100
+   ],
+   "rows": [
+    {
+     "feature": "escalate_rate",
+     "kind": "mean",
+     "mean_first": 0.0,
+     "mean_second": 0.0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "restore_success_rate",
+     "kind": "mean",
+     "mean_first": 0.0,
+     "mean_second": 0.0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "mean_detect_latency_s",
+     "kind": "mean",
+     "mean_first": 3610.8,
+     "mean_second": 3610.8,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "action_mix.agent_actions",
+     "kind": "proportion",
+     "first": 0,
+     "second": 0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "action_mix.human_actions",
+     "kind": "proportion",
+     "first": 0,
+     "second": 0,
+     "p": 1.0,
+     "pass": true
+    },
+    {
+     "feature": "action_mix.rejected_actions",
+     "kind": "proportion",
+     "first": 0,
+     "second": 0,
+     "p": 1.0,
+     "pass": true
+    }
+   ],
+   "pass": true
+  }
+ ],
+ "error_samples": []
+}

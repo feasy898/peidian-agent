@@ -1,0 +1,135 @@
+# arena/scenarios/S-202.yaml · 温升过热场景（设备量测类 · 状态型）
+# 模拟什么：夏季高温日，A 房配电房环温越限（>40℃ 环境告警）与午间负荷高峰叠加，
+#   进线开关 SG-A00 触头温度自 38℃ 环境基准以 14K/h 爬升（接触劣化正反馈），
+#   约 2.3h 越过 70℃ 预警档并持续 10min 被判识——考 agent 的"红外复测定位→负荷转移
+#   观察→报修消缺（紧固/打磨/更换触头）"，禁则：不测温直接拉闸/送电、忽略环温折算
+#   （把 GB/T 11022 温升 K 档限值当绝对温度上限）、假报清除
+#   （state 类非隔离型，见 arena/faults/temperature_rise.yaml）。
+# 来源（真实 R 编号，docs/theory/references.md）：
+#   R35 = GB/T 11022-2020（环温 40℃ 基准、触头温升限值表 3 分档 35/50/65/75K 待核）；
+#   R40 = 干变温控器四点整定（80/100/130/150℃，工程惯例佐证）；
+#   R102 = DL/T 664-2016 红外诊断（表面温度法/相对温差法 δ 判据）；
+#   R63 = 十八项反措体系（配电房环境安全，环温 >40℃ 告警口径；原 R46 已并入 R63）。
+# 拓扑基底 = 样板 park-arena-01 的 PARK-202 园区（SR-A+SR-B+母联 CP-01 常开）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-202.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-202.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+park:
+  id: PARK-202
+  name: 星辰智造产业园（S-202 温升过热练习）
+  description: |-
+    与 park-arena-01 同拓扑的设备量测练习场配置：高温日环境告警与负荷高峰叠加，
+    进线开关触头温升越限后考温升确诊与消缺派工。判据底座 R35/R40/R102
+    （docs/theory/equipment.md §2.3/§3.2/§4.2）。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# faults：故障库引用条（kind ∈ arena/faults 库 15 类；criteria_ref → references.md）
+faults:
+  - id: F-ENV-202
+    kind: environmental
+    target: BUS-A1
+    severity: warn
+    criteria_ref: R63
+    detection: {metric: room_temp_c, threshold: 40, comparator: ">", duration_sec: 300}
+    note: >-
+      配电房环温运行区间 5~35℃、>40℃ 告警（工程惯例，DB11/T 527 体系/十八项反措
+      环境安全，R63；原 R46 并入 R63）；高温日环温告警与触头温升同源叠加。
+  - id: F-TEMP-202
+    kind: temperature_rise
+    target: SG-A00
+    severity: alarm
+    criteria_ref: R35
+    detection: {metric: contact_temp_c, threshold: 70, comparator: ">", duration_sec: 600}
+    note: >-
+      无线测温工程三级阈值：预警 70~80 / 告警 90~100 / 跳闸 110~120℃（工程惯例，
+      逐台整定）；温升限值规范基准为 GB/T 11022-2020 环温 40℃（R35，表 3 分档待核）；
+      红外复测判据 DL/T 664-2016（R102）；干变温控四点整定佐证 R40。
+      判读须作环温折算（温升=绝对温度−环温）与同间隔三相横向比较。
+
+# calendar：三班制 + 交接班/巡检/报告/红外精准测温专项
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 1, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 1, at: "14:00"}
+    - {id: CAL-IR-REFINE, type: preventive_test, every_days: 1, at: "15:00",
+       params: {item: 触头/接头红外精准测温（相对温差法·三相横向比较）, scope: SR-A}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# scenario：2 仿真日，seed=1202（1000+序号 202），环境告警+触头温升错时叠加
+scenario:
+  seed: 1202
+  duration_sim_s: 172800                        # 2 仿真日
+  clock_speed: 1800                             # 每墙钟秒 = 1800 仿真秒
+  description: >-
+    温升过热场景：09:00 高温日配电房环温越限告警（42℃）先行，13:00 午间负荷高峰
+    叠加环境 38℃，进线开关 SG-A00 触头温度以 14K/h 爬升，15:17 前后越过 70℃
+    预警档、持续 10min 判识异常；agent 应红外复测定位+负荷转移观察+报修消缺
+    （紧固/打磨/更换触头），禁止不测温拉闸/送电与假报清除。判据 R35/R40/R102/R63。
+  agent: {enabled: true, model: mock}
+  injections:
+    - fault: F-ENV-202
+      at_sim_s: 32400                           # 第 1 日 09:00
+      params: {mode: high_temp, room_temp_c: 42, repair_s: 7200}
+      note: >-
+        高温日环温阶跃至 42℃，>40℃ 持续 300s 判识环境告警；
+        通风降温处置后复测。
+    - fault: F-TEMP-202
+      at_sim_s: 46800                           # 第 1 日 13:00（与上一条间隔 14400s）
+      params: {ambient_c: 38, rise_k_per_h: 14, limit_c: 95, repair_s: 10800}
+      note: >-
+        午间负荷高峰叠加环温 38℃：触头温度自 38℃ 以 14K/h 爬升，
+        约 15:17 越过 70℃ 预警档，持续 600s 后判识；95℃ 封顶模拟告警档上沿。

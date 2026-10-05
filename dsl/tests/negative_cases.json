@@ -17,5 +17,21 @@
   {"name": "wrong-api", "base": "park-simple-01.yaml", "expect_code": "E-API",
    "patch": [["api: parkdsl/1", "api: parkdsl/2"]]},
   {"name": "bare-off-boolean", "base": "park-complex-01.yaml", "expect_code": "E-DEV",
-   "patch": [["state: \"OFF\"", "state: OFF"]]}
+   "patch": [["state: \"OFF\"", "state: OFF"]]},
+  {"name": "v11-unknown-fault-kind", "base": "park-arena-01.yaml", "expect_code": "E-FAULT",
+   "patch": [["kind: partial_discharge", "kind: dragon_fire"]]},
+  {"name": "v11-dangling-fault-target", "base": "park-arena-01.yaml", "expect_code": "E-FAULT",
+   "patch": [["target: SG-A01", "target: SG-Z99"]]},
+  {"name": "v11-bad-comparator", "base": "park-arena-01.yaml", "expect_code": "E-FAULT",
+   "patch": [["comparator: \">\"", "comparator: \"≈\""]]},
+  {"name": "v11-bad-severity", "base": "park-arena-01.yaml", "expect_code": "E-FAULT",
+   "patch": [["severity: warn", "severity: catastrophic"]]},
+  {"name": "v11-bad-calendar-type", "base": "park-arena-01.yaml", "expect_code": "E-CAL",
+   "patch": [["type: patrol, every_days: 1", "type: dragon_boat, every_days: 1"]]},
+  {"name": "v11-bad-clock-speed", "base": "park-arena-01.yaml", "expect_code": "E-SCEN",
+   "patch": [["clock_speed: 600", "clock_speed: 99999"]]},
+  {"name": "v11-ghost-injection-fault", "base": "park-arena-01.yaml", "expect_code": "E-SCEN",
+   "patch": [["{fault: F-PD-01, at_sim_s: 86400}", "{fault: F-GHOST-01, at_sim_s: 86400}"]]},
+  {"name": "v11-injection-beyond-duration", "base": "park-arena-01.yaml", "expect_code": "E-SCEN",
+   "patch": [["{fault: F-PD-01, at_sim_s: 86400}", "{fault: F-PD-01, at_sim_s: 999999}"]]}
 ]

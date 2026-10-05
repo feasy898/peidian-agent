@@ -1,0 +1,52 @@
+# arena/faults/dc_ground_fault.yaml · 直流系统接地（故障库条目）
+# schema 对齐 TASK 分配卡（kind/title/class/engine_type/compat_kinds/params/detection/
+# mechanism/evolution/signals/agent_expectations/sources）；判据底座 = docs/theory/
+# equipment.md §2.5、operations.md §7（R41/R42/R99），与 dsl/examples/park-arena-01.yaml
+# F-DCGND-01 绑定口径一致（dc_insulation_kohm < 25kΩ）。
+kind: dc_ground_fault
+title: 直流系统接地（一点接地告警→两点接地误动/拒动风险）
+class: state                       # 消缺类：告警后查找接地支路并消缺，非靠拉闸消除
+engine_type: DC_GROUND_FAULT       # = kind 大写，fault/dsl.py FAULT_TYPES 注册名
+compat_kinds: [bus]                # = fault/dsl.py:47（DC 屏挂接母线，演示简化）
+params:                            # 注入参数（仿真引擎读；全部带 default/min/max）
+  insulation_kohm: {default: 8, min: 0.5, max: 100}   # 注入后的对地绝缘电阻（引擎域 (0,100]，fault/dsl.py:117）
+  repair_s: {default: 14400, min: 60, max: 2592000}   # 派工查找消缺时长（仿真秒，上限=引擎域 86400*30，fault/dsl.py:118；一点接地查找+消缺按 4h 量级【工程惯例】）
+detection:                         # 诚实检测判据（检测器只读遥测+本判据，不读注入计划）
+  metric: dc_insulation_kohm
+  comparator: "<"
+  threshold: 25                    # 220V 系统口径；110V 系统约 15kΩ（见 source）
+  duration_sec: 60
+  source: >-
+    220V 系统绝缘告警约 25kΩ、110V 约 15kΩ【工程惯例，R41/R42】；GB/T 19826-2014 另有
+    110V<25kΩ、220V<50kΩ 口径，两说并存【待核】；机理与"低于整定值可靠报警"的装置功能
+    定位见 R41（DL/T 1392-2014 绝缘监测装置技术条件，原文未核）。绑定示例同
+    dsl/examples/park-arena-01.yaml F-DCGND-01（threshold 25 / duration 60）。
+mechanism: |-
+  演示简化声明：直流屏（220V/110V 操作电源）不单独建模，本条目 target 锚定变电站母线，
+  故障信号挂接母线元件（fault/dsl.py:47 COMPAT_KINDS 演示简化）。直流操作电源专供控制
+  负荷宜 110V、专供动力负荷宜 220V、合并供电宜 220V（DL/T 5044 体系口径，equipment.md
+  §2.5）。电缆受潮/破损、端子箱进水使正负极对地绝缘缓降；一点接地不构成短路回路、故障
+  电流极小，系统可继续运行，仅绝缘监测装置告警，但必须立即安排查找（R41 机理）。绝缘告警
+  整定工程惯例为 220V 约 25kΩ、110V 约 15kΩ（R41/R42【工程惯例】；GB/T 19826-2014 另有
+  110V<25kΩ、220V<50kΩ 口径，两说并存【待核】）。若发展成两点接地，可造成直流短路、
+  熔断器熔断、开关误动或保护拒动——这是一点接地告警必须当值处置的依据（R41）。蓄电池组
+  应经核对性放电试验验证事故放电能力，变电站按有人值班 1h、无人值班 2h 的事故放电时间
+  口径设计（DL/T 5044 体系，检索转述、2014 版条文号【待核】）；核容放电周期按 DL/T 724：
+  新安装/大修后全核对性放电、运行 6 年后每年一次（R99，条文号【待核】）。
+evolution:                         # 演化链 隐患→异常→告警→事故
+  - {stage: 隐患, desc: "电缆受潮/破损、端子箱进水，正负极对地绝缘电阻缓降（趋势可观测），发现通道=直流屏巡检/绝缘监测趋势【R41】"}
+  - {stage: 异常, desc: "对地绝缘明显低于正常水平但仍在告警整定之上（220V 系统 25~50kΩ 区段），绝缘监测趋势告警或巡检发现【R41/R42，工程惯例】"}
+  - {stage: 告警, desc: "绝缘电阻 <25kΩ（220V 惯例口径；110V 约 15kΩ）→ 一点接地告警；不立即故障但必须拉路查找/定位接地点【R41/R42】"}
+  - {stage: 事故, desc: "发展成两点接地 → 直流短路、熔断器熔断、开关误动或保护拒动（随机突变，仿真可按概率注入）【R41】"}
+signals:                           # 可观测信号清单（每个 metric 一句话说明）
+  - {metric: dc_insulation_kohm, desc: "直流母线对地绝缘电阻（kΩ），注入即阶跃置值、目标断电即信号消失（fault/telemetry.py:193-194）"}
+agent_expectations:                # agent 期望处置锚点（人机对比评分依据）
+  must:
+    - "confirm：直流屏绝缘监测数据复核（母线电压、正/负极对地绝缘电阻、支路巡检仪数据）"
+    - "diagnose：拉路查找/便携仪定位接地支路与接地点（先次要负荷后控制保护回路的顺序为【工程惯例】）"
+    - "plan：报修工单限期消缺；两点接地风险预控（评估误动/拒动后果，必要时申请相关保护退出或加强值守）"
+  must_not:
+    - "一点接地告警只消音复位不查找"
+    - "查找中盲目操作致控制保护回路失电（两点接地误动/拒动风险未预控）"
+    - "假报清除"
+sources: [R41, R42, R99]           # docs/theory 参考文献编号（真实存在才写）

@@ -1,0 +1,150 @@
+# arena/scenarios/S-217.yaml · 练习场场景 S-217（园区变体 · 中等档）
+# 场景叙事：星辰智造产业园二期——两座 10kV 配电房、0.4kV 母联 CP-01（常开）的转供结构，
+# B 房屋顶光伏 500kWp + 储能 400kWh，A 房停车楼充电桩 300kW。
+# 时序：凌晨雷雨季 B 变（TX-B01）绕组短路→保护跳闸，agent 隔离 B 变后经母联 CP-01
+# 由 A 变转供 B2 段（转供投影 <1.0，干跑实测 0.76，可行）；午间充电桩集中充电致 A2 段谐波越限；
+# 次日上午 B 房直流屏绝缘下降告警。网络型+状态型混合，重点考"隔离→转供→复测"与消缺闭环。
+# 判据出处：R32/R33/R35/R37/R41 = docs/theory/references.md（GB/T 14549、GB/T 15543、
+# GB/T 11022-2020、35kV 开关柜局放案例、DL/T 1392-2014）；短路/断线为引擎原生类型
+# （检测信号为 fault/detect.py 声明的仿真近似口径，无对应 R 编号，处置遵循安规两票体系）。
+# 拓扑底：park-arena-01 的 PARK-202 结构变体（改参数：容量/负荷/DER 加大，保留母联）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-217.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-217.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+park:
+  id: PARK-203
+  name: 星辰智造产业园二期（练习场变体）
+  description: |-
+    中等档园区变体：两座 10kV 配电房、10kV 干线联络（LN-02）、0.4kV 母联 CP-01 常开——
+    主变故障隔离后经母联转供是本园唯一备供路径。B 房屋顶光伏 500kWp 与 400kWh 储能，
+    A 房停车楼 300kW 充电桩群；负荷两班制工厂为主、兼研发办公。
+  tier: medium
+  contract_capacity_kw: 2400
+  incoming_voltage: 10kV
+  seed: 203
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力与充电中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 2000, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 500, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 320, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 300, num_ports: 10}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 500, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 400, power_kw: 200, soc: 60}
+      - {id: LD-B01, type: Load, peak_kw: 460, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 280, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.0, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.8, ampacity_a: 400}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# v1.1 · faults：故障库引用条（kind ∈ arena/faults 库；criteria_ref → docs/theory/references.md）
+# ============================================================================
+faults:
+  - id: F-SC-01                                   # B 变绕组短路（引擎原生，隔离+转供主考题）
+    kind: short_circuit
+    target: TX-B01
+    severity: accident
+    detection: {metric: current_ratio, threshold: 4, comparator: ">", duration_sec: 60}
+    note: 引擎原生类型：故障电流 ≈+6pu、故障区电压塌陷为 fault.telemetry 声明的仿真近似，
+      无对应标准 R 编号；处置（隔离/转供/两票）遵循安规体系（R61/R62）
+  - id: F-PD-01                                   # 局部放电（A 房出线柜，监视配置未注入）
+    kind: partial_discharge
+    target: SG-A01
+    severity: warn
+    criteria_ref: R37                             # 35kV 开关柜局放案例（TEV/超声分级）
+    detection: {metric: tev_db, threshold: 20, comparator: ">", duration_sec: 600}
+    note: TEV 横向+纵向趋势判读；>20dB 注意 / 30dB 级严重（Q/GDW 11060-2013 分级，案例 R37）
+  - id: F-TEMP-01                                 # 触头温升（B 房进线柜，监视配置未注入）
+    kind: temperature_rise
+    target: SG-B00
+    severity: alarm
+    criteria_ref: R35                             # GB/T 11022-2020
+    detection: {metric: contact_temp_c, threshold: 70, comparator: ">", duration_sec: 600}
+    note: 无线测温工程三级 70~80/90~100/110~120℃，阈值取预警档（R35 温升基准）
+  - id: F-HARM-01                                 # 谐波畸变（充电桩群）
+    kind: harmonic
+    target: BUS-A2
+    severity: warn
+    criteria_ref: R32                             # GB/T 14549-1993（0.38kV THDu ≤5%）
+    detection: {metric: thdu_pct, threshold: 5, comparator: ">", duration_sec: 900}
+    note: 充电桩整流型负荷特征谐波 5/7/11/13 次；0.4kV 母线按 5% 口径
+  - id: F-UNBAL-01                                # 三相不平衡（监视配置未注入）
+    kind: three_phase_unbalance
+    target: BUS-B2
+    severity: warn
+    criteria_ref: R33                             # GB/T 15543-2008
+    detection: {metric: neg_seq_unbalance_pct, threshold: 2, comparator: ">", duration_sec: 600}
+    note: 单相负荷分配不均；Yyn0 配变留意中性线电流
+  - id: F-DCGND-01                                # 直流系统接地（挂接 B 房 10kV 母线）
+    kind: dc_ground_fault
+    target: BUS-B1
+    severity: alarm
+    criteria_ref: R41                             # DL/T 1392-2014（直流绝缘监测装置）
+    detection: {metric: dc_insulation_kohm, threshold: 25, comparator: "<", duration_sec: 60}
+    note: 一点接地告警即查找；两点接地→保护误动/拒动风险；220V 系统约 25kΩ 为工程惯例
+
+# ============================================================================
+# v1.1 · calendar：业务日历
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 7, at: "14:00"}
+    - {id: CAL-DIESEL, type: preventive_test, every_days: 30, params: {item: diesel_start}}
+    - {id: CAL-BAODIAN, type: baodian, every_days: 90, params: {level: "二级"}}
+    - {id: CAL-95598, type: work_order_95598, params: {response_min: 45}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# ============================================================================
+# v1.1 · scenario：倍速场景 + 注入计划
+# ============================================================================
+scenario:
+  seed: 1217
+  duration_sim_s: 172800                          # 2 仿真日
+  clock_speed: 1800
+  description: 中等档园区两日运行：凌晨 B 变短路→隔离→经母联 CP-01 转供（转供投影
+    干跑实测 0.76<1.0）；午间充电桩谐波越限（负荷侧溯源+治理）；次日上午 B 房直流接地
+    （告警即查找、严禁未查清前操作直流回路）
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-SC-01, at_sim_s: 7200}            # 02:00 雷雨季 B 变绕组短路（网络型，触发转供）
+    - {fault: F-HARM-01, at_sim_s: 43200}         # 12:00 充电桩午间集中充电谐波越限（状态型）
+    - {fault: F-DCGND-01, at_sim_s: 115200}       # 次日 08:00 B 房直流屏绝缘下降（状态型）

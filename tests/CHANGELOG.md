@@ -1609,3 +1609,126 @@
   `EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
   result=PASS`（exit 0，本轮实跑）；`python scripts/ci_isolation.py` → 零命中（新增
   skills/demand-analysis/ 与 tests/ 两件按 ISOLATION_PATTERN 实扫，exit 0）。
+
+## 2026-10-01 · 接手环境哈希重登记（CRLF→LF 归一 · 阶段 a 启动前基线修复）
+
+**触发**：新会话在 windev-01 接手运行门禁，`run_evals.py --module all` 首跑
+`modules=0/8 failed=8`（SPEC_DRIFT ×8）。排查确认根因是**行尾登记口径**，不是规格损坏。
+
+**根因链（实证）**：
+1. 本机 git `core.autocrlf=true`，monorepo 浅克隆检出后 peidian-agent 全部文本落CRLF；
+2. 历史冻结期的哈希登记（golden MANIFEST、ASSET-MANIFEST specs-v2 表、套件 spec_hash）
+   均在 **CRLF 工作树**上计算（Windows 会话）：
+   - golden/dev 12 个种子逐一验证 `sha256(CRLF 字节) == manifest 登记值`（12/12 全中），
+     `golden_set_version` 按 CRLF 字节重算 = `dev-f7e4e295e43be004`，与
+     `releases/rel-0001/release.yaml` 登记值逐位一致——**内容零变化，纯行尾差**；
+   - `specs-v2/M6-flywheel.md` 的 CRLF 字节哈希 = manifest 登记值 `ca7cd46f…`（内容一致）；
+   - `specs-v2/M1-agent-core.md` 的 LF/CRLF 字节哈希均**不**等于 manifest 登记值
+     `04e56106…`——该文件存在冻结后的真实内容编辑（压平历史不可溯源，**提请 owner 复核**，
+     详见 manifest 审计注记）。
+3. monorepo 处于 cone 稀疏检出且 patterns 仅含 `chenmai8`，peidian-agent 全树被置
+   skip-worktree，`git add` 拒更索引——已 `git sparse-checkout disable` 解封为全量检出。
+
+**修复动作（全部为登记/环境层，无一句规格语义改写）**：
+1. 环境归一：`git config core.autocrlf false`；peidian-agent 子树 338 个 i/lf 文件
+   工作树 CRLF→LF；新增 `peidian-agent/.gitattributes`（`* text=auto eol=lf`）防复发；
+2. **spec_hash 重登记**（01 v2 §6 协议，spec_ref 字节变化→套件回写+本节登记）：
+
+  | suite | 新 spec_hash (sha256) | 新 eval_hash (sha256) |
+  | --- | --- | --- |
+  | test_m1.yaml | `673df3dd6825b203189ad5a87e76a05efe7196ab0a0d29b4c7db62638554b75f` | `01023952898088fc0820ace114786241bfffcae7720951b7ccebf2aa520a2d83` |
+  | test_m6.yaml | `78c162327f7396700ad3462bfb0fc5dd868239a9f9c164c6eea3f90bfc31b8d2` | `582887b8a51bddef335e5052f758dabdfa5f65e40c7ab6c774fb8f05617198ca` |
+
+  （m0/m2/m3/m4/m5/m7 六套件 LF 字节即原登记值，无需重登记；m1/m6 重登记后 30/30、
+  21/21 用例全过。）
+3. **golden manifest 重建**（`python -m m6_flywheel.golden_set manifest golden/dev`，
+  sanctioned 工具、非手改）：内容不变（CRLF 证明在前），仅把登记基准换为 LF 字节；
+  `verify` 复跑 OK；`golden_set_version` 转为 LF 口径 `dev-836081d97036a274`
+  （rel-0001 的 CRLF 口径值作为历史登记留档，不追改）。
+4. 顺手修：`pyproject.toml` `requires-python` `>=3.11` → `>=3.12`（README 已知问题#2）。
+5. ASSET-MANIFEST.md specs-v2 表 M1/M6 两行哈希同步为 LF 现值并补审计注记。
+
+**门禁**：修复后 `python run_evals.py --module all` →
+`EVALS mode=all isolation=OK modules=8/8 pending=0 cases=233/233 failed=0 skipped=0
+result=PASS`（exit 0，本节登记时点实跑）。
+
+**遗留（如实登记，不计入收工阻断）**：
+- M1-agent-core.md 冻结后真实内容漂移的**具体编辑不可溯源**（压平历史），其第 5 行
+  "现行 20 用例"与体内 30 条套件计数不一致（既有陈旧行），留待 owner/阶段 c 模块图一并处置；
+- 本机 git 工作树 stat 缓存对 341 个 EOL 归一文件显示 ` M`（内容 diff 为空、
+  blob sha 与索引逐一致），纯缓存噪音，提交时以内容为准。
+
+## 2026-10-01 · ParkDSL v1.1 增量（阶段 d 练习场三节 · docs/theory 设备卷判据已入例）
+
+**动机**：TASK.md 阶段 d 需要 DSL 承载练习场三件事——故障库绑定、业务日历、倍速场景。
+**做法**：全部为**可选顶层节**，不含这些节的文件校验/导出行为与 v1 完全一致
+（api 仍 `parkdsl/1`，向后兼容；`spec_version` 1.0→1.1）。
+
+- `dsl/dsl_spec.yaml`：新增 `extensions:` 块（faults：16 类 kind/severity/comparator/
+  criteria_ref(R编号)/detection 判据；calendar：8 类事件+shifts 班次；scenario：seed/
+  duration_sim_s/clock_speed[0.1,3600]/agent 开关/injections 注入计划）。
+- `dsl/validate.py`：新增 `validate_extensions()`（错误码 E-FAULT/E-CAL/E-SCEN），
+  在基础校验全过后才跑（防结构错误层叠）；`build_export` 透传三节进 `parkdsl-web/1` JSON
+  （既有键不变）。shifts_pattern 修订：尾端班次允许 `24:00`。
+- `dsl/examples/park-arena-01.yaml`：新样例（PARK-202，11 条故障绑定+10 条日历+4 次
+  注入的 7 仿真日倍速场景）；criteria_ref 全部指向 `docs/theory/equipment.md` 真实
+  参考文献（R31–R50，GB/DL 标准+事故案例），非编造。
+- `dsl/tests/negative_cases.json`：+8 个 v1.1 负向用例（未知 kind/悬空 target/非法
+  comparator/非法 severity/非法日历类型/clock_speed 越界/幽灵注入/超时长注入）。
+- 文档：`dsl/docs/dsl-spec.md` §10、`dsl/README.md`、顶层 README 基线表同步。
+- **门禁**：`python dsl/tests/run_tests.py` → **25/25 PASS** exit 0（15→25）；
+  四个样例 export 结构完整、旧三档 validate 行为不变（向后兼容实证）。
+- 影响面：`specs-v2/` 与 `tests/test_m*.yaml` 零改动，233 门禁不受影响（本 entry 不触发
+  01 v2 §6 的 spec_hash 重登记）。
+
+## 2026-10-01 · 阶段 d 练习场落地：arena 编排层 + fault 引擎 v1.1 扩展 + 论文故障库
+
+**TASK.md §2.4 D-1/D-2/D-3 实证**（样例场景 7 仿真日、4 次注入全检出闭环）：
+
+- **arena/ 新建**（编排层，不改引擎语义）：`engine.py`（DSL→拓扑→注入→自适应步长
+  →业务日历→agent/人工→recorder→eval 摘要）、`run_scenario.py`（CLI：--seed/--human
+  交互暂停/--agent-off/--json）、`faultlib.py`（arena/faults 库装配：11 条目→判据覆盖表，
+  零信任核对 engine_type/compat_kinds）、`tests/run_tests.py`（24 用例）。
+- **fault/ 引擎 v1.1 扩展**（4 类白名单→15 类，加法式）：
+  - `dsl.py`：11 类通用信号故障的类型/兼容矩阵/参数规格注册（白名单仍封闭）；
+  - `telemetry.py`：通用信号层（爬升类线性封顶、阶跃类置值；目标断电即信号消失）；
+  - `detect.py`：Criterion/DEFAULT_CRITERIA（每条带【标准条文】/【工程惯例】出处与 R 编号）
+    + METRIC_HINTS 信号映射 + 持续时间判据 + 每设备判据（园区 DSL faults 节 detection 为
+    **告警定值配置**，非注入计划，诚实检测不受影响）+ 主导原因抑制（TRANSFORMER_FAULT
+    遇活动 TX_OVERLOAD 不叠报）；
+  - `engine.py`：ack→repair_s 排期→消缺摘除的完整生命周期（ops.repair_scheduled/completed）；
+    状态类异常不再误报 "复测未消除" 升级（NON_ESCALATING）；
+  - `agent.py`：STATE_PLAYBOOK 处置剧本（9 类非隔离型：确认+派工+禁则）+ 新签名表。
+- **park_adapter.py 修复一处潜伏缺陷**：变压器低压侧串联开关的边方向此前被建成
+  bus→TX（功率流反向），energized BFS 会断裂；历史样例无低压侧开关故从未暴露。
+  现高压侧 bus→TX、低压侧 TX→bus（功率流方向）。
+- **arena/faults/ 论文故障库 11 条目**（GLM-5.3-Flash 工作流产出+独立复核+机械校验）：
+  每条含机理/判据（带标准号+【工程惯例】标注）/演化链四阶段/可观测信号/agent 处置锚点/
+  sources（R 编号真实可核）；判据有出处 38 条、【待核】32 条如实标注。
+- **dsl/examples/park-arena-01.yaml 补强**：B 房加 SG-B00/SG-B01 串联开关 + A/B 低压
+  母联 CP-01，使隔离转供路径可演示（适配器缺陷因此暴露并修复）。
+- **门禁**：fault 15/15、arena 24/24、dsl 25/25、run_evals 233/233、ci_isolation
+  zero hits 全绿（本轮实跑）；样例场景端到端：4/4 注入检出、4/4 agent 闭环、0 误升级。
+
+## 2026-10-02 · 场景库生产期间暴露的三个引擎缺陷修复（工作流升级驱动）
+
+**触发**：场景库工作流（dwfrun-b46ea344）子代理升级——`phase_loss` 两条目标路径都被堵，
+且发现样板 `park-arena-01.yaml` 的 F-PHLOSS-01@LD-A01 从未检出过（同一根因）。
+
+1. **叶元件通用信号被整体抑制**（fault/telemetry.py）：`_generic_signals` 要求 target ∈
+   energized，而负荷/光伏/储能/电容是挂接母线的叶元件、不在带电图内
+   （topology.py successors 只走 EDGE_KINDS）。修正为叶元件按「所挂母线带电」判定。
+   实测：phase_loss@LD-A01 与 @LN-01 现均可检出。
+2. **DSL faults/injections 的 target 命名空间过窄**（dsl/validate.py）：仅接受元件 ID，
+   拒绝 link ID（LN/CP）——与 dsl_spec.yaml id_rules.note「devices.id 与 links.id(LN/CP)
+   共用同一命名空间」的规范相悖，且引擎 Topology 中边元素本就是合法注入目标。修正为
+   元件 ID ∪ link ID 的元素域。
+3. **③.5 独立开关注册的方向缺陷**（fault/park_adapter.py）：一母线面+一线路面的开关
+   此前一律按「线侧为电源」建边，对**联络串开关**（BUS-A1→SG-A02→LN-02→SG-B02→BUS-B1，
+   S-207 形态）建成反向边，energized BFS 断裂导致整段失电。修正为按线路 DSL 的
+   from/to 推导功率方向（开关在线路 from 端 → 母线→开关→线路；to 端 → 线路→开关→母线，
+   与既有进线开关 SG-A00 的正确行为同口径）。
+
+**回归**：fault 15/15、dsl 25/25、arena 24/24、run_evals 233/233 全绿；
+S-207 干跑实证完整闭环：SINGLE_PHASE_GROUND@BUS-B1 检出→agent 拉 SG-B02 隔离→
+合 CP-01 转供→anomaly.cleared（by=agent）。

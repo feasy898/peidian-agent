@@ -86,6 +86,202 @@ def infer_tier(stats: dict) -> str:
     return "complex"
 
 
+def validate_extensions(data: dict, devices: dict, origin: str, errs: list) -> list:
+    """v1.1 可选三节：faults / calendar / scenario。节缺失即跳过（向后兼容）。
+
+    仅在基础校验全过之后调用（见 validate_dsl 尾部），避免结构错误层叠。
+    错误码：E-FAULT（故障库引用）/ E-CAL（业务日历）/ E-SCEN（场景与注入计划）。
+
+    target 命名空间 = 元件 ID ∪ link ID（LN/CP）：dsl_spec.yaml id_rules.note 明确
+    "devices.id 与 links.id(LN/CP) 共用同一命名空间"，fault 引擎 Topology 中边元件
+    与叶元件同为可注入目标。
+    """
+    ext = SPEC.get("extensions") or {}
+    fspec = ext.get("faults") or {}
+    cspec = ext.get("calendar") or {}
+    sspec = ext.get("scenario") or {}
+
+    # link ID 命名空间（line/coupler 带 id；direct 不生成独立 ID）
+    link_ids: set[str] = set()
+    for lk in data.get("links") or []:
+        if isinstance(lk, dict) and lk.get("kind") in ("line", "coupler"):
+            lid = lk.get("id")
+            if isinstance(lid, str) and lid:
+                link_ids.add(lid)
+    id_universe = set(devices) | link_ids
+
+    def is_num(v) -> bool:
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+    # ---- faults：故障库引用条 ----
+    fault_ids: set[str] = set()
+    faults_raw = data.get("faults")
+    if faults_raw is not None:
+        if not isinstance(faults_raw, list):
+            errs.append(Err("E-FAULT", f"{origin}.faults", "faults 必须是数组"))
+        else:
+            kinds = set(fspec.get("kinds") or [])
+            sev = set(fspec.get("severities") or [])
+            comp = set(fspec.get("comparators") or [])
+            id_re = re.compile(fspec.get("id_pattern", r"^F-[A-Z][A-Z0-9-]{0,39}$"))
+            cref_re = re.compile(fspec.get("criteria_ref_pattern", r"^R[0-9]+$"))
+            det_req = list(fspec.get("detection_required") or ["metric", "threshold", "comparator"])
+            det_opt = set(fspec.get("detection_optional") or [])
+            for i, f in enumerate(faults_raw):
+                loc = f"{origin}.faults[{i}]"
+                if not isinstance(f, dict):
+                    errs.append(Err("E-FAULT", loc, "故障条目必须是映射", actual=repr(f)[:60]))
+                    continue
+                fid = f.get("id")
+                if not isinstance(fid, str) or not id_re.match(fid):
+                    errs.append(Err("E-ID", f"{loc}.id", "故障条目 ID 不匹配 F-[A-Z0-9-] 规范", actual=repr(fid)))
+                    continue
+                if fid in fault_ids:
+                    errs.append(Err("E-ID", f"{loc}.id", "故障条目 ID 重复", actual=fid))
+                    continue
+                fault_ids.add(fid)
+                for k in fspec.get("entry_required") or ["id", "kind"]:
+                    if k == "id":
+                        continue
+                    if f.get(k) in (None, ""):
+                        errs.append(Err("E-FAULT", f"{loc}.{k}", "故障条目缺必填字段"))
+                if f.get("kind") is not None and f.get("kind") not in kinds:
+                    errs.append(Err("E-FAULT", f"{loc}.kind",
+                                    f"故障类型须 ∈ arena/faults 库（{len(kinds)} 类）", actual=repr(f.get("kind"))))
+                if f.get("severity") is not None and f.get("severity") not in sev:
+                    errs.append(Err("E-FAULT", f"{loc}.severity", f"severity 须 ∈ {sorted(sev)}",
+                                    actual=repr(f.get("severity"))))
+                cref = f.get("criteria_ref")
+                if cref is not None and (not isinstance(cref, str) or not cref_re.match(cref)):
+                    errs.append(Err("E-FAULT", f"{loc}.criteria_ref",
+                                    "criteria_ref 须为 R 编号（docs/theory/references.md 编号）", actual=repr(cref)))
+                tgt = f.get("target")
+                if tgt is not None and tgt not in id_universe:
+                    errs.append(Err("E-FAULT", f"{loc}.target",
+                                    "target 引用的元件或线路不存在", actual=repr(tgt)))
+                det = f.get("detection")
+                if det is not None:
+                    if not isinstance(det, dict):
+                        errs.append(Err("E-FAULT", f"{loc}.detection", "detection 必须是映射"))
+                    else:
+                        for k in det_req:
+                            if det.get(k) in (None, ""):
+                                errs.append(Err("E-FAULT", f"{loc}.detection.{k}", f"detection 缺必填字段 {k}"))
+                        if det.get("comparator") is not None and det.get("comparator") not in comp:
+                            errs.append(Err("E-FAULT", f"{loc}.detection.comparator",
+                                            f"comparator 须 ∈ {sorted(comp)}", actual=repr(det.get("comparator"))))
+                        unknown = set(det) - set(det_req) - det_opt
+                        if unknown:
+                            errs.append(Err("E-FAULT", f"{loc}.detection", f"detection 含未知字段 {sorted(unknown)}"))
+                        d = det.get("duration_sec")
+                        if d is not None and (not is_num(d) or d <= 0):
+                            errs.append(Err("E-FAULT", f"{loc}.detection.duration_sec", "duration_sec 必须 > 0",
+                                            actual=repr(d)))
+
+    # ---- calendar：业务日历 ----
+    cal = data.get("calendar")
+    if cal is not None:
+        if not isinstance(cal, dict):
+            errs.append(Err("E-CAL", f"{origin}.calendar", "calendar 必须是映射"))
+        else:
+            shift_re = re.compile(cspec.get("shifts_pattern",
+                                            r"^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$"))
+            shifts = cal.get("shifts")
+            if shifts is not None:
+                if not isinstance(shifts, list) or not shifts:
+                    errs.append(Err("E-CAL", f"{origin}.calendar.shifts", "shifts 必须为非空数组"))
+                else:
+                    for i, s in enumerate(shifts):
+                        if not isinstance(s, str) or not shift_re.match(s):
+                            errs.append(Err("E-CAL", f"{origin}.calendar.shifts[{i}]", "班次须为 HH:MM-HH:MM",
+                                            actual=repr(s)))
+            types = set(cspec.get("types") or [])
+            time_re = re.compile(cspec.get("time_pattern", r"^([01][0-9]|2[0-3]):[0-5][0-9]$"))
+            events = cal.get("events")
+            if events is not None:
+                if not isinstance(events, list):
+                    errs.append(Err("E-CAL", f"{origin}.calendar.events", "events 必须是数组"))
+                else:
+                    seen_cids: set[str] = set()
+                    for i, ev in enumerate(events):
+                        loc = f"{origin}.calendar.events[{i}]"
+                        if not isinstance(ev, dict):
+                            errs.append(Err("E-CAL", loc, "日历事件必须是映射", actual=repr(ev)[:60]))
+                            continue
+                        if ev.get("type") not in types:
+                            errs.append(Err("E-CAL", f"{loc}.type", f"事件类型须 ∈ {sorted(types)}",
+                                            actual=repr(ev.get("type"))))
+                        cid = ev.get("id")
+                        if cid is not None:
+                            if not isinstance(cid, str) or cid in seen_cids:
+                                errs.append(Err("E-CAL", f"{loc}.id", "日历事件 ID 须为字符串且唯一", actual=repr(cid)))
+                            seen_cids.add(cid)
+                        ed = ev.get("every_days")
+                        if ed is not None and (not isinstance(ed, int) or isinstance(ed, bool) or ed < 1):
+                            errs.append(Err("E-CAL", f"{loc}.every_days", "every_days 必须为 ≥1 的整数", actual=repr(ed)))
+                        at = ev.get("at")
+                        if at is not None and (not isinstance(at, str) or not time_re.match(at)):
+                            errs.append(Err("E-CAL", f"{loc}.at", "at 须为 HH:MM", actual=repr(at)))
+                        params = ev.get("params")
+                        if params is not None and not isinstance(params, dict):
+                            errs.append(Err("E-CAL", f"{loc}.params", "params 必须是映射", actual=repr(params)[:60]))
+
+    # ---- scenario：场景 + 注入计划 ----
+    scen = data.get("scenario")
+    if scen is not None:
+        if not isinstance(scen, dict):
+            errs.append(Err("E-SCEN", f"{origin}.scenario", "scenario 必须是映射"))
+        else:
+            for k in sspec.get("required") or ["seed", "duration_sim_s", "clock_speed"]:
+                if scen.get(k) in (None, ""):
+                    errs.append(Err("E-SCEN", f"{origin}.scenario.{k}", f"场景缺必填字段 {k}"))
+            seed = scen.get("seed")
+            if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool) or seed < 0):
+                errs.append(Err("E-SCEN", f"{origin}.scenario.seed", "seed 须为 ≥0 整数", actual=repr(seed)))
+            dur = scen.get("duration_sim_s")
+            if dur is not None and (not is_num(dur) or dur < 1):
+                errs.append(Err("E-SCEN", f"{origin}.scenario.duration_sim_s", "duration_sim_s 必须 ≥1",
+                                actual=repr(dur)))
+            cs = sspec.get("clock_speed") or {}
+            speed = scen.get("clock_speed")
+            if speed is not None and (not is_num(speed)
+                                      or speed < cs.get("min", 0.1) or speed > cs.get("max", 3600)):
+                errs.append(Err("E-SCEN", f"{origin}.scenario.clock_speed",
+                                f"clock_speed 必须 ∈ [{cs.get('min', 0.1)}, {cs.get('max', 3600)}]", actual=repr(speed)))
+            ag = scen.get("agent")
+            if ag is not None and not isinstance(ag, dict):
+                errs.append(Err("E-SCEN", f"{origin}.scenario.agent", "agent 必须是映射"))
+            inj = scen.get("injections")
+            if inj is not None:
+                if not isinstance(inj, list):
+                    errs.append(Err("E-SCEN", f"{origin}.scenario.injections", "injections 必须是数组"))
+                else:
+                    if "faults" not in data:
+                        errs.append(Err("E-SCEN", f"{origin}.scenario.injections",
+                                        "injections 引用 faults 节，但本文件无 faults 节"))
+                    for i, j in enumerate(inj):
+                        loc = f"{origin}.scenario.injections[{i}]"
+                        if not isinstance(j, dict):
+                            errs.append(Err("E-SCEN", loc, "注入计划条目必须是映射", actual=repr(j)[:60]))
+                            continue
+                        if j.get("fault") not in fault_ids:
+                            errs.append(Err("E-SCEN", f"{loc}.fault",
+                                            "注入引用的故障条目未在本文件 faults 节声明", actual=repr(j.get("fault"))))
+                        at = j.get("at_sim_s")
+                        if at is None or not is_num(at) or at < 0:
+                            errs.append(Err("E-SCEN", f"{loc}.at_sim_s", "at_sim_s 须为 ≥0 的秒数", actual=repr(at)))
+                        elif is_num(dur) and at >= dur:
+                            errs.append(Err("E-SCEN", f"{loc}.at_sim_s", "注入时刻不得晚于场景时长",
+                                            actual=f"{at}≥{dur}"))
+                        t = j.get("target")
+                        if t is not None and t not in id_universe:
+                            errs.append(Err("E-SCEN", f"{loc}.target", "注入目标元件或线路不存在", actual=repr(t)))
+                        p = j.get("params")
+                        if p is not None and not isinstance(p, dict):
+                            errs.append(Err("E-SCEN", f"{loc}.params", "注入 params 必须是映射"))
+    return errs
+
+
 def validate_dsl(data: dict, origin: str = "<dsl>") -> list[Err]:
     errs: list[Err] = []
     if data.get("api") != SPEC["api"]:
@@ -364,6 +560,9 @@ def validate_dsl(data: dict, origin: str = "<dsl>") -> list[Err]:
         errs.append(Err("E-TIER", f"{origin}.park.tier",
                         f"声明 tier={park.get('tier')} 与规模判据推断不符（{stats}），建议 tier={inferred}",
                         actual=stats))
+
+    # ---- v1.1 可选三节（基础校验全过后才跑，避免结构错误层叠）----
+    validate_extensions(data, devices, origin, errs)
     return errs
 
 
@@ -423,6 +622,10 @@ def build_export(data: dict, source: str) -> dict:
                       "voltage_noise": SPEC["telemetry"]["voltage_noise"],
                       "shapes": SPEC["telemetry"]["shapes"],
                       "components": comps, "buses": buses},
+        # v1.1 可选节透传（缺省为空容器；arena 引擎与前端消费）
+        "faults": data.get("faults") if isinstance(data.get("faults"), list) else [],
+        "calendar": data.get("calendar") if isinstance(data.get("calendar"), dict) else {},
+        "scenario": data.get("scenario") if isinstance(data.get("scenario"), dict) else {},
     }
 
 

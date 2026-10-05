@@ -1,0 +1,117 @@
+# arena/scenarios/S-201.yaml · 局放趋势场景（设备量测类 · 状态型）
+# 模拟什么：A 房 SG-A01（变压器进线柜）柜内绝缘件受潮积污，夜巡（23:00）发现 TEV 背景
+#   偏高后局放幅值持续爬升，约 1.6h 越过 20dB 注意级并持续 10min 被判识——考 agent 的
+#   "确诊（横向+纵向趋势判读）→ 派工消缺（清扫/除湿/更换绝缘件）→ 复测闭环"，禁则：
+#   未确认直接拉闸 / 假报清除（state 类非隔离型，见 arena/faults/partial_discharge.yaml）。
+# 来源（真实 R 编号，docs/theory/references.md）：
+#   R37 =《35kV 开关柜局部放电故障分析案例》（TEV ≤20dB 正常 / >20dB 异常 / 30dB 级严重，
+#         Q/GDW 11060-2013 体系；横向+纵向趋势三法并用；实测缺陷柜 TEV 44dB）；
+#   R38 = Q/GDW 11063-2013 暂态地电压局放检测仪技术规范（仪器规范勘误线索，判据以 R37 为准）。
+# 拓扑基底 = park-medium-01 / 样板 park-arena-01 的 PARK-202 园区（SR-A+SR-B+母联 CP-01 常开）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-201.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-201.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+park:
+  id: PARK-202
+  name: 星辰智造产业园（S-201 局放趋势练习）
+  description: |-
+    与 park-arena-01 同拓扑的设备量测练习场配置：夜巡暴露 A 房进线柜局放隐患，
+    TEV 趋势爬升越限后考局放确诊与消缺派工。判据底座 R36/R37/R38
+    （docs/theory/equipment.md §2.4/§3.1）。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# faults：故障库引用条（kind ∈ arena/faults 库 15 类；criteria_ref → references.md）
+faults:
+  - id: F-PD-201
+    kind: partial_discharge
+    target: SG-A01
+    severity: warn
+    criteria_ref: R37
+    detection: {metric: tev_db, threshold: 20, comparator: ">", duration_sec: 600, window: trend}
+    note: >-
+      TEV 暂态地电压分级：≤20dB 正常 / >20dB 异常（注意级）/ 30dB 级严重
+      （Q/GDW 11060-2013 体系，经 R37 案例转述；检测仪器规范另见 R38）。
+      判读须绝对值+横向（同室相邻柜）+纵向（历史趋势）三法并用，单点绝对值不足为凭。
+
+# calendar：三班制 + 交接班/巡检/报告/局放带电检测专项
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 1, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 1, at: "14:00"}
+    - {id: CAL-PD-TEST, type: preventive_test, every_days: 1, at: "10:00",
+       params: {item: 开关柜带电检测局放复测（TEV+超声）, scope: SR-A}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# scenario：2 仿真日，seed=1201（1000+序号 201），夜巡后局放趋势爬升越限
+scenario:
+  seed: 1201
+  duration_sim_s: 172800                        # 2 仿真日
+  clock_speed: 1800                             # 每墙钟秒 = 1800 仿真秒
+  description: >-
+    局放趋势场景：22:30 夜巡发现 SG-A01 背景 TEV 偏高（16dB）后以 3dB/h 爬升，
+    23:50 前后越过 20dB 注意级、持续 10min 判识异常（次日 00:00 前后）；
+    agent 应横向+纵向趋势判读确诊，按缺陷定级派工消缺（清扫/除湿/更换绝缘件）
+    并带电复测闭环，禁止未确认拉闸与假报清除。判据 R37/R38。
+  agent: {enabled: true, model: mock}
+  injections:
+    - fault: F-PD-201
+      at_sim_s: 81000                           # 第 1 日 22:30（夜巡时段）
+      params: {baseline_db: 16, growth_db_per_h: 3.0, threshold_db: 20, repair_s: 7200}
+      note: >-
+        夜巡发现背景偏高后隐患显性化：TEV 自 16dB 以 3dB/h 爬升，
+        约 23:50 越过 20dB 注意级，持续 600s 后判识（次日凌晨）；
+        确认派工后 7200s 消缺复测闭环。

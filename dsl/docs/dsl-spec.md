@@ -118,6 +118,78 @@ links:                             # 连接（全园一级，≥1）
 
 ## 9. 三档样例与 LLM 提示词
 
-- 样例：`examples/park-simple-01.yaml`、`park-medium-01.yaml`、`park-complex-01.yaml`（全部过 §6 校验，`dsl/tests/run_tests.py` 退出码为证）。
+- 样例：`examples/park-simple-01.yaml`、`park-medium-01.yaml`、`park-complex-01.yaml`、`park-arena-01.yaml`（全部过 §6 校验，`dsl/tests/run_tests.py` 退出码为证；末者为 v1.1 练习场三节示范）。
 - 提示词：`prompts/gen-{simple,medium,complex}.prompt.md`，内嵌本规范要点+完整元件表+tier 判据+few-shot；运行器 `prompts/run_gen.py`（OpenAI 兼容 /v1/chat/completions，凭证经 env/stdin，argv-free；产物直接接 `validate.py validate` 复核）。
 - 真实模型配额：线1 ≤3 次（台账 `prompts/quota-ledger.md`）。
+
+## 10. v1.1 增量：练习场三节（faults / calendar / scenario）
+
+> 2026-10-01 · 阶段 d（模拟练习场）落地。**全部为可选顶层节**：不含这些节的文件
+> 校验与导出行为与 v1 完全一致（向后兼容，api 仍为 parkdsl/1）。裁决源仍是
+> `dsl_spec.yaml` 的 `extensions:` 块；`validate.py` 在基础校验全过后才校验三节
+> （错误码 E-FAULT / E-CAL / E-SCEN），避免结构错误层叠。示范样例：
+> `examples/park-arena-01.yaml`。
+
+### 10.1 `faults`：故障库引用条
+
+把 `arena/faults` 论文故障库的条目**绑定**到本园设备与判据（库是判据权威，DSL 是绑定层）：
+
+```yaml
+faults:
+  - id: F-PD-01                    # ^F-[A-Z][A-Z0-9-]{0,39}$，节内唯一
+    kind: partial_discharge        # 必须 ∈ arena/faults 库 16 类（4 类既有白名单 + 12 类论文扩展）
+    target: SG-A01                 # 可选；绑定元件 ID（不写=园区级/库级条目）
+    severity: warn                 # info | warn | alarm | accident
+    criteria_ref: R37              # ^R[0-9]+$ → docs/theory/references.md 编号（判据出处）
+    detection:                     # 告警判据（可选）
+      metric: tev_db               # 测点名
+      threshold: 20
+      comparator: ">"              # > >= < <= == 或 trend_up（趋势型）
+      duration_sec: 600            # 持续时间（>0）
+      window: trend                # 可选：趋势窗口
+    note: TEV 横向+纵向趋势判读…    # 人读备注
+```
+
+- `kind` 16 类：`short_circuit / line_break / overload / pv_trip`（既有引擎白名单）
+  + `partial_discharge / temperature_rise / harmonic / three_phase_unbalance / over_limit /
+  protection_maloperation / transformer_fault / dc_ground_fault / phase_loss /
+  single_phase_ground / environmental`（论文扩展）。
+- 判据阈值须带出处：`criteria_ref` 指向理论卷参考文献；没有把握的判据在 `note` 标明
+  【工程惯例/待核】——这条是"经得起电力专家审查"的硬约束。
+
+### 10.2 `calendar`：业务日历（正常营业与管理变化的事件源）
+
+```yaml
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]   # HH:MM-HH:MM（尾端可 24:00）
+  events:
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-UPS, type: preventive_test, every_days: 90, params: {item: ups_battery_capacity}}
+    - {id: CAL-95598, type: work_order_95598, params: {response_min: 45}}
+```
+
+- `type` 8 类：`shift_handover / patrol / infrared_scan / preventive_test / outage_plan /
+  baodian / work_order_95598 / report`（对齐两票三制、DL/T 1102 巡检周期、95598 时限等，
+  依据见 `docs/theory/`）。
+- `every_days` ≥1 整数；`at` 为 HH:MM；`params` 自由映射放类型专属参数。
+
+### 10.3 `scenario`：倍速场景 + 注入计划
+
+```yaml
+scenario:
+  seed: 202                        # ≥0 整数
+  duration_sim_s: 604800           # 场景总长（仿真秒）= 7 仿真日
+  clock_speed: 600                 # 每墙钟秒对应 600 仿真秒（10 分钟倍速）
+  agent: {enabled: true, model: mock}   # 被测 agent 开关（人机对比的总开关）
+  injections:                      # 注入计划（四步留痕：计划→执行→命中→恢复）
+    - {fault: F-PD-01, at_sim_s: 86400}  # fault 必须引用本文件 faults 节的条目 ID
+```
+
+- `clock_speed` ∈ [0.1, 3600]；`at_sim_s` ≥0 且 < `duration_sim_s`；`agent.enabled=false`
+  即「关闭 agent 交给人类」的人类体验模式入口（TASK.md D-1..D-3 的 DSL 侧）。
+- `injections[].params` 可带类型专属注入参数（如 `overload_ratio`）。
+
+### 10.4 导出透传
+
+`validate.py export` 在 `parkdsl-web/1` JSON 中新增 `faults / calendar / scenario` 三个键
+（缺省为空容器），arena 引擎与前端直接消费；`api/nodes/links/telemetry` 既有结构不变。

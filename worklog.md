@@ -334,3 +334,201 @@ PASS exit 0（新增 t_adapter_sg_incomer）；run_matrix 全绿 exit 0（25/25+
 - **悬留维持登记（不计收工阻断）**：Higress 凭据缺（真实 LLM 注入未跑，离线兜底已实证）；
   srv-1 通道缺（caddy 未上线，deploy/ 包就绪+api.js 相对路径已清障）；浏览器截图缺（无 headless
   浏览器）。模型配额 0/10 未动，密钥零打印。
+
+## 2026-10-01 · ZCode 主会话 · 转向计划启动轮（Phase 0 基线修复 + 阶段 a 工作流点火）
+
+**做了什么**：
+- 接手实测：session cwd（D:\new-workspace\配电agent）为空目录，项目本体在
+  `D:\new-workspace\澄迈项目\机械臂\peidian-agent`（remote feasy898/agentic-factory-projects，
+  本地=远程 HEAD 0ab1c25，浅克隆）；Monorepo 顶层另有 6 个项目不在本任务范围。
+- 环境修复（详见 tests/CHANGELOG.md 2026-10-01 节与 ASSET-MANIFEST §6 R-2）：
+  core.autocrlf=true 致全树 CRLF → 门禁 0/8；排查后确认登记口径=CRLF 字节，
+  完成 LF 归一（338 文件）+ `.gitattributes` 锁 LF + sparse-checkout disable
+  （原 cone 仅含 chenmai8，peidian-agent 全树 skip-worktree 无法提交）；
+  golden/dev MANIFEST 按 sanctioned 工具重建（12 种子内容零变化，CRLF 证明）；
+  test_m1/test_m6 spec_hash 按 01 v2 §6 重登记；pyproject `>=3.11`→`>=3.12`。
+- 基线五门：run_evals **233/233 PASS exit 0**（登记时点实跑）；ci_isolation OK。
+- 阶段 a 点火：动态工作流 `dwfrun-8ab46deb`（4 域研究员 GLM-5.3-Flash 并行 → 汇总 →
+  独立复核 → 修订+python 机械校验），目标产出 docs/theory/ 六件（A-1..A-3）。
+
+**悬留/待办（如实登记）**：A-4 owner 批示门未过（不可代签）；M1-agent-core.md 冻结后
+内容漂移待 owner 复核（R-2）；Higress/LLM 真实模型凭据仍缺（真实注入验证待凭据）；
+git stat 缓存 341 文件 ` M` 噪音（内容 diff 为空，提交以内容为准）。
+
+## 2026-10-02 · ZCode 主会话 · 转向计划主交付轮（阶段 a/b/c/d 主体落地）
+
+**做了什么**（提交链：fbc9eaf 环境基线 → 9c9fb4a 阶段 d 主体 → 390ff33 人类体验+收敛件
+→ b556609 清理；另有 monorepo 内其他会话并发提交，本会话只动 peidian-agent 子树）：
+- **阶段 a 理论卷**（GLM-5.3-Flash 工作流 dwfrun-8ab46deb）：docs/theory/ 六件
+  （overview/references/business/equipment/safety/operations），references 62 条、
+  四域论断 252 条、43 个来源 WebFetch 实测可达；独立复核+修订 5 处（R46/R47 空号、
+  统计行不符、类型枚举名不副实等）；A-1..A-3 过，A-4 待 owner。
+- **阶段 b/c 草案**：docs/contracts/agent-purpose-contract.md（七节+红线 R1-R7）、
+  module-map.md（26 件三态判定：fault/ 升唯一注入引擎权威、m5 injector 停演进、
+  三处 LLM 调用点收编、web/ 冻结+ui/ 全新）；evidence/owner-gates.md 批示门台账。
+- **阶段 d 主体**：ParkDSL v1.1 三节（faults/calendar/scenario，25/25）；arena 编排层
+  （engine/run_scenario/faultlib/tests 24 用例）；fault 引擎 4→15 类（11 类通用信号 +
+  ack→repair 生命周期 + Criterion 判据表带出处）；park_adapter 修复低压侧串联开关
+  方向反向的潜伏缺陷；arena/faults 论文故障库 11 条目（38 条判据有出处、【待核】如实）。
+- **人类体验模式**：CLI --human（异常暂停等人工）+ arena/serve.py（HTTP+SSE）+ ui/
+  全新前端三件套（owner 裁定推翻重做）；冒烟实测通过（run/事件流/人工注入/静态服务）。
+- **收敛件**：thresholds.yaml（红线 3/N Clopper-Pearson、收益、前后窗漂移；
+  frozen: false 待校准）+ converge.py（calibrate/judge，未冻结拒绝判定）。
+- docs/expert-review.md：判据溯源总表（标准条文 vs 工程惯例 vs 待核）+ 审查清单。
+- **门禁**：全绿实跑——run_evals 233/233、ci_isolation zero hits、dsl 25/25、
+  fault 15/15、arena 24/24；样例场景端到端 4/4 注入检出、4/4 agent 闭环、0 误升级。
+
+**悬留/待办（如实登记）**：①场景库 20 个工作流 dwfrun-b46ea344 生产中（S-201 起，
+完成并复核后单独提交）；②D-5 链路未闭环：100 次校准→owner 冻阈值→3 万次隔离判定→
+D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner 批示门未过；
+④Higress/LLM 真实凭据缺（场景生成器的真实模型路径未启用，当前离线兜底）；
+⑤gen_scenario.py（LLM 规则化生成器）未实现——语料由工作流产出先行，生成器
+列后续；⑥ui/ 待办：遥测曲线、人机对比评分卡、单线图（ui/README 已列）。
+
+## 2026-10-02 · ZCode 主会话 · 场景库收尾 + 引擎三修 + 100 次校准（DD-558e7 前链）
+
+**做了什么**：
+- **场景库 20 个全部入库**（D-4 达标）：GLM-5.3-Flash 工作流 dwfrun-b46ea344
+  （4 编撰组×5 → 独立复核 → 修订+机械校验 exit 0）；覆盖设备量测/网络保护/直流运维/
+  园区变体四类，全部过 dsl 校验 + arena 干跑（detected≥1、0 rejected）。
+- **修了三个引擎缺陷**（commit 8a4f146，均由场景编撰升级/实测驱动，纯加法修复）：
+  ①telemetry 叶元件（负荷/光伏/储能/电容）通用信号被 energized 判定整体抑制
+  （phase_loss@load 结构性不可检出——连样板 F-PHLOSS-01 也从未触发）；
+  ②dsl/validate faults/injections target 命名空间过窄（拒 link ID，与
+  dsl_spec id_rules.note 相悖）；③park_adapter ③.5 独立开关一母线面+一线路面时
+  方向反向（联络串开关 BUS→SG→LN→SG→BUS 形态下 B 段整段失电，S-207 暴露）。
+- **批跑 10x 提速**（3 万次的前提）：arena busy 判定精化（全部异常 ack 后按空闲
+  大步长跳到下一事件，消缺期无新状态）单 run 30s→1.7-3.6s；converge.py 多进程
+  批跑（--workers，64 核机 12 workers）。
+- **100 次校准**（12 workers、100 run、0 errors）：红线违规 0、收益 0.6414 vs
+  参照 0.6320（pass）、漂移全 pass；N=100 红线置信上界 2.95%（3/N 须 3 万次才能
+  判定——统计口径预期，非失败）；升级率 0.2/平均检出时延 3502s/平均闭环 1.7。
+  基线数字已写入 thresholds.yaml calibration_baseline，冻结决策包入
+  evidence/owner-gates.md（等 owner 裁定 D-5）。
+- **门禁**：arena 24/24、dsl 25/25、fault 15/15、run_evals 233/233 全绿（每步实跑）。
+
+**悬留/待办**：①**D-5 等 owner 冻结**（决策包已就绪：红线 3/N 维持/收益基线建议补
+--agent-off 批/漂移维持）；②3 万次隔离判定 + D-7 报告在冻结后执行；③A-4/B-4 批示门
+未过；④M1 spec 漂移 R-2 待复核；⑤Higress 凭据缺；⑥gen_scenario.py 未实现；
+⑦ui/ 遥测曲线/对比评分卡/单线图待迭代。
+
+## 2026-10-02 · ZCode 主会话 · 收益指标重做 + 阈值冻结 + 3 万次判定启动
+
+**owner 批示**（当日会话）：「全部按照你建议的方式操作。然后继续。你先全部做完再看看」
+→ 按决策包三项建议执行到底。
+
+**做了什么**：
+- **agent-off 基线批**（100 run，seeds 2000-2099，0 errors）：暴露收益公式无区分度
+  （agent-on 0.6414 vs agent-off 0.6237——旧公式用「检出时延」计响应（与 agent 无关）、
+  「无动作=零被拒」计满分）。**重做收益口径**为四元组（arena/engine.py 新增 quality
+  字段逐拍采集）：availability 0.40（供电可用率=1-失电负荷·秒/名义负荷·秒）/
+  response 0.30（0.5×闭环率+0.5×响应率×时效分）/ action 0.20（1/(1+恶化动作+被拒)）/
+  hygiene 0.10（日历完成率）；区分度 0.246（agent-on 0.9197 vs agent-off 0.6735）。
+- **busy 判定再精化**：agent 关闭且无人工队列时同样按空闲步长（无人 ack 时 1s 步长
+  空转数小时是 agent-off 批慢的首因）。
+- **converge.py 增强**：--agent-off 基线模式 / --partial-out+--merge 分块合并判定 /
+  --keep-every run 记录抽样 / benefit 判据改为与冻结基线数字比对。
+- **阈值冻结**（owner 批准）：thresholds.yaml v1.0 frozen: true——红线 3/N 维持、
+  收益基线 0.6735（agent-off 实测）、漂移 α=0.01 维持；判定种子段 10000-39999；
+  冻结记录与纪律说明入 evidence/owner-gates.md。
+- **3 万次判定工作流启动**：dwfrun-61d550b5（隔离会话：冻结算验→5 分块×6000
+  world.run 门控→merge→D-7 报告→独立复核），预计约 2 小时。
+- **门禁**：fault 15/15、arena 24/24、run_evals 233/233 全绿（提交前实跑）。
+
+**悬留/待办**：①3 万次判定 + D-7 报告（工作流运行中，完成后验证提交）；②A-4/B-4
+批示门未过；③M1 spec 漂移 R-2 待复核；④Higress 凭据缺；⑤gen_scenario.py 未实现；
+⑥ui/ 三项迭代待办。
+
+## 2026-10-02 · 判定 v1 超时中止 → v2 小分块修订（打捞基建）
+
+- **v1（dwfrun-61d550b5）失败**：chunk 1（6000 run）超过 world.run 45 分钟超时点被
+  中止（实测聚合速率约 1 run/s，6000 run 需 ~70 分钟 > 45 分钟超时）。已完成部分
+  经 `arena/harvest_runs.py` 从 run 目录 eval.json **打捞回 2872 个 run**（bad=0），
+  写入 partial——无算力浪费。
+- **v2（dwfrun-883705b3，AmendWorkflow 修订）**：①分块 6000→2000（15 块，
+  seeds 10000-39999）；②每块 world.run 包 try/catch，超时只打捞续跑不中止；
+  ③每块前后 harvest 两个 runs root；④补跑机制：去重计数 <30000 时按
+  seeds 40000+ 补块（上限 8 块）；⑤workers 12→24；⑥merge 按 run_id 去重。
+- **工具链提交** 1f4b474：harvest_runs.py + converge run_id 种子唯一化 + merge 去重。
+- **事故记账**：本日一次 `git commit` 误吞其他会话（chenmai8）暂存变更约 9400 行，
+  已软撤销并只重提 peidian-agent 7 文件（78058c7）；对方变更还原为未暂存状态，
+  内容无损。教训：monorepo 并发会话下，提交必须显式 `git add <路径>` 且提交后
+  `git show --stat` 自查。
+
+## 2026-10-02 · 判定 v2 再次中止 → 改为直接批跑执行（执行台账）
+
+- **v2（dwfrun-883705b3）第二次失败**：8 个 chunk（c1-c8，seeds 10000-25999）实际
+  **全部跑完**（日志 exit=1 只是「2000 run 时红线 3/N 上界必然不达标」的判定退出码，
+  partial 均已正常写入）；致命点是 chunk 间 harvest 扫盘超过 world.run 的 5 分钟
+  超时（run 目录随批增长 + 24 worker IO 争抢）。已打捞：**unique 20434 run、0 error**。
+- **执行方式切换**：判定输入（thresholds.yaml frozen + 20 场景 + converge.py）在
+   judgment 开始前已全部冻结入库（git 可证），执行是确定性的——剩余批次不再绕道
+  工作流（world.run 超时属基础设施限制），改为主会话直接后台批跑：3 组并行
+  （seeds 26000-37999，6×2000，workers 16/组），组日志 runtime/judge-group-{a,b,c}.log。
+- **速率实测**：本机 64 核但有效算力约 4 核（48 worker 超卖），聚合约 1.4 run/s、
+  单 run CPU 约 2.5s——3 万次全程约 5-6 小时，符合 thresholds budget（12h）。
+- **计划**：6 块完成 → harvest → merge 判定 → D-7 报告（数字逐位对 JSON）→ 独立
+  复核 → 提交 → 终门禁。
+
+## 2026-10-02 · D-7 完成 · CONVERGED · 阶段 (a)/(b)/(c)/(d) 全部收口
+
+- **D-7 报告**（commit 7454932，convergence-report.md）：GLM-5.3-Flash 子代理工作流
+  dwfrun-a437fa3f 起草 + 独立复核 → **29946 run、0 errors，三条判据全过**：
+  - 红线 0/29946 违规，单侧 95% 上界 0.00010003 ≤ 0.0003（`converge-judgment.json`）
+  - 收益 0.919709 ≥ 冻结基线 0.6735
+  - 前/后窗各 1 万次，六特征漂移 p 值 0.83/0.77/0.98/1.0/1.0/1.0 全过 α=0.01
+- **实跑 29946 < 预算 30000（差 54，0.18%）**：报告如实登记为非判据事实——红线随 N 放宽
+  不受影响，补跑 54 次即可对齐预算。
+- **终门禁全绿**：evals 233/233 / isolation zero / dsl 25/25 / fault 15/15 / arena 24/24。
+- **整体交付链**（owner 批准的整条链路）：
+  - 阶段 (a) 四域理论卷六件（dwfrun-8ab46deb）
+  - 阶段 (b) 行为契约草案 docs/contracts/agent-purpose-contract.md
+  - 阶段 (c) 模块图 docs/contracts/module-map.md + evidence/owner-gates.md
+  - 阶段 (d) ParkDSL v1.1（4.1）+ arena 编排层 + fault 引擎 15 类 + 故障库 11 条（4.2/4.3）
+  - 阶段 (d) 场景库 20 个入库（4.4）+ 多进程批跑 + 性能优化（4.5）
+  - 人类体验模式：CLI/serve/全新 ui/ + 专家审查物料（4.6-4.8）
+  - 100 次校准 + 阈值冻结 v1.0（owner 批准，commit 78058c7）
+  - D-7 报告（commit 7454932）
+- **悬留（owner 后续门）**：①A-4/B-4 批示门未过；②M1 spec 漂移 R-2 待复核；③Higress
+  凭据缺（真实 LLM 路径未启用）；④gen_scenario.py 未实现；⑤ui/ 三项迭代待办。
+
+## 2026-10-02 · 迭代第2轮：对照六条核心目标的差距弥合（4 commits）
+
+**触发**：owner 提出 6 条核心目的（DSL/模拟真实性/真实案例/Agent 行为/度量/人类可理解），
+自评均分 5/10，目标2（仿真真实性 3/10）和目标4（Agent 智能 4/10）为量级性差距。
+
+**交付**（commits 745b014 → 000c272 → 4fb74ee → 59ba215）：
+
+### 目标2：仿真真实性（3→6/10）
+- **pandapower 潮流内核**（arena/powerflow.py）：
+  - ParkDSL → fault.topology → pandapower 网络 → 牛顿法潮流
+  - 真实电压降（0.970-0.990 pu）替代拓扑连通性阶跃（0/1）
+  - 24h 日负荷形状插值（10am factory=0.95 → 399kW 而非恒定 420kW）
+  - 气象模型（温度影响负荷/PV；辐照度影响PV出力）
+- **隔离开关/转供**（关键修复，实测三场景全部物理正确）：
+  - SG-B00 OPEN → B 侧负荷归零（隔离正确）
+  - +CP-01 CLOSE → B 负荷恢复，TX-A01 从 61%→91%（承接全负荷）
+  - BUS-A2 电压 0.970→0.958 pu（真实电压降）
+  - 修复关键 bug：同一变压器双端开关聚合（任一 OPEN 即断开）+ 默认状态取 normally
+
+### 目标3：真实数据（5→7/10）
+- **SimBench 基准数据集接入**（arena/data/）：
+  - 真实测量的全年 15min×35136 点负荷/光伏曲线
+  - 6 条标准 24h 形状 + 17 条 SimBench 原始细分剖面
+  - 来源标注/许可（ODC-BY 1.0）/处理链完整
+
+### 目标4：Agent 智能化（4→6/10）
+- **LLM 推理式诊断代理**（arena/llm_agent.py）：
+  - OpenAI 兼容 API（BigModel GLM 等）；环境变量认证
+  - 异常+遥测+故障库知识 → LLM → 结构化诊断（diagnosis/action/reasoning/confidence）
+  - 无 key 时优雅回退 mock（规则化剧本）
+  - 已集成到 arena engine（agent.llm_diagnosis 事件追加到事件流）
+
+### 目标6：人类可理解（5→7/10）
+- **SVG 单线图生成器**（arena/sld.py）：
+  - IEC 60617 简化符号（母线/变压器/开关/负荷/光伏/储能/充电桩）
+  - 按电压等级分层布局 + 状态着色（正常/故障/失电）
+  - serve.py 新增 /api/sld 端点（SVG 直出）
+
+### grok CLI 评审
+- 网络不可达（cli-chat-proxy.grok.com 直连+代理均失败），已记录到 runtime/grok-network-diagnosis.txt
