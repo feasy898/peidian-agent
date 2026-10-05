@@ -559,7 +559,12 @@ class ArenaEngine:
         detected = [e for e in events if e.get("type") == "fault.detected"]
         cleared = [e for e in events if e.get("type") == "anomaly.cleared"]
         escalated = [e for e in events if e.get("type") == "control.escalated"]
-        active_end = len(self.engine.detector.active)
+        # 只计 status=="active"：cleared 异常按设计保留在 detector.active 字典中
+        # （engine 验证相/bridge 状态面依赖其存续），但不属于"结束时仍活跃"。
+        active_end = sum(
+            1 for a in self.engine.detector.active.values()
+            if getattr(a, "status", "active") == "active"
+        )
 
         detect_lat, restore_lat = self._latencies(events)
         respond_lat = self._respond_latencies(events)

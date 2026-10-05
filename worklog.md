@@ -532,3 +532,10 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
 
 ### grok CLI 评审
 - 网络不可达（cli-chat-proxy.grok.com 直连+代理均失败），已记录到 runtime/grok-network-diagnosis.txt
+
+## 2026-10-05 夜 · LLM 真调打通 + active_at_end 修复（九项目盘点 P1/P2 工单）
+
+- **LLM 真调（P1）**：arena/llm_agent.py 经 OpenBao `company/LLM-upstream/Zhipu/zhipu-bigmodel-CodingPlan-1`（BIGMODEL_API_KEY 环境注入）真实调用 glm-4-flash 成功——`source=llm` 结构化输出（diagnosis/action/reasoning），fail-closed→真调链路闭合。首调发现 `_build_prompt` 未充分序列化 telemetry（模型自述"未提供遥测数据"），记为后续改进项。
+- **Higress 桥（协同项）**：fault/llm_bridge.HigressClient 的设计入口 governance:8080 当前仅允许 consumer=glue-core（旧 jiuwen 体系，owner 已裁决作废）且 auto-router 上游连接失败——LLM 网关重建属 OPC-harness 集群范围，桥的真调待其放行后一行 env 即通。
+- **active_at_end（P2）**：arena/engine.py 只计 status=="active"（cleared 留存 detector.active 供验证相/状态面用）。S-202 复测：detected=2/cleared=2/cleared_by_agent=2/**active_at_end=0**（原误报 2）。
+- 门禁：run_evals 233/233 PASS + fault 15/15 PASS（改动零回归）。
