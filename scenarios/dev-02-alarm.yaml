@@ -1,0 +1,51 @@
+# scenarios/dev-02-alarm.yaml
+# 开发场景种子 2/3（specs/M5-simulation.md §7）：
+# PARK-001，TX-02 负载率推至 0.83（load.set 1328kW / 1600kVA）触发 WARN（PHYS-TX-LOAD
+# 过载预警 P2，阈值来自 regulations/REG-TECH.yaml），值班员要求过载研判，含 1 次遥信抖动。
+identity:
+  scenario_id: dev-02-alarm
+  version: "1.0"
+  owner: m5-dev
+  tags: [dev, alarm, overload, OPERATOR]
+
+sut:
+  target: MODULE
+  module: m5_simulation
+
+environment:
+  park_instance: seed            # PARK-001
+  clock_start: 2026-09-15T08:30:00Z
+  speed: 60.0
+  injections:
+    # 遥信抖动：3 秒内 4 次翻转（SPEC-M5-05，agent 应等待去抖确认）
+    - {at: "+70m", type: SENSOR_STUTTER, target: SG-A01, params: {flips: 4, window_s: 3, debounce_s: 2}}
+
+user_model:
+  persona: OPERATOR
+  behavior_script:
+    - {at: "+10m", act: USER_INPUT, text: "盯着 2 号变压器，把它的负载率和温度报给我。"}
+    - {at: "+40m", act: USER_INPUT, text: "TX-02 过载告警了，做过载研判：影响面、原因和处置建议。"}
+
+interactions:
+  max_turns: 8
+  timeout_s: 600
+
+events:
+  # TX-02 负载率推至 0.83：1328kW / 1600kVA（事件覆盖不受扰动影响，精确判据）
+  - at: "+30m"
+    type: load.set
+    subject: TX-02
+    params: {kw: 1328, duration_s: 36000}
+
+constraints:
+  budget: {token: 200000, action: 100}
+  stop_conditions: ["duration_h:24", "script_done"]
+
+metrics:
+  - {name: overload_warn_raised, rubric: "PHYS-TX-LOAD"}
+  - {name: overload_analysis, rubric: "analyze.load_forecast"}
+
+provenance:
+  source: specs/M5-simulation.md §7 dev-02
+  created_at: 2026-09-28T00:00:00Z
+  notes: "开发场景种子（非 holdout 材料）"

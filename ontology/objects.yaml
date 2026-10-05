@@ -1,0 +1,183 @@
+# ontology/objects.yaml
+# 机械落盘自 specs/00-ontology.md §1.1（对象类型表）。运行期只读（M4 加载）。
+# 字段约定：id=类型 ID；name_cn=中文名；attributes=关键属性；measurement_bindings=量测绑定；
+#           description=补充说明（来自 00 原文括注）。
+meta:
+  source: specs/00-ontology.md §1.1
+  version: "1.0"
+
+object_groups:
+  equipment:
+    description: 电气设备（Equipment）
+    types:
+      - id: Transformer
+        name_cn: 配电变压器
+        attributes: [capacity_kva, load_rate, cooling, winding_temp]
+        measurement_bindings: ["U", "I", "P", "Q", "cosφ", "温度"]
+      - id: Switchgear
+        name_cn: 高压开关柜
+        attributes: [rated_a, breaker_state, protection_setting_ref]
+        measurement_bindings: ["分/合状态", "局放"]
+      - id: Bus
+        name_cn: 母线
+        attributes: [voltage_level, connected_devices]
+        measurement_bindings: ["U", "f"]
+      - id: Cable
+        name_cn: 电力电缆
+        attributes: [length_m, spec, insulation]
+        measurement_bindings: ["温度", "局放"]
+      - id: CapacitorBank
+        name_cn: 无功补偿装置
+        attributes: [capacity_kvar, state, auto_mode]
+        measurement_bindings: ["Q", "cosφ", "THD"]
+        description: state 取值 投/切
+      - id: APF
+        name_cn: 有源滤波器
+        attributes: [rated_a, filter_state]
+        measurement_bindings: ["THD", "各次谐波"]
+      - id: BESS
+        name_cn: 储能系统
+        attributes: [capacity_kwh, power_kw, soc, charge_state]
+        measurement_bindings: ["SOC", "P", "Q"]
+      - id: PV
+        name_cn: 光伏系统
+        attributes: [capacity_kwp, output_kw]
+        measurement_bindings: ["P", "Q"]
+      - id: EVCharger
+        name_cn: 充电桩群
+        attributes: [total_power_kw, session_count]
+        measurement_bindings: ["P"]
+      - id: Panel
+        name_cn: 低压配电柜
+        attributes: [circuits]
+        measurement_bindings: ["U", "I", "P", "Q"]
+
+  sensor:
+    description: 环境传感（Sensor）
+    types:
+      - id: TempHumiditySensor
+        name_cn: 温湿度传感器
+        attributes: []
+        measurement_bindings: []
+      - id: WaterLeakSensor
+        name_cn: 水浸传感器
+        attributes: []
+        measurement_bindings: []
+      - id: SmokeSensor
+        name_cn: 烟感传感器
+        attributes: []
+        measurement_bindings: []
+      - id: PDSensor
+        name_cn: 局放传感器
+        attributes: []
+        measurement_bindings: []
+        description: 局放
+      - id: IRCamera
+        name_cn: 红外测温
+        attributes: []
+        measurement_bindings: []
+        description: 红外测温
+
+  operational:
+    description: 运行对象（Operational）
+    types:
+      - id: Measurement
+        name_cn: 量测
+        attributes: [device_ref, quantity, value, unit, quality, ts]
+        measurement_bindings: []
+      - id: Alarm
+        name_cn: 告警
+        attributes: [level, source_ref, code, text, raised_at, cleared_at, ack_by]
+        measurement_bindings: []
+        description: level 取值 P0-P3
+      - id: GridEvent
+        name_cn: 电网事件
+        attributes: [type, subject_ref, ts, detail]
+        measurement_bindings: []
+        description: type 取值 开关变位/越限/保护动作/通信中断
+      - id: OperatingState
+        name_cn: 运行状态
+        attributes: [device_ref, state, since]
+        measurement_bindings: []
+        description: state 取值 运行/检修/热备/冷备/故障
+
+  administrative:
+    description: 管理对象（Administrative）
+    types:
+      - id: WorkOrder
+        name_cn: 工单
+        attributes: [code, type, status, priority, related_alarm, assignee]
+        measurement_bindings: []
+        description: type 取值 消缺/检修/巡检
+      - id: SwitchOrder
+        name_cn: 操作票
+        attributes: [code, steps, status, issuer, executor, guard_check]
+        measurement_bindings: []
+        description: steps 为操作序列
+      - id: WorkTicket
+        name_cn: 工作票
+        attributes: [code, permit_type, status, issuer, receiver]
+        measurement_bindings: []
+      - id: InspectionRecord
+        name_cn: 巡检记录
+        attributes: [route, items, inspector, ts]
+        measurement_bindings: []
+        description: items 为 设备/部位/方法/结果
+      - id: MaintenancePlan
+        name_cn: 检修计划
+        attributes: [device_ref, cycle, next_due, last_done, items]
+        measurement_bindings: []
+      - id: AssetRecord
+        name_cn: 台账
+        attributes: [device_ref, model, vendor, commission_date, history]
+        measurement_bindings: []
+
+  commercial:
+    description: 经营对象（Commercial）
+    types:
+      - id: PriceSchedule
+        name_cn: 电价方案
+        attributes: [tariff_id, periods, effective_range]
+        measurement_bindings: []
+        description: periods 元素含 start/end/type（尖/峰/平/谷）/price
+      - id: DemandRecord
+        name_cn: 需量记录
+        attributes: [month, peak_kw, contract_capacity_kw, over_threshold]
+        measurement_bindings: []
+        description: over_threshold 阈值 1.05
+      - id: LoadCurve
+        name_cn: 负荷曲线
+        attributes: [device_ref_or_park, points, granularity]
+        measurement_bindings: []
+        description: points 元素含 ts/kw；归属 device_ref 或 park
+      - id: Bill
+        name_cn: 账单
+        attributes: [month, energy_kwh, demand_charge, energy_charge, pf_bonus]
+        measurement_bindings: []
+
+  space_and_personnel:
+    description: 空间与人员
+    types:
+      - id: Park
+        name_cn: 园区
+        attributes: [id, name, tariff, contract_capacity_kw]
+        measurement_bindings: []
+      - id: SubstationRoom
+        name_cn: 配电房
+        attributes: [name, address, sensors]
+        measurement_bindings: []
+      - id: Feeder
+        name_cn: 馈线
+        attributes: []
+        measurement_bindings: []
+        description: 进线/母线/出线归属
+      - id: Circuit
+        name_cn: 回路
+        attributes: []
+        measurement_bindings: []
+        description: 挂接 Panel
+      - id: Operator
+        name_cn: 运维人员
+        attributes: [id, name, role, permissions]
+        measurement_bindings: []
+        description: role 取值 值班员/调度员/签发人/审批人；含权限集

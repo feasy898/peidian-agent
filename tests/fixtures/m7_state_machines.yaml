@@ -1,0 +1,18 @@
+# 固化评审流与 Release 状态机（M7 SPEC-M7-03/05 表驱动断言基准）。
+# 与 src/m7_registry/review.REVIEW_TRANSITIONS、release.RELEASE_TRANSITIONS
+# 的实现表 diff 必须为空（EVAL-M7-TABLE-P）；迁移语义来自 M7 §2/§3 行为规格：
+#   review : PROPOSED→EVALUATING→APPROVED→PUBLISHED（拒绝/撤回分支；终态只读）
+#   release: DRAFT→GATED→PUBLISHED（PUBLISHED 后仅可 SUPERSEDED）
+machines:
+  review:
+    PROPOSED: [EVALUATING, REJECTED, WITHDRAWN]
+    EVALUATING: [APPROVED, REJECTED, WITHDRAWN]
+    APPROVED: [PUBLISHED]
+    PUBLISHED: []
+    REJECTED: []
+    WITHDRAWN: []
+  release:
+    DRAFT: [GATED]
+    GATED: [PUBLISHED]
+    PUBLISHED: [SUPERSEDED]
+    SUPERSEDED: []

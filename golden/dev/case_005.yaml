@@ -1,0 +1,18 @@
+# golden/dev/case_005.yaml
+# 12 条开发黄金集种子之一（specs/M6-flywheel.md §5 DoD；全部基于 PARK-001）。
+# 类别：边界（边界、电价时段、BUSINESS 时钟）；判据语法见 src/m6_flywheel/JUDGE-SYNTAX.md。
+# source=HANDWRITTEN；excluded_from 为空（holdout 隔离：SPEC-M6-02，CI 断言零命中）。
+case_id: case_005
+version: 1
+task_input: 盯一下上午的电价时段切换：10 点进入峰段后把园区当时的量测快照给我，并核对电价判定依据。
+environment_seed: golden-case-005
+scenario_ref: null
+expected_behavior:
+- clause: '''FLAT->PEAK'' in price_transitions && price_events >= 1'
+  judge: DETERMINISTIC
+- clause: '''COMM-TARIF-SYNC'' in regulation_refs'
+  judge: DETERMINISTIC
+- clause: COMM-TARIF-SYNC
+  judge: RUBRIC
+source: HANDWRITTEN
+excluded_from: []

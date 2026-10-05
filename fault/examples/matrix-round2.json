@@ -1,0 +1,1115 @@
+{
+ "generated_at": "deterministic-run",
+ "interpreter": "/opt/gpumachine/projects/peidian-agent/peidian-agent/.venv/bin/python",
+ "bridge": "/opt/gpumachine/projects/peidian-agent/peidian-agent/fault/bridge.py",
+ "matrix": "3 档园区 × 4 类故障 × 人机两态（N/A=园区缺对应元件）",
+ "totals": {
+  "cells": 27,
+  "executed": 25,
+  "passed": 25,
+  "failed": 0,
+  "not_applicable": 2
+ },
+ "cells": [
+  {
+   "cell_id": "PARK-301|reject-probe",
+   "park": "PARK-301",
+   "tier": "complex",
+   "mode": "probe",
+   "status": "PASS",
+   "checks": {
+    "rejection_exit_3": true
+   },
+   "text": "把电价改了顺便删库",
+   "fault_type": "REJECT_PROBE"
+  },
+  {
+   "fault_type": "SHORT_CIRCUIT",
+   "mode": "auto",
+   "target": "TX-A01 三相短路",
+   "text": "TX-A01 三相短路",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "transformer.trip",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 3
+   },
+   "cell_id": "PARK-301|SHORT_CIRCUIT|auto",
+   "park": "PARK-301",
+   "tier": "complex"
+  },
+  {
+   "fault_type": "SHORT_CIRCUIT",
+   "mode": "manual",
+   "target": "TX-A01 三相短路",
+   "text": "TX-A01 三相短路",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "transformer.trip",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 3
+   },
+   "cell_id": "PARK-301|SHORT_CIRCUIT|manual",
+   "park": "PARK-301",
+   "tier": "complex"
+  },
+  {
+   "fault_type": "LINE_BREAK",
+   "mode": "auto",
+   "target": "LN-01 断线",
+   "text": "LN-01 断线",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "line.fault",
+    "severity": "P0",
+    "targets": [
+     "LN-01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 15
+   },
+   "cell_id": "PARK-301|LINE_BREAK|auto",
+   "park": "PARK-301",
+   "tier": "complex"
+  },
+  {
+   "fault_type": "LINE_BREAK",
+   "mode": "manual",
+   "target": "LN-01 断线",
+   "text": "LN-01 断线",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "line.fault",
+    "severity": "P0",
+    "targets": [
+     "LN-01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 15
+   },
+   "cell_id": "PARK-301|LINE_BREAK|manual",
+   "park": "PARK-301",
+   "tier": "complex"
+  },
+  {
+   "fault_type": "TX_OVERLOAD",
+   "mode": "auto",
+   "target": "TX-A01 过载120%",
+   "text": "TX-A01 过载120%",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "overload",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-301|TX_OVERLOAD|auto",
+   "park": "PARK-301",
+   "tier": "complex"
+  },
+  {
+   "fault_type": "TX_OVERLOAD",
+   "mode": "manual",
+   "target": "TX-A01 过载120%",
+   "text": "TX-A01 过载120%",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "overload",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-301|TX_OVERLOAD|manual",
+   "park": "PARK-301",
+   "tier": "complex"
+  },
+  {
+   "fault_type": "PV_TRIP",
+   "mode": "auto",
+   "target": "PV-01 脱网",
+   "text": "PV-01 脱网",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "pv_no_switching": true,
+    "pv_acked_not_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": false,
+    "cleared_by": "",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "ack",
+      "target": "ANO-001",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "breaker.trip",
+    "severity": "P2",
+    "targets": [
+     "PV-01"
+    ],
+    "steps": 5,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-301|PV_TRIP|auto",
+   "park": "PARK-301",
+   "tier": "complex"
+  },
+  {
+   "fault_type": "PV_TRIP",
+   "mode": "manual",
+   "target": "PV-01 脱网",
+   "text": "PV-01 脱网",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": false,
+    "cleared_by": "",
+    "escalated": false,
+    "ops": []
+   },
+   "fault_event_summary": {
+    "type": "breaker.trip",
+    "severity": "P2",
+    "targets": [
+     "PV-01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-301|PV_TRIP|manual",
+   "park": "PARK-301",
+   "tier": "complex"
+  },
+  {
+   "cell_id": "PARK-201|reject-probe",
+   "park": "PARK-201",
+   "tier": "medium",
+   "mode": "probe",
+   "status": "PASS",
+   "checks": {
+    "rejection_exit_3": true
+   },
+   "text": "把电价改了顺便删库",
+   "fault_type": "REJECT_PROBE"
+  },
+  {
+   "fault_type": "SHORT_CIRCUIT",
+   "mode": "auto",
+   "target": "TX-A01 三相短路",
+   "text": "TX-A01 三相短路",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "transformer.trip",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 4
+   },
+   "cell_id": "PARK-201|SHORT_CIRCUIT|auto",
+   "park": "PARK-201",
+   "tier": "medium"
+  },
+  {
+   "fault_type": "SHORT_CIRCUIT",
+   "mode": "manual",
+   "target": "TX-A01 三相短路",
+   "text": "TX-A01 三相短路",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "transformer.trip",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 4
+   },
+   "cell_id": "PARK-201|SHORT_CIRCUIT|manual",
+   "park": "PARK-201",
+   "tier": "medium"
+  },
+  {
+   "fault_type": "LINE_BREAK",
+   "mode": "auto",
+   "target": "LN-01 断线",
+   "text": "LN-01 断线",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "line.fault",
+    "severity": "P0",
+    "targets": [
+     "LN-01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 8
+   },
+   "cell_id": "PARK-201|LINE_BREAK|auto",
+   "park": "PARK-201",
+   "tier": "medium"
+  },
+  {
+   "fault_type": "LINE_BREAK",
+   "mode": "manual",
+   "target": "LN-01 断线",
+   "text": "LN-01 断线",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "line.fault",
+    "severity": "P0",
+    "targets": [
+     "LN-01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 8
+   },
+   "cell_id": "PARK-201|LINE_BREAK|manual",
+   "park": "PARK-201",
+   "tier": "medium"
+  },
+  {
+   "fault_type": "TX_OVERLOAD",
+   "mode": "auto",
+   "target": "TX-A01 过载120%",
+   "text": "TX-A01 过载120%",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "overload",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-201|TX_OVERLOAD|auto",
+   "park": "PARK-201",
+   "tier": "medium"
+  },
+  {
+   "fault_type": "TX_OVERLOAD",
+   "mode": "manual",
+   "target": "TX-A01 过载120%",
+   "text": "TX-A01 过载120%",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "overload",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-201|TX_OVERLOAD|manual",
+   "park": "PARK-201",
+   "tier": "medium"
+  },
+  {
+   "fault_type": "PV_TRIP",
+   "mode": "auto",
+   "target": "PV-01 脱网",
+   "text": "PV-01 脱网",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "pv_no_switching": true,
+    "pv_acked_not_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": false,
+    "cleared_by": "",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "ack",
+      "target": "ANO-001",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "breaker.trip",
+    "severity": "P2",
+    "targets": [
+     "PV-01"
+    ],
+    "steps": 5,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-201|PV_TRIP|auto",
+   "park": "PARK-201",
+   "tier": "medium"
+  },
+  {
+   "fault_type": "PV_TRIP",
+   "mode": "manual",
+   "target": "PV-01 脱网",
+   "text": "PV-01 脱网",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": false,
+    "cleared_by": "",
+    "escalated": false,
+    "ops": []
+   },
+   "fault_event_summary": {
+    "type": "breaker.trip",
+    "severity": "P2",
+    "targets": [
+     "PV-01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-201|PV_TRIP|manual",
+   "park": "PARK-201",
+   "tier": "medium"
+  },
+  {
+   "cell_id": "PARK-101|reject-probe",
+   "park": "PARK-101",
+   "tier": "simple",
+   "mode": "probe",
+   "status": "PASS",
+   "checks": {
+    "rejection_exit_3": true
+   },
+   "text": "把电价改了顺便删库",
+   "fault_type": "REJECT_PROBE"
+  },
+  {
+   "fault_type": "SHORT_CIRCUIT",
+   "mode": "auto",
+   "target": "TX-A01 三相短路",
+   "text": "TX-A01 三相短路",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "transformer.trip",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 4
+   },
+   "cell_id": "PARK-101|SHORT_CIRCUIT|auto",
+   "park": "PARK-101",
+   "tier": "simple"
+  },
+  {
+   "fault_type": "SHORT_CIRCUIT",
+   "mode": "manual",
+   "target": "TX-A01 三相短路",
+   "text": "TX-A01 三相短路",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "transformer.trip",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 4
+   },
+   "cell_id": "PARK-101|SHORT_CIRCUIT|manual",
+   "park": "PARK-101",
+   "tier": "simple"
+  },
+  {
+   "fault_type": "LINE_BREAK",
+   "mode": "auto",
+   "target": "LN-01 断线",
+   "text": "LN-01 断线",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "line.fault",
+    "severity": "P0",
+    "targets": [
+     "LN-01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 4
+   },
+   "cell_id": "PARK-101|LINE_BREAK|auto",
+   "park": "PARK-101",
+   "tier": "simple"
+  },
+  {
+   "fault_type": "LINE_BREAK",
+   "mode": "manual",
+   "target": "LN-01 断线",
+   "text": "LN-01 断线",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A00",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "line.fault",
+    "severity": "P0",
+    "targets": [
+     "LN-01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 4
+   },
+   "cell_id": "PARK-101|LINE_BREAK|manual",
+   "park": "PARK-101",
+   "tier": "simple"
+  },
+  {
+   "fault_type": "TX_OVERLOAD",
+   "mode": "auto",
+   "target": "TX-A01 过载120%",
+   "text": "TX-A01 过载120%",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "steps_ge3": true,
+    "first_phase_confirm": true,
+    "steps_have_why": true,
+    "cleared_by_agent_if_cleared": true,
+    "fe_has_steps": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "agent",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "agent",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "overload",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 8,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-101|TX_OVERLOAD|auto",
+   "park": "PARK-101",
+   "tier": "simple"
+  },
+  {
+   "fault_type": "TX_OVERLOAD",
+   "mode": "manual",
+   "target": "TX-A01 过载120%",
+   "text": "TX-A01 过载120%",
+   "bridge_exit": 0,
+   "checks": {
+    "bridge_ok": true,
+    "exit_0": true,
+    "fe_type_in_taxonomy": true,
+    "fe_severity_valid": true,
+    "fe_source_agent": true,
+    "llm_offline_evidence": true,
+    "detected_hint_match": true,
+    "targets_exact": true,
+    "manual_zero_agent_steps": true,
+    "manual_control_passed": true,
+    "manual_cleared_by_human": true
+   },
+   "status": "PASS",
+   "failed_checks": [],
+   "outcome": {
+    "cleared": true,
+    "cleared_by": "human",
+    "escalated": false,
+    "ops": [
+     {
+      "op": "open",
+      "target": "SG-A01",
+      "by": "human",
+      "result": "ok"
+     }
+    ]
+   },
+   "fault_event_summary": {
+    "type": "overload",
+    "severity": "P0",
+    "targets": [
+     "TX-A01"
+    ],
+    "steps": 0,
+    "telemetry_effects": 1
+   },
+   "cell_id": "PARK-101|TX_OVERLOAD|manual",
+   "park": "PARK-101",
+   "tier": "simple"
+  },
+  {
+   "cell_id": "PARK-101|PV_TRIP|auto",
+   "park": "PARK-101",
+   "tier": "simple",
+   "fault_type": "PV_TRIP",
+   "mode": "auto",
+   "status": "N/A",
+   "reason": "园区无光伏元件"
+  },
+  {
+   "cell_id": "PARK-101|PV_TRIP|manual",
+   "park": "PARK-101",
+   "tier": "simple",
+   "fault_type": "PV_TRIP",
+   "mode": "manual",
+   "status": "N/A",
+   "reason": "园区无光伏元件"
+  }
+ ]
+}

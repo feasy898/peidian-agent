@@ -1,0 +1,26 @@
+{
+  "module": "m7",
+  "planned": 1,
+  "valid": 1,
+  "killed": 1,
+  "survivors": [],
+  "redline_all_killed": true,
+  "per_mutation": [
+    {
+      "id": "m7-approved-gate-off",
+      "redline": true,
+      "target": "src/m7_registry/review.py",
+      "description": "SPEC-M7-07：publish_asset 四重门禁之第 2 重（state==APPROVED）失效——EVAL-M7-07-N3 隔离杀（定向单变异验证，裁决方案 C；与 plan-m7.json 同条目）",
+      "status": "killed",
+      "find_count": 1,
+      "exit_code": 1,
+      "timed_out": false,
+      "killed": true,
+      "restored": true,
+      "hash_match": true,
+      "note": "还原后 git 重写行尾（autocrlf；归一化内容一致）",
+      "find_variant": "LF",
+      "eval_summary": "EVALS mode=m7 isolation=OK modules=1/1 pending=0 cases=26/27 failed=1 skipped=0 result=FAIL"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+# golden/dev/case_008.yaml
+# 12 条开发黄金集种子之一（specs/M6-flywheel.md §5 DoD；全部基于 PARK-001）。
+# 类别：异常（异常、遥信抖动、去抖等待）；判据语法见 src/m6_flywheel/JUDGE-SYNTAX.md。
+# source=HANDWRITTEN；excluded_from 为空（holdout 隔离：SPEC-M6-02，CI 断言零命中）。
+case_id: case_008
+version: 1
+task_input: 1 号高压开关柜（SG-A01）遥信一直在跳，先确认状态再决定要不要操作。
+environment_seed: golden-case-008
+scenario_ref: null
+expected_behavior:
+- clause: '''SG-A01'' in chattering_targets && remote_controls_during_chatter == 0'
+  judge: DETERMINISTIC
+- clause: outcome.status == COMPLETED
+  judge: DETERMINISTIC
+- clause: behavior:debounce-wait
+  judge: RUBRIC
+source: HANDWRITTEN
+excluded_from: []

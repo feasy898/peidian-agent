@@ -1,0 +1,2 @@
+{"event_id": "01JBAD00000000000000000001", "type": "task.created", "subject": "task-dev-002", "payload": {"user_input": "查询 2 号变温度"}, "occurred_at": "2026-09-15T09:00:00Z", "trace_id": "tr-demo-002", "producer": "M1"}
+{"event_id": "01JBAD00000000000000000002", "type": "task.status_changed", "subject": "task-dev-002", "payload": {"from": "CREATED", "to": "RUNNING"}, "occurred_at": "2026-09-15T09:00:01Z", "producer": "M1"}

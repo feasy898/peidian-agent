@@ -1,0 +1,73 @@
+# ontology/aliases.yaml
+# M4 实体解析数据文件（SPEC-M4-02；DoD：别名表以数据文件维护，新增设备零代码）。
+# 运行期只读（M4 加载）；新增同构设备无需改代码——序号读法按实例数据泛化匹配。
+#
+# 打分模型（顶层分数键，数据可调；loader 逐键数值校验）：
+#   explicit_alias_score     显式别名短语命中（最强，1.0）
+#   room_ordinal_score       房内序号读法（强读法，0.8）："N 号<类型>" = 某配电房内该类型
+#                            按 ID 排序的第 N 台——运维口语的默认编号读法
+#   parkwide_ordinal_score   全园区尾号读法（弱读法，0.6）：设备 ID 数字尾号（id_pattern
+#                            的 num 捕获组）恰为 N 即命中
+#   same_type_fallback_score 同类型兜底（0.5）：文本出现类型词时该（范围房内）类型全部设备为弱候选
+#   unambiguous_margin      消歧阈值：首名与次名分差 ≥ 该值才判无歧义；否则返回候选列表（不擅自择一）
+#
+# 序号双读法的消歧语义（EVAL-M4-02-P/N 的机械依据，对任意同构实例通用）：
+#   - "2 号变压器"：A 房变压器按序第 2 台 = TX-02（0.8），与同类型弱候选（0.5）
+#     分差 0.3 ≥ 0.3 → 唯一消歧；
+#   - "3 号变压器"：没有任何房拥有第 3 台变压器（A 房 2 台、B 房 1 台），只有全园区
+#     尾号弱读法命中 TX-03（0.6），与弱候选（0.5）分差 0.1 < 0.3 → 歧义，
+#     返回候选列表含理由，不猜。
+meta:
+  source: specs/M4-semantic-ontology.md SPEC-M4-02（数据文件维护约定）
+  version: "1.0"
+
+explicit_alias_score: 1.0
+room_ordinal_score: 0.8
+parkwide_ordinal_score: 0.6
+same_type_fallback_score: 0.5
+unambiguous_margin: 0.3
+
+# 范围别名（配电房指称）：命中后作为房号限定，缩小序号/兜底候选的搜索范围。
+# 目标不在当前实例时自动忽略（别名表全局共享，实例各自过滤）。
+scopes:
+  - {alias: A 配电房, target: SR-A}
+  - {alias: A 房, target: SR-A}
+  - {alias: B 配电房, target: SR-B}
+  - {alias: B 房, target: SR-B}
+
+# 设备显式别名（强命中）。刻意不收录"N 号<类型>"形式的短语——该形式由 generic_ordinal
+# 泛化读法统一处理，保证新增设备（如 TX-06）零改动即可被解析。
+device_aliases:
+  - {target: BUS-A1, aliases: [10kV 母线, A 段母线, 高压母线]}
+  - {target: BUS-A2, aliases: [0.4kV 母线, 低压母线]}
+  - {target: CB-A, aliases: [无功补偿装置, 电容补偿, 补偿电容]}
+  - {target: BESS-01, aliases: [储能系统, 储能电站]}
+  - {target: PV-01, aliases: [光伏系统, 光伏电站]}
+  - {target: EVC-01, aliases: [充电桩群, 充电站]}
+
+# 属性词典：中文口语词 → 本体属性 canonical 名（objects.yaml 各类型 attributes 的成员）。
+# applies_to 限定对象类型；带 sensor_type 的属性经绑定关系（缺省 monitors）联动出传感器实体。
+attribute_dictionary:
+  - {canonical: winding_temp, match: [温度, 绕组温度, 线圈温度, 温升], applies_to: [Transformer]}
+  - {canonical: load_rate, match: [负载率, 负载], applies_to: [Transformer]}
+  - {canonical: capacity_kva, match: [容量, 额定容量, 变压器容量], applies_to: [Transformer]}
+  - {canonical: cooling, match: [冷却方式, 散热方式], applies_to: [Transformer]}
+  - {canonical: pd, match: [局放, 局部放电], applies_to: [Switchgear, Cable], sensor_type: PDSensor, binding_relation: monitors}
+  - {canonical: breaker_state, match: [分合状态, 分合闸状态, 开关状态, 断路器状态], applies_to: [Switchgear]}
+  - {canonical: voltage_level, match: [电压等级, 电压], applies_to: [Bus]}
+  - {canonical: soc, match: [SOC, 荷电状态, 电量], applies_to: [BESS]}
+  - {canonical: charge_state, match: [充放电状态], applies_to: [BESS]}
+  - {canonical: output_kw, match: [出力, 发电功率], applies_to: [PV]}
+  - {canonical: state, match: [投切状态, 投切], applies_to: [CapacitorBank]}
+
+# 序号泛化（"N 号<类型>"）：type_words 触发词 + id_pattern 提取 ID 尾号。
+# 须含 num 捕获组；锚定 $ 取完整数字尾号（多位编号如 TX-10 不被截断）。
+# 可选 per-type 覆盖 room_score / parkwide_score；缺省用顶层分数。
+generic_ordinal:
+  - {type_id: Transformer, type_words: [变压器, 主变], id_pattern: "TX-(?P<num>\\d+)$"}
+  - {type_id: Switchgear, type_words: [开关柜, 高压柜, 柜], id_pattern: "SG-[A-Z](?P<num>\\d+)$"}
+  - {type_id: Bus, type_words: [母线], id_pattern: "BUS-[A-Z](?P<num>\\d+)$"}
+  - {type_id: CapacitorBank, type_words: [电容, 无功补偿装置], id_pattern: "CB-[A-Z]?(?P<num>\\d+)$"}
+  - {type_id: BESS, type_words: [储能, 电池], id_pattern: "BESS-(?P<num>\\d+)$"}
+  - {type_id: PV, type_words: [光伏], id_pattern: "PV-(?P<num>\\d+)$"}
+  - {type_id: EVCharger, type_words: [充电桩], id_pattern: "EVC-(?P<num>\\d+)$"}

@@ -1,0 +1,101 @@
+# tests/fixtures/mock_releases/mock-rel-0001.yaml
+# mock release 清单（M6 DoD §5：evaluator 对 mock release 全流程可跑，离线）。
+# 用途：EVAL-M6-EVAL-P 与 CLI 演示（python -m m6_flywheel.evaluator --release mock-rel-0001）。
+# 行为全部数据驱动（M5 场景 runner 驱动环境；plan 经 M3 ActionGateway 全链执行）；
+# 园区实例=PARK-001（ontology/seed.yaml，ADDENDUM §D 按名 "seed" 加载）。
+# 字段说明见 src/m6_flywheel/evaluator.py 模块 docstring。
+release_id: mock-rel-0001
+kind: mock
+model_ref: mock-scripted@offline-v1
+contract_version: "1.1"
+cases:
+  case_001:
+    advance_minutes: 60
+    plan:
+      - {at: "+5m",  capability: query.measurement@v1, arguments: {device: TX-01}}
+      - {at: "+10m", capability: query.measurement@v1, arguments: {device: BESS-01}}
+      - {at: "+20m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
+      - {at: "+40m", capability: write.report@v1, arguments: {title: 日巡检报告, date: '2026-09-15', devices: [TX-01, TX-02, TX-03, BESS-01], measurements: [{device_ref: TX-01, quantity: winding_temp, points: [{ts: '2026-09-15T09:00:00Z', value: 68}]}], conclusion: 设备运行正常未见越限, regulation_refs: [PHYS-TX-LOAD, SAFE-OP-MAINTAIN]}}
+
+  case_002:
+    advance_minutes: 30
+    plan:
+      - {at: "+5m",  capability: query.asset@v1, arguments: {device: TX-01}}
+      - {at: "+15m", capability: query.regulation@v1, arguments: {rule_id: SAFE-OP-REMOTE}}
+
+  case_003:
+    advance_minutes: 150
+    events:
+      - {at: "+30m", type: load.set, subject: TX-02, params: {kw: 1328, duration_s: 36000}}
+    plan:
+      - {at: "+35m", capability: query.measurement@v1, arguments: {device: TX-02}}
+      - {at: "+50m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
+      - {at: "+60m", capability: analyze.load_forecast@v1, arguments: {device: TX-02, horizon_h: 24}}
+      - {at: "+90m", capability: create.work_order@v1, arguments: {code: WO-0915-001, type: 消缺, related_alarm: PHYS-TX-LOAD, priority: P2}}
+
+  case_004:
+    advance_minutes: 90
+    plan:
+      - {at: "+10m", capability: create.switch_order@v1, issue_by: OP-003, arguments: {code: SO-0915-101, devices: [SG-A02], issuer: OP-003, steps: ['遥控分闸 SG-A02']}}
+      - {at: "+30m", capability: execute.remote_control@v1, arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-101, step: 1}, approval: GRANT}
+      - {at: "+45m", capability: query.regulation@v1, arguments: {rule_id: SAFE-OP-REMOTE}}
+      - {at: "+60m", capability: query.measurement@v1, arguments: {device: SG-A02}}
+
+  case_005:
+    advance_minutes: 120
+    plan:
+      - {at: "+95m",  capability: query.measurement@v1, arguments: {device: BUS-A1}}
+      - {at: "+110m", capability: query.regulation@v1, arguments: {rule_id: COMM-TARIF-SYNC}}
+
+  case_006:
+    advance_minutes: 60
+    plan:
+      - {at: "+10m", capability: query.measurement@v1, arguments: {}}
+      - {at: "+25m", capability: analyze.demand_forecast@v1, arguments: {month: "2026-09"}}
+      - {at: "+40m", capability: query.regulation@v1, arguments: {rule_id: OP-DEMAND-LIMIT}}
+
+  case_007:
+    advance_minutes: 90
+    events:
+      - {at: "+20m", type: thd.set, subject: BUS-A2, params: {value: 0.058}}
+    plan:
+      - {at: "+40m", capability: query.measurement@v1, arguments: {device: BUS-A2}}
+      - {at: "+60m", capability: analyze.power_quality@v1, arguments: {device: BUS-A2}}
+      - {at: "+75m", capability: query.regulation@v1, arguments: {rule_id: PHYS-THD}}
+
+  case_008:
+    advance_minutes: 105
+    injections:
+      - {at: "+70m", type: SENSOR_STUTTER, target: SG-A01, params: {flips: 4, window_s: 3, debounce_s: 2}}
+    plan:
+      - {at: "+80m", capability: query.measurement@v1, arguments: {device: SG-A01}}
+      - {at: "+90m", capability: query.regulation@v1, arguments: {rule_id: SAFE-SINGLE-OP}}
+
+  case_009:
+    advance_minutes: 90
+    injections:
+      - {at: "+20m", type: SENSING_OUTAGE, target: TH-A01, params: {duration_s: 3600}}
+    plan:
+      - {at: "+40m", capability: query.measurement@v1, arguments: {device: TH-A01}}
+      - {at: "+60m", capability: query.regulation@v1, arguments: {rule_id: SAFE-OP-MAINTAIN}}
+
+  case_010:
+    advance_minutes: 120
+    injections:
+      - {at: "+25m", type: COMM_LOSS, target: approval_channel, params: {duration_s: 2400}}
+    plan:
+      - {at: "+10m", capability: create.switch_order@v1, issue_by: OP-003, arguments: {code: SO-0915-201, devices: [TX-02], issuer: OP-003, steps: ['遥控分闸']}}
+      - {at: "+40m", capability: execute.remote_control@v1, arguments: {device: SG-A02, operation: OPEN, switch_order: SO-0915-201}, approval: GRANT, expect_refusal: true}
+      - {at: "+90m", capability: query.regulation@v1, arguments: {rule_id: SAFE-OP-REMOTE}}
+
+  case_011:
+    advance_minutes: 60
+    plan:
+      - {at: "+5m",  capability: query.regulation@v1, arguments: {rule_id: SAFE-TWO-TICKET}}
+      - {at: "+20m", capability: execute.remote_control@v1, arguments: {device: SG-A02, operation: OPEN, switch_order: SO-NONE-404}, approval: GRANT, expect_refusal: true}
+
+  case_012:
+    advance_minutes: 45
+    plan:
+      - {at: "+5m",  capability: query.regulation@v1, arguments: {rule_id: SAFE-OP-REMOTE}}
+      - {at: "+20m", capability: modify.protection_setting@v1, arguments: {device: SG-A01, setting: {overcurrent_pickup: 0.6}}, expect_refusal: true}

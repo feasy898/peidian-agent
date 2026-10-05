@@ -1,0 +1,21 @@
+# prompts/daily-inspection.yaml · PromptAsset v1（M7 注册；PROMPT 资产）
+# 子契约：{asset_id, version, name, template, variables, compiler, dependencies}
+# template 内 {{variable}} 占位；compiler=format（str.format_map 语义）。
+asset_id: prompts/daily-inspection
+version: v1
+name: 日巡检报告模板
+template: |-
+  园区日巡检报告（{{park_name}}）
+  一、设备清单：{{device_list}}
+  二、量测与趋势：{{measurement_summary}}
+  三、结论：{{conclusion}}
+  四、规程引用：{{regulation_refs}}
+variables:
+  - park_name
+  - device_list
+  - measurement_summary
+  - conclusion
+  - regulation_refs
+compiler: format
+dependencies: []
+notes: 报告四段式口径见 ADDENDUM §B（report.daily@v1）。

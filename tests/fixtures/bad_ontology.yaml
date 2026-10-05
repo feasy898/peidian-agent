@@ -1,0 +1,18 @@
+# tests/fixtures/bad_ontology.yaml
+# 负向 fixture：动作 risk_level 枚举越界（loading 必须"启动失败优于带病运行"，SPEC-M4-01 口径）。
+# 仅供 EVAL-M0-xx（negative_rejection/ontology_load）使用，不进入任何运行期目录。
+meta:
+  source: tests/fixtures（S0 负向测试件）
+  version: "1.0"
+
+actions:
+  - id: query.measurement
+    name_cn: 读量测
+    risk_level: SUPER        # 越界：合法值仅 LOW/MEDIUM/HIGH/CRITICAL
+    reversible: false
+    default_policy: ALLOW
+  - id: execute.remote_control
+    name_cn: 遥控分/合闸
+    risk_level: HIGH
+    reversible: false
+    default_policy: PERHAPS  # 越界：合法值仅 ALLOW/ASK/DENY

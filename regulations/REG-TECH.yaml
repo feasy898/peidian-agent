@@ -1,0 +1,96 @@
+# regulations/REG-TECH.yaml
+# 技术监督规程 · 覆盖 specs/00-ontology.md §1.4 R-物理约束（PHYS-*）的判据口径。
+# 用途（ADDENDUM A / SPEC-M5-08）：M5 仿真判据的唯一阈值来源——
+# 禁止在仿真代码硬编码阈值；改本文件即改仿真告警行为。
+# thresholds 语义：按序评估，`op value` 以 metric 为左操作数；level=告警级别（P0-P3）。
+meta:
+  id: REG-TECH
+  title: 园区配电技术监督规程（物理约束判据）
+  domain: TECHNICAL
+  source: specs/00-ontology.md §1.4 R-物理约束
+  version: "1.0"
+
+rules:
+  - id: PHYS-TX-LOAD
+    title: 变压器负载率
+    category: physical
+    scope: Transformer
+    metric: load_rate
+    criterion: load_rate = P/capacity（回路聚合有功 / 变压器额定容量）
+    clauses:
+      - 变压器负载率 ≤ 80%（重过载 >100% 跳闸风险）。
+    thresholds:
+      - {op: ">", value: 0.80, level: P2, name: 过载预警}
+      - {op: ">", value: 1.00, level: P0, name: 重过载跳闸风险}
+
+  - id: PHYS-V-RANGE
+    title: 母线电压合格范围
+    category: physical
+    scope: Bus
+    metric: voltage_deviation
+    criterion: voltage_deviation = (U − Un)/Un（标么偏差，取绝对值判定）
+    clauses:
+      - 母线电压合格范围 ±7%。
+    thresholds:
+      - {op: ">=", value: 0.05, level: P3, name: 电压偏差越注意值}
+      - {op: ">=", value: 0.07, level: P2, name: 电压偏差越限}
+
+  - id: PHYS-THD
+    title: 电压总谐波畸变率
+    category: physical
+    scope: Bus
+    metric: thd_u
+    criterion: THD（GB/T 14549 口径，虚拟条款 R-THD-01）
+    clauses:
+      - 电压 THD ≤ 5%（GB/T 14549 口径，虚拟条款 R-THD-01）。
+    thresholds:
+      - {op: ">", value: 0.05, level: P3, name: 谐波越注意值}
+      - {op: ">", value: 0.08, level: P2, name: 谐波越限}
+
+  - id: PHYS-PF
+    title: 功率因数考核
+    category: physical
+    scope: Feeder
+    metric: power_factor
+    criterion: cosφ（月度考核口径）
+    clauses:
+      - 功率因数 ≥ 0.90（考核）。
+    thresholds:
+      - {op: "<", value: 0.90, level: P3, name: 功率因数不达标}
+
+  - id: PHYS-DEMAND
+    title: 最大需量约束
+    category: physical
+    scope: Park
+    metric: demand_ratio
+    criterion: demand_ratio = 月最大需量/合同容量（15min 滑窗月最大值）
+    clauses:
+      - 需量 ≤ 合同容量 × 1.05。
+    thresholds:
+      - {op: ">", value: 1.00, level: P2, name: 需量预警}
+      - {op: ">", value: 1.05, level: P0, name: 需量越限}
+
+  - id: PHYS-BESS-SOC
+    title: 储能 SOC 运行区间
+    category: physical
+    scope: BESS
+    metric: soc
+    unit: percent
+    criterion: "soc（荷电状态，百分数口径，与园区实例数据同源：soc 值 62 即 62%）"
+    clauses:
+      - SOC 运行区间 10%-90%。
+    thresholds:
+      - {op: "<", value: 10, level: P2, name: SOC 下越界}
+      - {op: ">", value: 90, level: P2, name: SOC 上越界}
+
+  - id: PHYS-TX-TEMP
+    title: 变压器绕组温度
+    category: physical
+    scope: Transformer
+    metric: winding_temp_c
+    unit: degC
+    criterion: "winding_temp_c（绕组温度，℃；M5 仿真量测口径：环境温度 + 满载温升×负载率 + 事件漂移）"
+    clauses:
+      - 变压器绕组温度 > 85℃ 越限（specs/M5-simulation.md §2 告警生成口径）。
+    thresholds:
+      - {op: ">", value: 85, level: P2, name: 绕组温度越限}

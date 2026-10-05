@@ -1,0 +1,41 @@
+# regulations/REG-SAFE.yaml
+# 安全规程 · 机械落盘自 specs/00-ontology.md §1.4 R-安全规程（条款 ID 逐条对应）。
+# 虚拟规程：条款文字即 00 原文；被 agent 以规则 ID 引用（01 §8）。
+meta:
+  id: REG-SAFE
+  title: 园区配电安全规程
+  domain: SAFETY
+  source: specs/00-ontology.md §1.4 R-安全规程
+  version: "1.0"
+
+rules:
+  - id: SAFE-TWO-TICKET
+    title: 两票制
+    category: safety
+    clauses:
+      - 任何遥控操作前必须存在状态=已签发的 SwitchOrder（两票制）。
+
+  - id: SAFE-ISSUE-HUMAN
+    title: 签发人主体资格
+    category: safety
+    clauses:
+      - 操作票签发人必须是 Operator.role ∈ {签发人}。
+      - 签发动作不属于任何 agent 动作集（agent 不得签发、不得代签）。
+
+  - id: SAFE-ORDER-SEQ
+    title: 操作顺序
+    category: safety
+    clauses:
+      - 操作步骤必须按 SwitchOrder.steps 声明顺序执行，不得跳步。
+
+  - id: SAFE-MAINTAIN-ISO
+    title: 检修隔离
+    category: safety
+    clauses:
+      - 检修作业设备必须处于检修状态且有 WorkTicket（含许可）。
+
+  - id: SAFE-SINGLE-OP
+    title: 单一执行流
+    category: safety
+    clauses:
+      - 每张操作票同一时刻只有一个执行流（互斥）。

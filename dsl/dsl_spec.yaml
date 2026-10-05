@@ -1,0 +1,113 @@
+# dsl/dsl_spec.yaml · ParkDSL v1 机器可读规范（validate.py 的唯一裁决源）
+# 人读规范：dsl/docs/dsl-spec.md。运行期只读。
+api: parkdsl/1
+spec_version: "1.0"
+
+voltage_levels: ["110kV", "35kV", "10kV", "0.4kV"]
+
+id_rules:
+  device: '^(GRID|LN|TX|BUS|SG|CB|BESS|PV|EVC|LD|CP)-[A-Z]?[0-9]{1,2}$'
+  substation: '^SR-[A-Z]$'
+  park: '^PARK-[0-9]{3}$'
+  note: >-
+    devices.id 与 links.id(LN/CP) 共用同一命名空间，全园唯一；[A-Z] 为配电房字母（推荐携带）；
+    序号 1-2 位数字（推荐两位补零，如 TX-A01）；兼容考古 seed.yaml 单数字风格（BUS-A1）；
+    故障事件 targets[] 引用本命名空间 ID（对齐契约见 web/docs/fault-events.md）。
+
+park_required: [id, name, description, tier, contract_capacity_kw]
+park_tiers: [simple, medium, complex]
+
+device_types:
+  GridInlet:
+    prefix: GRID
+    required: {source_voltage: voltage}
+    optional: {short_capacity_mva: {type: number, min: 1, default: 200}}
+  Transformer:
+    prefix: TX
+    required:
+      capacity_kva: {type: number, min: 1}
+      hv: voltage
+      lv: voltage
+    optional:
+      cooling: {enum: [ONAN, ONAF], default: ONAN}
+      no_load_loss_kw: {type: number, min: 0, default: 1.5}
+      load_loss_kw: {type: number, min: 0, default: 12.0}
+    constraint: hv != lv
+  Bus:
+    prefix: BUS
+    required: {voltage_level: voltage}
+    optional: {}
+  Switchgear:
+    prefix: SG
+    required: {rated_current_a: {type: number, min: 1}}
+    optional:
+      state: {enum: [CLOSED, OPEN], default: CLOSED}
+      role: {enum: [feeder, coupler, incomer], default: feeder}
+  CapacitorBank:
+    prefix: CB
+    required: {capacity_kvar: {type: number, min: 1}}
+    optional:
+      state: {enum: ["ON", "OFF"], default: "OFF"}   # YAML1.1 裸 OFF=布尔，必须引号（seed.yaml 同坑）
+  BESS:
+    prefix: BESS
+    required:
+      capacity_kwh: {type: number, min: 1}
+      power_kw: {type: number, min: 1}
+    optional: {soc: {type: number, min: 0, max: 100, default: 50}}
+  PV:
+    prefix: PV
+    required: {capacity_kwp: {type: number, min: 1}}
+    optional:
+      tilt: {type: number, min: 0, max: 60, default: 15}
+      azimuth: {type: number, min: 0, max: 360, default: 180}
+  EVCharger:
+    prefix: EVC
+    required: {total_power_kw: {type: number, min: 1}}
+    optional: {num_ports: {type: integer, min: 1, default: 4}}
+  Load:
+    prefix: LD
+    required:
+      peak_kw: {type: number, min: 1}
+      profile: {enum: [office, factory, commercial, resident]}
+    optional: {power_factor: {type: number, min: 0.5, max: 1.0, default: 0.85}}
+
+link_kinds:
+  line:
+    prefix: LN
+    required:
+      length_km: {type: number, min: 0.01, max: 50}
+      ampacity_a: {type: number, min: 1}
+    optional:
+      r_ohm_per_km: {type: number, min: 0, default: 0.20}
+      x_ohm_per_km: {type: number, min: 0, default: 0.08}
+  direct: {required: {}, optional: {}}
+  coupler:
+    prefix: CP
+    required: {}
+    optional: {state: {enum: [OPEN, CLOSED], default: OPEN}}
+
+topology_rules:
+  tx_loading_factor: 0.85      # E-CAP②：TX 下游 Σpeak ≤ capacity_kva × 该系数
+  open_coupler_disconnects: true
+  simple_no_loop: true         # E-LOOP：simple 档任意环即错
+
+tier_rules:                     # §7 判据；推断顺序 simple→medium→complex
+  simple:  {substations_max: 1, transformers_max: 2, loads_max: 6,  der_max: 0}
+  medium:  {substations_max: 2, transformers_max: 4, loads_max: 12, der_max: 4}
+  complex: {substations_max: null, transformers_max: null, loads_max: null, der_max: null}
+der_types: [BESS, PV, EVCharger]
+
+telemetry:
+  step_sec: 15
+  noise_amplitude: 0.04
+  wander_amplitude: 0.02
+  wander_period_sec: 600
+  voltage_drop_factor: 0.03
+  voltage_noise: 0.004
+  shapes:                       # 24 点日形状（小时粒度，线性插值）
+    office:     [0.35,0.33,0.32,0.32,0.33,0.36,0.45,0.60,0.78,0.90,0.95,0.92,0.80,0.82,0.90,0.92,0.88,0.80,0.68,0.58,0.50,0.45,0.40,0.37]
+    factory:    [0.55,0.55,0.55,0.55,0.55,0.60,0.75,0.90,0.95,0.95,0.95,0.95,0.85,0.95,0.95,0.95,0.95,0.90,0.75,0.65,0.60,0.58,0.56,0.55]
+    commercial: [0.40,0.38,0.36,0.35,0.35,0.38,0.45,0.55,0.65,0.75,0.85,0.90,0.88,0.80,0.82,0.85,0.88,0.92,0.98,0.95,0.85,0.70,0.58,0.47]
+    resident:   [0.45,0.42,0.40,0.39,0.40,0.45,0.52,0.55,0.52,0.50,0.50,0.52,0.58,0.56,0.54,0.56,0.62,0.75,0.92,1.00,0.95,0.82,0.68,0.55]
+    pv:          [0.00,0.00,0.00,0.00,0.00,0.02,0.08,0.18,0.32,0.48,0.64,0.80,0.92,0.98,0.94,0.82,0.64,0.44,0.24,0.10,0.02,0.00,0.00,0.00]
+    bess:        [-0.5,-0.5,-0.5,-0.5,-0.5,-0.5,-0.5,-0.3,0.2,0.4,0.5,0.5,0.0,0.0,0.0,0.2,0.4,0.5,0.5,0.4,0.1,-0.3,-0.5,-0.5]

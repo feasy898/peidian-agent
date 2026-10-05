@@ -1,0 +1,89 @@
+# ontology/relations.yaml
+# 机械落盘自 specs/00-ontology.md §1.2（关系类型表 + 三跳查询模式）。运行期只读（M4 加载）。
+meta:
+  source: specs/00-ontology.md §1.2
+  version: "1.0"
+
+relations:
+  - id: connected_to
+    name_cn: 电气连接
+    semantics: 电气连接（设备→母线）
+    domain: Equipment
+    range: Bus
+    cardinality: N:1
+  - id: part_of
+    name_cn: 空间/结构包含
+    semantics: 空间/结构包含
+    domain: Equipment, SubstationRoom, Circuit
+    range: SubstationRoom, Park, Feeder
+    cardinality: N:1
+    domain_note: Equipment→SubstationRoom; SubstationRoom→Park; Circuit→Feeder
+  - id: monitors
+    name_cn: 传感/量测绑定
+    semantics: 传感/量测绑定
+    domain: Sensor, Measurement
+    range: Equipment
+    cardinality: N:1
+  - id: upstream_of
+    name_cn: 供电方向
+    semantics: 供电方向
+    domain: Equipment, Feeder
+    range: Equipment, Feeder
+    cardinality: 有向链
+  - id: raised_by
+    name_cn: 告警溯源
+    semantics: 告警溯源
+    domain: Alarm
+    range: Equipment, Sensor
+    cardinality: N:1
+  - id: responds_to
+    name_cn: 工单/操作票响应
+    semantics: 工单/操作票响应
+    domain: WorkOrder, SwitchOrder
+    range: Alarm, GridEvent
+    cardinality: N:1
+  - id: operated_by
+    name_cn: 操作票执行对象
+    semantics: 操作票执行对象
+    domain: SwitchOrder
+    range: Equipment
+    cardinality: N:N(步骤级)
+  - id: schedules
+    name_cn: 检修计划绑定
+    semantics: 检修计划绑定
+    domain: MaintenancePlan
+    range: Equipment
+    cardinality: N:1
+  - id: owned_by
+    name_cn: 责任归属
+    semantics: 责任归属
+    domain: Equipment, Feeder
+    range: Operator
+    cardinality: N:1
+  - id: tariff_applies
+    name_cn: 电价适用
+    semantics: 电价适用
+    domain: PriceSchedule
+    range: Park
+    cardinality: N:1
+  - id: metered_at
+    name_cn: 计量点
+    semantics: 计量点
+    domain: LoadCurve, DemandRecord
+    range: Feeder, Park
+    cardinality: N:1
+
+# M4 必须支持的三跳查询模式（00 §1.2）
+query_patterns:
+  - id: alarm_impact
+    name_cn: 告警影响面分析
+    path: 告警→设备→母线→同母线设备
+    hops: 3
+  - id: overload_analysis
+    name_cn: 过载研判
+    path: 负荷→回路→变压器→容量约束
+    hops: 3
+  - id: defect_closure
+    name_cn: 消缺闭环
+    path: 工单→告警→设备→检修计划→下次检修
+    hops: 3

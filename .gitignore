@@ -1,0 +1,16 @@
+.zcode/
+runtime/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+golden/holdout/
+**/*holdout*/
+runs/
+*.db
+*.sqlite3
+*.egg-info/
+build/
+dist/
+.mimosa/

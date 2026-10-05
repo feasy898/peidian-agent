@@ -1,0 +1,66 @@
+# tests/fixtures/dev-sim-park.yaml
+# M5 EVAL 物理模型用例（EVAL-M5-PHYS-P / EVAL-M5-08-P）的仿真开发实例。
+# 格式与 ontology/seed.yaml 同构（PARK-001 快照变体：TX-02 容量 1250kVA，
+# 使 1100kW 回路聚合 → load_rate 0.88 与规格 §5 Eval 表口径一致）；
+# 经 ADDENDUM §D 按名加载（PARK_INSTANCE_PATH 追加 tests/fixtures 后按名匹配）。
+meta:
+  source: tests/test_m5.yaml（EVAL-M5-PHYS-P / EVAL-M5-08-P 场景数据）
+  version: "1.0"
+
+park:
+  id: PARK-001
+  name: 示范园区（仿真开发快照）
+  tariff: TARIFF-2026A
+  contract_capacity_kw: 2000
+  substations:
+    - id: SR-A
+      name: A 配电房
+      devices:
+        - {id: TX-01, type: Transformer, capacity_kva: 1600, cooling: ONAN}
+        - {id: TX-02, type: Transformer, capacity_kva: 1250, cooling: ONAN}
+        - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+        - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+        - {id: SG-A01, type: Switchgear, breaker_state: CLOSED}
+        - {id: SG-A02, type: Switchgear, breaker_state: CLOSED}
+        - {id: CB-A, type: CapacitorBank, capacity_kvar: 300, state: "OFF"}
+        - {id: PD-A01, type: PDSensor, target: SG-A01}
+        - {id: TH-A01, type: TempHumiditySensor}
+    - id: SR-B
+      name: B 配电房
+      devices:
+        - {id: TX-03, type: Transformer, capacity_kva: 1000}
+        - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+        - {id: PV-01, type: PV, capacity_kwp: 400}
+        - {id: EVC-01, type: EVCharger, total_power_kw: 480}
+
+relations:
+  - [TX-01, connected_to, BUS-A1]
+  - [TX-02, connected_to, BUS-A1]
+  - [TX-03, connected_to, BUS-A1]
+  - [BESS-01, part_of, SR-B]
+  - [PV-01, part_of, SR-B]
+  - [SG-A01, upstream_of, TX-01]
+  - [PD-A01, monitors, SG-A01]
+
+operators:
+  - {id: OP-001, name: 张工, role: 值班员}
+  - {id: OP-002, name: 李工, role: 调度员}
+  - {id: OP-003, name: 王工, role: 签发人}
+  - {id: OP-004, name: 赵总, role: 审批人}
+
+price_schedule:
+  id: TARIFF-2026A
+  effective_range: [2026-01-01, 2026-12-31]
+  periods:
+    - {type: VALLEY, start: "00:00", end: "08:00", price: 0.35}
+    - {type: FLAT,   start: "08:00", end: "10:00", price: 0.70}
+    - {type: PEAK,   start: "10:00", end: "12:00", price: 1.10}
+    - {type: FLAT,   start: "12:00", end: "18:00", price: 0.70}
+    - {type: PEAK,   start: "18:00", end: "21:00", price: 1.10}
+    - {type: FLAT,   start: "21:00", end: "24:00", price: 0.70}
+
+demand_2026_09: {peak_kw: 1720, month: 2026-09}
+
+load_curve_2026_09:
+  shape: [0.42,0.40,0.38,0.38,0.40,0.44,0.50,0.58,0.68,0.78,0.86,0.90,0.84,0.76,0.80,0.88,0.94,0.98,0.92,0.84,0.72,0.60,0.50,0.44]
+  base_kw: 1400

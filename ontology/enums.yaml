@@ -1,0 +1,24 @@
+# ontology/enums.yaml
+# 机械落盘自 specs/00-ontology.md §2（受控词表，全部封闭集）。
+# 运行期只读；与 src/contracts/enums.py 的 CONTROLLED_VOCABULARY 同源，
+# 一致性由 EVAL 用例（enum_closure）断言。
+meta:
+  source: specs/00-ontology.md §2
+  version: "1.0"
+  notes:
+    alarm_level: P0=紧急(5min 响应) P1=重要(30min) P2=一般(4h) P3=提示(24h)
+
+enums:
+  alarm_level: [P0, P1, P2, P3]
+  task_status: [CREATED, RUNNING, WAITING_INPUT, WAITING_APPROVAL, WAITING_EVENT,
+                PAUSED, VERIFYING, COMPLETED, FAILED, CANCELLED]
+  action_status: [REQUESTED, POLICY_DECIDED, WAITING_APPROVAL, EXECUTING,
+                  SUCCEEDED, FAILED, REJECTED, DENIED, COMPENSATED]
+  artifact_status: [DRAFT, VALIDATING, READY, PUBLISHED, REJECTED, ARCHIVED, DELETED]
+  device_state: [RUNNING, MAINTENANCE, HOT_STANDBY, COLD_STANDBY, FAULT]
+  work_order_status: [OPEN, ASSIGNED, IN_PROGRESS, PENDING_VERIFY, CLOSED, CANCELLED]
+  switch_order_status: [DRAFT, ISSUED, EXECUTING, COMPLETED, CANCELLED]
+  price_period_type: [PEAK, SHARP, FLAT, VALLEY]
+  memory_type: [WORKING, EPISODIC, SEMANTIC, PROCEDURAL]
+  risk_level: [LOW, MEDIUM, HIGH, CRITICAL]
+  policy_decision: [ALLOW, ASK, DENY]

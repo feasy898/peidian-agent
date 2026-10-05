@@ -1,0 +1,47 @@
+# tests/fixtures/frozen_state_machines.yaml
+# 冻结状态机迁移表 · 机械转写自 specs/01-contracts.md §5（三状态机）。
+# 用途：S0 基座用例（state_transition 形态）的判据数据；M1/M3/M2 的表驱动实现
+# 必须与本表 diff 为空（M1 DoD：迁移表与 01§5.1 完全一致）。
+# conditional: 该迁移附带条件（FAILED→COMPENSATED 要求可逆且有补偿，01§5.2）。
+# 说明：01§5.2 原文 "DENY→DENYED" 系笔误，终态枚举为 00§2 action_status 的 DENIED，
+#       本表按枚举落盘（偏差已在 tests/CHANGELOG.md 登记）。
+meta:
+  source: specs/01-contracts.md §5
+  version: "1.0"
+
+machines:
+  task:            # §5.1 任务状态机（10 态）
+    CREATED: [RUNNING, CANCELLED]
+    RUNNING: [WAITING_INPUT, WAITING_APPROVAL, WAITING_EVENT, PAUSED, VERIFYING, FAILED, CANCELLED]
+    WAITING_INPUT: [RUNNING, CANCELLED]
+    WAITING_APPROVAL: [RUNNING, CANCELLED]   # DENY → RUNNING（带拒绝观测）或 CANCELLED
+    WAITING_EVENT: [RUNNING, CANCELLED]
+    PAUSED: [RUNNING, CANCELLED]
+    VERIFYING: [COMPLETED, RUNNING, FAILED]  # 证据不足回 RUNNING
+    COMPLETED: []                            # 终态（只读）
+    FAILED: []                               # 终态（只读）
+    CANCELLED: []                            # 终态（只读）
+
+  action:          # §5.2 Action 生命周期
+    REQUESTED: [POLICY_DECIDED]
+    POLICY_DECIDED: [DENIED, WAITING_APPROVAL, EXECUTING]  # DENY→DENIED / ASK→WAITING_APPROVAL / ALLOW→EXECUTING
+    WAITING_APPROVAL: [EXECUTING, REJECTED]                # GRANT→EXECUTING / DENY 或超时→REJECTED
+    EXECUTING: [SUCCEEDED, FAILED]
+    FAILED: [COMPENSATED]                    # conditional：且 reversible 且有 compensation
+    SUCCEEDED: []                            # 终态
+    REJECTED: []                             # 终态
+    DENIED: []                               # 终态
+    COMPENSATED: []                          # 终态
+
+  artifact:        # §5.3 Artifact 状态机
+    DRAFT: [VALIDATING, DELETED]             # DRAFT/READY 可 → DELETED（软删）
+    VALIDATING: [READY, REJECTED]
+    REJECTED: [DRAFT]                        # 修订
+    READY: [PUBLISHED, DELETED]
+    PUBLISHED: [ARCHIVED]                    # 被新版本替代 → ARCHIVED（supersedes 链）
+    ARCHIVED: []                             # 终态
+    DELETED: []                              # 终态（软删，留记录）
+
+conditional_transitions:
+  - {machine: action, from: FAILED, to: COMPENSATED,
+     condition: reversible 且存在 compensation（01§5.2），可选迁移}

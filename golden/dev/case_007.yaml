@@ -1,0 +1,18 @@
+# golden/dev/case_007.yaml
+# 12 条开发黄金集种子之一（specs/M6-flywheel.md §5 DoD；全部基于 PARK-001）。
+# 类别：边界（边界、THD、告警级别口径）；判据语法见 src/m6_flywheel/JUDGE-SYNTAX.md。
+# source=HANDWRITTEN；excluded_from 为空（holdout 隔离：SPEC-M6-02，CI 断言零命中）。
+case_id: case_007
+version: 1
+task_input: A 配电房低压母线（BUS-A2）谐波有点高，做电能质量分析，判断告警级别口径。
+environment_seed: golden-case-007
+scenario_ref: null
+expected_behavior:
+- clause: '''PHYS-THD:P3'' in alarm_codes_level && ''PHYS-THD:P2'' not in alarm_codes_level'
+  judge: DETERMINISTIC
+- clause: actions.succeeded >= 2
+  judge: DETERMINISTIC
+- clause: PHYS-THD
+  judge: RUBRIC
+source: HANDWRITTEN
+excluded_from: []

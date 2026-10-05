@@ -1,0 +1,8 @@
+{
+  "module": "m5",
+  "recorded_at": "2026-09-29",
+  "subject": "编排方报告的 survivors=[\"结果文件缺失\",\"工具失败: can't open file 'D:\\\\workspace\\\\xunfei4\\\\scripts\\\\mutation_test.py': No such file or directory\"]（kill_rate=无效）",
+  "verdict": "invalid",
+  "reason": "基础设施伪影，非行为变异结论：mutation_test.py 实位于仓库根 peidian-agent/scripts/mutation_test.py（本目录），编排方在 D:\\workspace\\xunfei4（仓库根的上一级）调用导致脚本找不到；results-m5.json 亦因工具未运行而缺失（结果文件缺失即此因）。",
+  "resolution": "已在仓库根实跑 `python scripts/mutation_test.py --module m5 --plan .mutations/plan-m5.json --baseline`：基线通过，6/7 killed、真 survivor=m5-business-nohub-wall-fallback（存照 .mutations/results-m5.first-run.json；results-m5.json 后被并行模块变异期间的 skipped_dirty 运行覆盖）。该真 survivor 已由 EVAL-M5-02-N2（tests/fixtures/m5_eval_plugin.py 的 m5.clock_discipline）补强并在 27 例套件上单变异实跑确认 killed（存照 .mutations/results-m5.recheck.json；26/27 failed=1 即 02-N2）；其余 6 变异均有 executed kill 证据，7/7 汇总确认随统一门禁在干净 oracle 树复跑（plan-m5-recheck.json 为单变异最小计划，备用）。计划内 7 条变异经 --check-plan 与实跑均为 valid，无 invalid 变异条目。"
+}

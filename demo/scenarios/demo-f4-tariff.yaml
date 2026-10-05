@@ -1,0 +1,62 @@
+# demo/scenarios/demo-f4-tariff.yaml
+# 现场演示流 F4-A 专用场景（docs/presentation/DEMO-DESIGN.md §F4）：
+# PARK-001，2026-09-15 11:50:00Z 起 1h，跨 TARIFF-2026A 峰段(10:00-12:00, 1.10)→平段(12:00-18:00, 0.70) 边界。
+# 两个计划查询（ALLOW 能力 query.measurement）分别落在边界前 10s（11:59:50）与边界后 10s（12:00:10），
+# 展示「同一问句、答案随 BUSINESS 时钟跨界变化」；边界事件 price.period_changed 由 PriceClock 发布。
+# 十字段组逐项符合 contracts.ScenarioSpec（01 §2.8，形态与 scenarios/dev-01-report.yaml 同构）。
+identity:
+  scenario_id: demo-f4-tariff
+  version: "1.0"
+  owner: demo
+  tags: [demo, tariff, boundary, OPERATOR]
+
+sut:
+  target: MODULE
+  module: m5_simulation
+
+environment:
+  park_instance: seed            # PARK-001（ontology/seed.yaml，ADDENDUM §D 按名加载）
+  clock_start: 2026-09-15T11:50:00Z
+  speed: 60.0
+  injections: []
+
+user_model:
+  persona: OPERATOR
+  behavior_script: []
+
+interactions:
+  max_turns: 4
+  timeout_s: 600
+
+events:
+  # 边界前 10s：值班员问「现在算峰还是平？此刻充储能按哪个价？」
+  - at: "2026-09-15T11:59:50Z"
+    type: action.request
+    subject: BESS-01
+    params:
+      capability: query.measurement@v1
+      purpose: 值班员问价：11:59:50 此刻属哪个电价时段，充储能成本按哪个价？
+      args: {device: BESS-01}
+      user: OP-001
+  # 边界后 10s：同一问句再问一次（答案应变为平段 0.70）
+  - at: "2026-09-15T12:00:10Z"
+    type: action.request
+    subject: BESS-01
+    params:
+      capability: query.measurement@v1
+      purpose: 值班员问价：12:00:10 同一问句再问一次，跨过边界后答案应变
+      args: {device: BESS-01}
+      user: OP-001
+
+constraints:
+  budget: {token: 200000, action: 100}
+  stop_conditions: ["duration_s:3600"]
+
+metrics:
+  - {name: price_boundary_event, rubric: "price.period_changed {from: PEAK, to: FLAT, boundary: 2026-09-15T12:00:00Z}"}
+  - {name: business_clock_only, rubric: "电价判定依据=BUSINESS 时钟（无墙钟判价）"}
+
+provenance:
+  source: docs/presentation/DEMO-DESIGN.md §F4（演示专用场景，非黄金集材料）
+  created_at: 2026-09-29T00:00:00Z
+  notes: "演示场景种子（TARIFF-2026A 时段表以 ontology/seed.yaml 为权威）"

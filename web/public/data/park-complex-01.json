@@ -1,0 +1,1025 @@
+{
+ "api": "parkdsl-web/1",
+ "source": "dsl/examples/park-complex-01.yaml",
+ "park": {
+  "id": "PARK-301",
+  "name": "湾流综合能源示范园区",
+  "description": "大型综合能源园区：一座 10kV 环网柜级开关站带 A/B/C 三座配电房，手拉手环网\n（A–C 联络点常开，故障时可转供）。负荷覆盖智造厂房、写字楼、商业综合体与\n人才公寓四类形态；B 房配置光伏+储能形成微源，C 房屋顶光伏与充电桩群参与\n需求响应。运行方式多样、转供路径复杂，是故障定位与多智能体协同的典型考场。",
+  "tier": "complex",
+  "contract_capacity_kw": 3500,
+  "incoming_voltage": "10kV",
+  "seed": 301
+ },
+ "substations": [
+  {
+   "id": "SR-A",
+   "name": "A 配电房（动力车间）"
+  },
+  {
+   "id": "SR-B",
+   "name": "B 配电房（微源示范）"
+  },
+  {
+   "id": "SR-C",
+   "name": "C 配电房（商业与公寓）"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "GRID-01",
+   "type": "GridInlet",
+   "label": "10kV",
+   "substation": null,
+   "params": {
+    "id": "GRID-01",
+    "source_voltage": "10kV",
+    "short_capacity_mva": 300
+   }
+  },
+  {
+   "id": "SG-A00",
+   "type": "Switchgear",
+   "label": "SG-A00",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "SG-A00",
+    "type": "Switchgear",
+    "rated_current_a": 630,
+    "state": "CLOSED",
+    "role": "incomer"
+   }
+  },
+  {
+   "id": "BUS-A1",
+   "type": "Bus",
+   "label": "BUS-A1",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "BUS-A1",
+    "type": "Bus",
+    "voltage_level": "10kV"
+   }
+  },
+  {
+   "id": "SG-A01",
+   "type": "Switchgear",
+   "label": "SG-A01",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "SG-A01",
+    "type": "Switchgear",
+    "rated_current_a": 630,
+    "state": "CLOSED",
+    "role": "incomer"
+   }
+  },
+  {
+   "id": "TX-A01",
+   "type": "Transformer",
+   "label": "TX-A01",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "TX-A01",
+    "type": "Transformer",
+    "capacity_kva": 1600,
+    "hv": "10kV",
+    "lv": "0.4kV",
+    "cooling": "ONAF"
+   }
+  },
+  {
+   "id": "BUS-A2",
+   "type": "Bus",
+   "label": "BUS-A2",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "BUS-A2",
+    "type": "Bus",
+    "voltage_level": "0.4kV"
+   }
+  },
+  {
+   "id": "TX-A02",
+   "type": "Transformer",
+   "label": "TX-A02",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "TX-A02",
+    "type": "Transformer",
+    "capacity_kva": 1000,
+    "hv": "10kV",
+    "lv": "0.4kV"
+   }
+  },
+  {
+   "id": "BUS-A3",
+   "type": "Bus",
+   "label": "BUS-A3",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "BUS-A3",
+    "type": "Bus",
+    "voltage_level": "0.4kV"
+   }
+  },
+  {
+   "id": "CB-A01",
+   "type": "CapacitorBank",
+   "label": "CB-A01",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "CB-A01",
+    "type": "CapacitorBank",
+    "capacity_kvar": 300,
+    "state": "OFF"
+   }
+  },
+  {
+   "id": "LD-A01",
+   "type": "Load",
+   "label": "LD-A01",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "LD-A01",
+    "type": "Load",
+    "peak_kw": 380,
+    "profile": "factory"
+   }
+  },
+  {
+   "id": "LD-A02",
+   "type": "Load",
+   "label": "LD-A02",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "LD-A02",
+    "type": "Load",
+    "peak_kw": 300,
+    "profile": "factory"
+   }
+  },
+  {
+   "id": "LD-A03",
+   "type": "Load",
+   "label": "LD-A03",
+   "substation": "SR-A",
+   "substation_name": "A 配电房（动力车间）",
+   "params": {
+    "id": "LD-A03",
+    "type": "Load",
+    "peak_kw": 250,
+    "profile": "office"
+   }
+  },
+  {
+   "id": "BUS-B1",
+   "type": "Bus",
+   "label": "BUS-B1",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（微源示范）",
+   "params": {
+    "id": "BUS-B1",
+    "type": "Bus",
+    "voltage_level": "10kV"
+   }
+  },
+  {
+   "id": "TX-B01",
+   "type": "Transformer",
+   "label": "TX-B01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（微源示范）",
+   "params": {
+    "id": "TX-B01",
+    "type": "Transformer",
+    "capacity_kva": 1600,
+    "hv": "10kV",
+    "lv": "0.4kV",
+    "cooling": "ONAF"
+   }
+  },
+  {
+   "id": "BUS-B2",
+   "type": "Bus",
+   "label": "BUS-B2",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（微源示范）",
+   "params": {
+    "id": "BUS-B2",
+    "type": "Bus",
+    "voltage_level": "0.4kV"
+   }
+  },
+  {
+   "id": "PV-01",
+   "type": "PV",
+   "label": "PV-01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（微源示范）",
+   "params": {
+    "id": "PV-01",
+    "type": "PV",
+    "capacity_kwp": 500
+   }
+  },
+  {
+   "id": "BESS-01",
+   "type": "BESS",
+   "label": "BESS-01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（微源示范）",
+   "params": {
+    "id": "BESS-01",
+    "type": "BESS",
+    "capacity_kwh": 500,
+    "power_kw": 250,
+    "soc": 62
+   }
+  },
+  {
+   "id": "LD-B01",
+   "type": "Load",
+   "label": "LD-B01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（微源示范）",
+   "params": {
+    "id": "LD-B01",
+    "type": "Load",
+    "peak_kw": 520,
+    "profile": "factory"
+   }
+  },
+  {
+   "id": "LD-B02",
+   "type": "Load",
+   "label": "LD-B02",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（微源示范）",
+   "params": {
+    "id": "LD-B02",
+    "type": "Load",
+    "peak_kw": 460,
+    "profile": "factory"
+   }
+  },
+  {
+   "id": "EVC-01",
+   "type": "EVCharger",
+   "label": "EVC-01",
+   "substation": "SR-B",
+   "substation_name": "B 配电房（微源示范）",
+   "params": {
+    "id": "EVC-01",
+    "type": "EVCharger",
+    "total_power_kw": 360,
+    "num_ports": 12
+   }
+  },
+  {
+   "id": "BUS-C1",
+   "type": "Bus",
+   "label": "BUS-C1",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "BUS-C1",
+    "type": "Bus",
+    "voltage_level": "10kV"
+   }
+  },
+  {
+   "id": "TX-C01",
+   "type": "Transformer",
+   "label": "TX-C01",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "TX-C01",
+    "type": "Transformer",
+    "capacity_kva": 1000,
+    "hv": "10kV",
+    "lv": "0.4kV"
+   }
+  },
+  {
+   "id": "BUS-C2",
+   "type": "Bus",
+   "label": "BUS-C2",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "BUS-C2",
+    "type": "Bus",
+    "voltage_level": "0.4kV"
+   }
+  },
+  {
+   "id": "TX-C02",
+   "type": "Transformer",
+   "label": "TX-C02",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "TX-C02",
+    "type": "Transformer",
+    "capacity_kva": 800,
+    "hv": "10kV",
+    "lv": "0.4kV"
+   }
+  },
+  {
+   "id": "BUS-C3",
+   "type": "Bus",
+   "label": "BUS-C3",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "BUS-C3",
+    "type": "Bus",
+    "voltage_level": "0.4kV"
+   }
+  },
+  {
+   "id": "PV-02",
+   "type": "PV",
+   "label": "PV-02",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "PV-02",
+    "type": "PV",
+    "capacity_kwp": 300
+   }
+  },
+  {
+   "id": "LD-C01",
+   "type": "Load",
+   "label": "LD-C01",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "LD-C01",
+    "type": "Load",
+    "peak_kw": 320,
+    "profile": "commercial"
+   }
+  },
+  {
+   "id": "LD-C02",
+   "type": "Load",
+   "label": "LD-C02",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "LD-C02",
+    "type": "Load",
+    "peak_kw": 280,
+    "profile": "commercial"
+   }
+  },
+  {
+   "id": "LD-C03",
+   "type": "Load",
+   "label": "LD-C03",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "LD-C03",
+    "type": "Load",
+    "peak_kw": 180,
+    "profile": "office"
+   }
+  },
+  {
+   "id": "LD-C04",
+   "type": "Load",
+   "label": "LD-C04",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "LD-C04",
+    "type": "Load",
+    "peak_kw": 240,
+    "profile": "resident"
+   }
+  },
+  {
+   "id": "EVC-02",
+   "type": "EVCharger",
+   "label": "EVC-02",
+   "substation": "SR-C",
+   "substation_name": "C 配电房（商业与公寓）",
+   "params": {
+    "id": "EVC-02",
+    "type": "EVCharger",
+    "total_power_kw": 120,
+    "num_ports": 6
+   }
+  }
+ ],
+ "links": [
+  {
+   "id": "LN-01",
+   "from": "GRID-01",
+   "to": "SG-A00",
+   "kind": "line",
+   "state": null,
+   "params": {
+    "length_km": 2.5,
+    "ampacity_a": 400
+   }
+  },
+  {
+   "id": null,
+   "from": "SG-A00",
+   "to": "BUS-A1",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": "LN-02",
+   "from": "BUS-A1",
+   "to": "BUS-B1",
+   "kind": "line",
+   "state": null,
+   "params": {
+    "length_km": 1.2,
+    "ampacity_a": 400
+   }
+  },
+  {
+   "id": "LN-03",
+   "from": "BUS-B1",
+   "to": "BUS-C1",
+   "kind": "line",
+   "state": null,
+   "params": {
+    "length_km": 0.9,
+    "ampacity_a": 400
+   }
+  },
+  {
+   "id": "CP-01",
+   "from": "BUS-A1",
+   "to": "BUS-C1",
+   "kind": "coupler",
+   "state": "OPEN",
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A1",
+   "to": "SG-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "SG-A01",
+   "to": "TX-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "TX-A01",
+   "to": "BUS-A2",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A1",
+   "to": "TX-A02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "TX-A02",
+   "to": "BUS-A3",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "LD-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "LD-A02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A2",
+   "to": "CB-A01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-A3",
+   "to": "LD-A03",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B1",
+   "to": "TX-B01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "TX-B01",
+   "to": "BUS-B2",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "LD-B01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "LD-B02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "PV-01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "BESS-01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-B2",
+   "to": "EVC-01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-C1",
+   "to": "TX-C01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "TX-C01",
+   "to": "BUS-C2",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-C1",
+   "to": "TX-C02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "TX-C02",
+   "to": "BUS-C3",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-C2",
+   "to": "PV-02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-C2",
+   "to": "LD-C01",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-C2",
+   "to": "LD-C02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-C3",
+   "to": "LD-C03",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-C3",
+   "to": "LD-C04",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  },
+  {
+   "id": null,
+   "from": "BUS-C3",
+   "to": "EVC-02",
+   "kind": "direct",
+   "state": null,
+   "params": {}
+  }
+ ],
+ "telemetry": {
+  "seed": 301,
+  "step_sec": 15,
+  "noise_amplitude": 0.04,
+  "wander_amplitude": 0.02,
+  "wander_period_sec": 600,
+  "voltage_drop_factor": 0.03,
+  "voltage_noise": 0.004,
+  "shapes": {
+   "office": [
+    0.35,
+    0.33,
+    0.32,
+    0.32,
+    0.33,
+    0.36,
+    0.45,
+    0.6,
+    0.78,
+    0.9,
+    0.95,
+    0.92,
+    0.8,
+    0.82,
+    0.9,
+    0.92,
+    0.88,
+    0.8,
+    0.68,
+    0.58,
+    0.5,
+    0.45,
+    0.4,
+    0.37
+   ],
+   "factory": [
+    0.55,
+    0.55,
+    0.55,
+    0.55,
+    0.55,
+    0.6,
+    0.75,
+    0.9,
+    0.95,
+    0.95,
+    0.95,
+    0.95,
+    0.85,
+    0.95,
+    0.95,
+    0.95,
+    0.95,
+    0.9,
+    0.75,
+    0.65,
+    0.6,
+    0.58,
+    0.56,
+    0.55
+   ],
+   "commercial": [
+    0.4,
+    0.38,
+    0.36,
+    0.35,
+    0.35,
+    0.38,
+    0.45,
+    0.55,
+    0.65,
+    0.75,
+    0.85,
+    0.9,
+    0.88,
+    0.8,
+    0.82,
+    0.85,
+    0.88,
+    0.92,
+    0.98,
+    0.95,
+    0.85,
+    0.7,
+    0.58,
+    0.47
+   ],
+   "resident": [
+    0.45,
+    0.42,
+    0.4,
+    0.39,
+    0.4,
+    0.45,
+    0.52,
+    0.55,
+    0.52,
+    0.5,
+    0.5,
+    0.52,
+    0.58,
+    0.56,
+    0.54,
+    0.56,
+    0.62,
+    0.75,
+    0.92,
+    1.0,
+    0.95,
+    0.82,
+    0.68,
+    0.55
+   ],
+   "pv": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.02,
+    0.08,
+    0.18,
+    0.32,
+    0.48,
+    0.64,
+    0.8,
+    0.92,
+    0.98,
+    0.94,
+    0.82,
+    0.64,
+    0.44,
+    0.24,
+    0.1,
+    0.02,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "bess": [
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.5,
+    -0.3,
+    0.2,
+    0.4,
+    0.5,
+    0.5,
+    0.0,
+    0.0,
+    0.0,
+    0.2,
+    0.4,
+    0.5,
+    0.5,
+    0.4,
+    0.1,
+    -0.3,
+    -0.5,
+    -0.5
+   ]
+  },
+  "components": [
+   {
+    "id": "TX-A01",
+    "metric": "loading",
+    "rated_kva": 1600,
+    "profile": null,
+    "pf": 0.85
+   },
+   {
+    "id": "TX-A02",
+    "metric": "loading",
+    "rated_kva": 1000,
+    "profile": null,
+    "pf": 0.85
+   },
+   {
+    "id": "LD-A01",
+    "metric": "power",
+    "rated_kw": 380,
+    "profile": "factory",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-A02",
+    "metric": "power",
+    "rated_kw": 300,
+    "profile": "factory",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-A03",
+    "metric": "power",
+    "rated_kw": 250,
+    "profile": "office",
+    "pf": 0.85
+   },
+   {
+    "id": "TX-B01",
+    "metric": "loading",
+    "rated_kva": 1600,
+    "profile": null,
+    "pf": 0.85
+   },
+   {
+    "id": "PV-01",
+    "metric": "power",
+    "rated_kw": 500,
+    "profile": "pv",
+    "pf": 1.0
+   },
+   {
+    "id": "BESS-01",
+    "metric": "power",
+    "rated_kw": 250,
+    "profile": "bess",
+    "pf": 0.95
+   },
+   {
+    "id": "LD-B01",
+    "metric": "power",
+    "rated_kw": 520,
+    "profile": "factory",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-B02",
+    "metric": "power",
+    "rated_kw": 460,
+    "profile": "factory",
+    "pf": 0.85
+   },
+   {
+    "id": "EVC-01",
+    "metric": "power",
+    "rated_kw": 360,
+    "profile": "commercial",
+    "pf": 0.9
+   },
+   {
+    "id": "TX-C01",
+    "metric": "loading",
+    "rated_kva": 1000,
+    "profile": null,
+    "pf": 0.85
+   },
+   {
+    "id": "TX-C02",
+    "metric": "loading",
+    "rated_kva": 800,
+    "profile": null,
+    "pf": 0.85
+   },
+   {
+    "id": "PV-02",
+    "metric": "power",
+    "rated_kw": 300,
+    "profile": "pv",
+    "pf": 1.0
+   },
+   {
+    "id": "LD-C01",
+    "metric": "power",
+    "rated_kw": 320,
+    "profile": "commercial",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-C02",
+    "metric": "power",
+    "rated_kw": 280,
+    "profile": "commercial",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-C03",
+    "metric": "power",
+    "rated_kw": 180,
+    "profile": "office",
+    "pf": 0.85
+   },
+   {
+    "id": "LD-C04",
+    "metric": "power",
+    "rated_kw": 240,
+    "profile": "resident",
+    "pf": 0.85
+   },
+   {
+    "id": "EVC-02",
+    "metric": "power",
+    "rated_kw": 120,
+    "profile": "commercial",
+    "pf": 0.9
+   }
+  ],
+  "buses": [
+   {
+    "id": "BUS-A1",
+    "vnom_kv": 10.0
+   },
+   {
+    "id": "BUS-A2",
+    "vnom_kv": 0.4
+   },
+   {
+    "id": "BUS-A3",
+    "vnom_kv": 0.4
+   },
+   {
+    "id": "BUS-B1",
+    "vnom_kv": 10.0
+   },
+   {
+    "id": "BUS-B2",
+    "vnom_kv": 0.4
+   },
+   {
+    "id": "BUS-C1",
+    "vnom_kv": 10.0
+   },
+   {
+    "id": "BUS-C2",
+    "vnom_kv": 0.4
+   },
+   {
+    "id": "BUS-C3",
+    "vnom_kv": 0.4
+   }
+  ]
+ }
+}

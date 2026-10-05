@@ -1,0 +1,38 @@
+/* web/public/css/tokens.css · shadcn 风格设计令牌（zinc 暗色基底 + 电力绿主色）· 全部本地，无 CDN */
+:root {
+  --background: 240 10% 4%;
+  --foreground: 0 0% 98%;
+  --card: 240 8% 6.5%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 8% 7%;
+  --border: 240 5% 15%;
+  --input: 240 5% 17%;
+  --muted: 240 5% 12%;
+  --muted-foreground: 240 5% 64%;
+  --primary: 142 69% 45%;
+  --primary-foreground: 150 80% 8%;
+  --secondary: 240 5% 13%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: 217 91% 60%;
+  --accent-foreground: 220 90% 96%;
+  --destructive: 0 78% 58%;
+  --warning: 38 92% 52%;
+  --success: 142 69% 45%;
+  --ring: 142 69% 45%;
+  --radius: 0.625rem;
+
+  /* 语义色（拓扑/曲线用） */
+  --c-load: 217 91% 64%;
+  --c-pv: 45 93% 58%;
+  --c-bess: 262 84% 68%;
+  --c-evc: 172 66% 50%;
+  --c-bus: 0 0% 72%;
+  --c-line: 240 5% 42%;
+  --c-grid: 142 69% 52%;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 0 0 1px hsl(var(--border) / 0.6);
+  --shadow-pop: 0 10px 38px -10px rgb(0 0 0 / 0.55), 0 0 0 1px hsl(var(--border));
+}

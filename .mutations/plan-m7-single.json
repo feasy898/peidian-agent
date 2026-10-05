@@ -1,0 +1,10 @@
+[
+  {
+    "id": "m7-approved-gate-off",
+    "redline": true,
+    "target": "src/m7_registry/review.py",
+    "find": "    if journal_record.state != \"APPROVED\":",
+    "replace": "    if False and journal_record.state != \"APPROVED\":",
+    "description": "SPEC-M7-07：publish_asset 四重门禁之第 2 重（state==APPROVED）失效——EVAL-M7-07-N3 隔离杀（定向单变异验证，裁决方案 C；与 plan-m7.json 同条目）"
+  }
+]

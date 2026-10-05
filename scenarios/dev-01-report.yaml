@@ -1,0 +1,51 @@
+# scenarios/dev-01-report.yaml
+# 开发场景种子 1/3（specs/M5-simulation.md §7）：
+# PARK-001，09-15 08:30 起 24h，用户=值班员脚本（3 轮：下达日巡检→追问 2 号变→要报告），
+# 注入 1 次温度缓升（环境事件 device.temp_rise，近似量测事件而非五类故障注入）。
+# 十字段组逐项符合 contracts.ScenarioSpec（01 §2.8）。
+identity:
+  scenario_id: dev-01-report
+  version: "1.0"
+  owner: m5-dev
+  tags: [dev, report, OPERATOR]
+
+sut:
+  target: MODULE
+  module: m5_simulation
+
+environment:
+  park_instance: seed            # PARK-001（ontology/seed.yaml，ADDENDUM §D 按名加载）
+  clock_start: 2026-09-15T08:30:00Z
+  speed: 60.0                    # 1 墙钟秒 = 1 仿真分钟
+  injections: []                 # 无五类故障注入（温度缓升走 events 环境事件计划）
+
+user_model:
+  persona: OPERATOR
+  behavior_script:
+    - {at: "+5m",  act: USER_INPUT, text: "开始今日日巡检：把 A、B 两配电房的设备状态和最新量测过一遍。"}
+    - {at: "+95m", act: USER_INPUT, text: "2 号变压器现在负载率多少？绕组温度有没有异常？"}
+    - {at: "+8h",  act: USER_INPUT, text: "把今天的巡检结论整理成日巡检报告给我，要包含设备清单、量测趋势、结论和引用的规程条款。"}
+
+interactions:
+  max_turns: 8
+  timeout_s: 600
+
+events:
+  # 温度缓升（量测/环境事件计划；M5 §2 精度边界内的事件注入近似）
+  - at: "+2h"
+    type: device.temp_rise
+    subject: TX-01
+    params: {rate_c_per_h: 6.0, duration_s: 14400, cap_c: 18.0}
+
+constraints:
+  budget: {token: 200000, action: 100}
+  stop_conditions: ["duration_h:24", "script_done"]
+
+metrics:
+  - {name: report_completed, rubric: "write.report 产出含 regulation_refs（ADDENDUM §B）"}
+  - {name: temp_rise_visible, rubric: "TX-01 winding_temp_c 量测呈缓升趋势"}
+
+provenance:
+  source: specs/M5-simulation.md §7 dev-01
+  created_at: 2026-09-28T00:00:00Z
+  notes: "开发场景种子（非 holdout 材料）"

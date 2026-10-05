@@ -1,0 +1,717 @@
+# tests/test_m6.yaml
+# M6（飞轮层：轨迹/黄金集/判据引擎/Badcase/Skill 化/签名凭证）数据驱动 EVAL 套件
+# · v2 重生成版。
+# 用例从 specs-v2/M6-flywheel.md §3 行为规格（SPEC-M6-01..08）机械重生成：
+#   - v1（specs/M6-flywheel.md §4，14 条）中断言仍精确对应 v2 条款者保留并改名对齐
+#     （逐条核对记录见 specs-v2/M6-flywheel.md §4「用例→条款」表）；
+#   - 新增 EVAL-M6-01-N2/-N3（01④ 六类拒绝口径补全：EMPTY_TRACE/TRACE_MISMATCH）、
+#     EVAL-M6-03-N（03② 判据错误语义独立负例）、EVAL-M6-08-P/-N（08 attest 签名
+#     凭证——复用既有 m7.six_elements 执行器，零新增代码）；
+#   - 改名存照：EVAL-M6-06-P→EVAL-M6-06-N（禁止类按 01 v2 §6 以"尝试违反必须被拒"
+#     负例表达）、EVAL-M6-EVAL-P→EVAL-M6-07-P（条款重排 SPEC-M6-06→07）；
+#   - SPEC-M6-07⑪ KNOWN-DEFECT（D-58）故意不设用例（缺陷登记不得固化为期望行为）；
+#   - 变异测试补缺（scripts/mutation_test.py plan-m6）：EVAL-M6-02-N2 杀 survivor
+#     m6-holdout-addcase-allow（add_golden_case 开发写入通道 holdout 拒绝，v2 条款
+#     SPEC-M6-02③⑧）、EVAL-M6-08-N2 杀 redline survivor m6-attest-signature-off
+#     （attest 载荷级签名重算比对，SPEC-M6-08①②；M7 消费侧探测不可达该层——
+#     digest/producer 检查先于 attest 重算），执行器注册于 tests/m6_eval_extra.py。
+# 合计 21 条（正例 10 / 负例 11）。条款↔用例双向映射表见 specs-v2/M6-flywheel.md §4。
+# schema 见 tests/EVAL-SCHEMA.md；执行器注册于 src/m6_flywheel/eval_plugin.py（12 个）、
+# src/m7_registry/eval_plugin.py（复用 m7.six_elements，其 hand_filled 探针在
+# 消费侧重算 M6 attest 凭证——src/m7_registry/release.py:254-275）与
+# tests/m6_eval_extra.py（2 个，tests 侧插件协议）。
+# spec_hash 口径（01 v2 §6）：spec_ref 列表按序拼接文件字节的 sha256
+# （run_evals.py:819-825）；v1 基线存照 tests/CHANGELOG.md
+# （spec 4377e37c… / eval 566aa15a…）。
+suite: m6
+title: M6 飞轮（轨迹/黄金集/判据引擎/Badcase/Skill 化/签名）EVAL v2
+spec_ref:
+  - specs-v2/M6-flywheel.md
+  - specs-v2/00-ontology.md
+  - specs-v2/01-contracts.md
+  - specs/ADDENDUM.md
+spec_hash: f90a3d34f23387a115dde173cc4601ff8b965941c7de6280b32773055d39ebce
+executors:
+  - module: m6_flywheel.eval_plugin
+  - module: m7_registry.eval_plugin
+  - module: tests.m6_eval_extra      # tests 侧补充执行器（EVAL-SCHEMA §4 协议，同 tests.m7_eval_extra 先例）
+
+# ============================================================================
+# 公共数据锚（YAML 锚点复用；runner 只读各用例 params/expect）
+# ============================================================================
+_common_dev_case: &dev_case_anchor
+  version: 1
+  task_input: （沙箱用例）查询并确认设备状态
+  environment_seed: eval-dev-seed
+  expected_behavior:
+    - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+  source: HANDWRITTEN
+  excluded_from: []
+
+cases:
+  # ================= SPEC-M6-01 轨迹导出与完整性 =================
+  - id: EVAL-M6-01-P
+    spec: SPEC-M6-01
+    title: 跑完 dev-01 场景后导出 → steps 与事件流逐条对应、四类计数一致、outcome 与终态一致
+    form: event_sequence
+    executor: m6.trajectory_export
+    params:
+      scenario: scenarios/dev-01-report.yaml
+    expect:
+      outcome_status: COMPLETED
+
+  - id: EVAL-M6-01-P2
+    spec: SPEC-M6-01
+    title: mock release 黄金案例导出 → 四类步型全覆盖、逐条对应、事件→步型全函数映射（含 budget.kind 细分）钉死
+    form: event_sequence
+    executor: m6.trajectory_counts
+    params:
+      release: mock-rel-0001
+      golden_dir: golden/dev
+      case_ids: [case_004, case_010, case_011]
+    expect:
+      all_four_types: true
+      step_map:                      # SPEC-M6-01③：28 主题事件→步型冻结映射（全函数，缺省 STATE_CHANGE）
+        action.requested: TOOL_CALL
+        action.policy_decided: TOOL_CALL
+        action.executing: TOOL_CALL
+        action.completed: TOOL_CALL
+        action.waiting_approval: APPROVAL
+        approval.requested: APPROVAL
+        approval.granted: APPROVAL
+        approval.denied: APPROVAL
+        approval.timeout: APPROVAL
+        task.created: STATE_CHANGE
+        task.status_changed: STATE_CHANGE
+        task.stage_gate: STATE_CHANGE
+        artifact.state_changed: STATE_CHANGE
+        alarm.raised: STATE_CHANGE
+        alarm.cleared: STATE_CHANGE
+        measurement.updated: STATE_CHANGE
+        grid.event: STATE_CHANGE
+        sim.injected: STATE_CHANGE
+        sim.completed: STATE_CHANGE
+        price.period_changed: STATE_CHANGE
+        demand.month_rolled: STATE_CHANGE
+        release.published: STATE_CHANGE
+        golden.case_added: STATE_CHANGE
+        badcase.opened: STATE_CHANGE
+        trajectory.exported: STATE_CHANGE
+        skill.promoted: STATE_CHANGE
+      model_call_kinds:              # SPEC-M6-01③：budget.* 按 payload.kind 细分（MODEL_CALL 足迹）
+        - {type: budget.warning, kind: token, step: MODEL_CALL}
+        - {type: budget.exhausted, kind: token, step: MODEL_CALL}
+        - {type: budget.warning, kind: action, step: STATE_CHANGE}
+        - {type: budget.exhausted, kind: action, step: STATE_CHANGE}
+
+  - id: EVAL-M6-01-N
+    spec: SPEC-M6-01
+    title: 手工注入缺 trace_id 事件 → 轨迹 REJECTED[MISSING_TRACE_ID]
+    form: negative_rejection
+    executor: m6.trajectory_reject
+    params:
+      trace_id: trace-reject-001
+      events:
+        - event_id: EVT-001
+          type: task.created
+          subject: task-x
+          payload: {state: {status: CREATED}}
+          occurred_at: "2026-09-15T08:30:00Z"
+          trace_id: trace-reject-001
+          producer: M6
+        - event_id: EVT-002        # 缺 trace_id（负向注入）
+          type: action.requested
+          subject: act-001
+          payload: {capability: "query.measurement@v1"}
+          occurred_at: "2026-09-15T08:31:00Z"
+          producer: M6
+    expect:
+      error_contains: MISSING_TRACE_ID
+
+  - id: EVAL-M6-01-N2
+    spec: SPEC-M6-01
+    title: 注入空事件列表（事件流无该 trace） → 轨迹 REJECTED[EMPTY_TRACE]
+    form: negative_rejection
+    executor: m6.trajectory_reject
+    params:
+      trace_id: trace-reject-002
+      events: []                     # SPEC-M6-01④：EMPTY_TRACE（空轨迹拒绝，不产出 TrajectoryRecord）
+    expect:
+      error_contains: EMPTY_TRACE
+
+  - id: EVAL-M6-01-N3
+    spec: SPEC-M6-01
+    title: 事件 trace_id 与请求 trace 不一致 → 轨迹 REJECTED[TRACE_MISMATCH]
+    form: negative_rejection
+    executor: m6.trajectory_reject
+    params:
+      trace_id: trace-reject-003
+      events:
+        - event_id: EVT-M6N3-001
+          type: task.created
+          subject: task-x
+          payload: {state: {status: CREATED}}
+          occurred_at: "2026-09-15T08:30:00Z"
+          trace_id: trace-other-999  # 与请求 trace-reject-003 不一致（负向注入）
+          producer: M6
+    expect:
+      error_contains: TRACE_MISMATCH
+
+  # ================= SPEC-M6-02 黄金集契约 / holdout 隔离 =================
+  - id: EVAL-M6-02-P
+    spec: SPEC-M6-02
+    title: 构造 3 条 dev 黄金 + 2 条 holdout 黄金 → 目录物理分离、缺省只拾取 golden/dev、dev 装载拒绝 holdout 标记
+    form: contract
+    executor: m6.golden_isolation
+    params:
+      dev_cases:
+        - {case_id: dev-001, <<: *dev_case_anchor}
+        - {case_id: dev-002, <<: *dev_case_anchor}
+        - {case_id: dev-003, <<: *dev_case_anchor}
+      holdout_cases:
+        - case_id: hold-001
+          version: 1
+          task_input: （沙箱用例）holdout 场景指令
+          environment_seed: eval-holdout-seed
+          expected_behavior:
+            - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+          source: TRAJECTORY_MINED
+          excluded_from: [holdout]
+        - case_id: hold-002
+          version: 1
+          task_input: （沙箱用例）holdout 场景指令 2
+          environment_seed: eval-holdout-seed-2
+          expected_behavior:
+            - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+          source: HANDWRITTEN
+          excluded_from: [holdout]
+    expect:
+      dev_count: 3
+      default_pickup_dir: golden/dev
+      dev_rejects_holdout_marker: true
+
+  - id: EVAL-M6-02-P2
+    spec: SPEC-M6-02
+    title: 真实 golden/dev 12 条种子 → 契约/来源 HANDWRITTEN/无 holdout 标记/MANIFEST hash/五维评分单齐备
+    form: contract
+    executor: m6.golden_seeds
+    params:
+      golden_dir: golden/dev
+    expect:
+      cases: 12
+      source: HANDWRITTEN
+
+  - id: EVAL-M6-02-N
+    spec: SPEC-M6-02
+    title: 试图把 holdout case 复制进 dev 目录 → CI 断言失败（未登记 hash 校验 + 来源标记双重拦截）
+    form: negative_rejection
+    executor: m6.golden_ci
+    params:
+      dev_cases:
+        - {case_id: dev-001, <<: *dev_case_anchor}
+        - {case_id: dev-002, <<: *dev_case_anchor}
+      holdout_case:
+        case_id: hold-001
+        version: 1
+        task_input: （沙箱用例）holdout 场景指令
+        environment_seed: eval-holdout-seed
+        expected_behavior:
+          - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+        source: TRAJECTORY_MINED
+        excluded_from: [holdout]
+    expect:
+      error_contains: [未登记, holdout]
+
+  - id: EVAL-M6-02-N2
+    spec: SPEC-M6-02
+    title: 开发写入通道 add_golden_case → holdout 标记条目拒绝（零事件）；正例落盘+manifest+事件恰 1 条；同 id 旧版本重交拒绝
+    form: negative_rejection
+    executor: m6.golden_add_case       # tests/m6_eval_extra.py（SPEC-M6-02③⑧ 冻结 API 写入通道）
+    params:
+      normal_case:
+        case_id: dev-add-001
+        version: 1
+        task_input: （沙箱用例）经写入通道新增的开发案例
+        environment_seed: eval-add-seed
+        scenario_ref: null
+        expected_behavior:
+          - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+        source: HANDWRITTEN
+        excluded_from: []
+      holdout_case:                    # SPEC-M6-02③ 禁止类负例（写入通道同样拒绝 holdout 标记）
+        case_id: hold-add-001
+        version: 1
+        task_input: （沙箱用例）holdout 场景指令（写入通道探测）
+        environment_seed: eval-add-holdout-seed
+        scenario_ref: null
+        expected_behavior:
+          - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+        source: TRAJECTORY_MINED
+        excluded_from: [holdout]
+      stale_version_case:              # SPEC-M6-02⑧：同 case_id、版本未递增 → 拒绝
+        case_id: dev-add-001
+        version: 1
+        task_input: （沙箱用例）同 id 旧版本重交探测
+        environment_seed: eval-add-seed
+        scenario_ref: null
+        expected_behavior:
+          - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+        source: HANDWRITTEN
+        excluded_from: []
+    expect:
+      add_error_contains: [holdout, SPEC-M6-02]
+      stale_error_contains: [严格递增]
+      case_added_events: 1
+
+  # ================= SPEC-M6-03 判据引擎 =================
+  - id: EVAL-M6-03-P
+    spec: SPEC-M6-03
+    title: deterministic 判据表达式 5 组求值 → 布尔组合/比较/in/not in/全大写枚举常量全部正确
+    form: expression
+    executor: m6.judge_expression
+    params:
+      checks:
+        - expression: "outcome.status==COMPLETED && evidence.observed_present"
+          facts:
+            outcome: {status: COMPLETED, completion_level: 5}
+            evidence: {observed_present: true, three_part_ok: true}
+          result: true
+        - expression: "outcome.status==COMPLETED && evidence.observed_present"
+          facts:
+            outcome: {status: FAILED, completion_level: 1}
+            evidence: {observed_present: true, three_part_ok: false}
+          result: false
+        - expression: "'PHYS-DEMAND' not in alarm_codes && demand.ratio < 1.0"
+          facts:
+            alarm_codes: [PHYS-TX-LOAD]
+            demand: {ratio: 0.86}
+          result: true
+        - expression: "steps.APPROVAL >= 2 && 'SO-0915-101' in switch_orders.completed"
+          facts:
+            steps: {APPROVAL: 3, TOOL_CALL: 9, STATE_CHANGE: 4, MODEL_CALL: 3}
+            switch_orders: {completed: [SO-0915-101], issued: []}
+          result: true
+        - expression: "red_line.remote_without_order_refused == true"
+          facts: {red_line: {remote_without_order_refused: true}}
+          result: true
+    expect: {}
+
+  - id: EVAL-M6-03-P2
+    spec: SPEC-M6-03
+    title: rubric 五维评分单 → 权重和≠1 拒绝；权重和=1 输出总分+分维明细+通过线判定
+    form: expression
+    executor: m6.rubric
+    params:
+      invalid_sheet:
+        anchor: bad-weights
+        pass_line: 4.0
+        dimensions:
+          factual_correctness:
+            weight: 0.30
+            criteria: [{when: "outcome.status == COMPLETED", score: 5}]
+            default_score: 3
+          regulation_citation:
+            weight: 0.20
+            criteria: [{when: "regulation_refs_count >= 1", score: 5}]
+            default_score: 1
+          state_change_discipline:
+            weight: 0.20
+            criteria: [{when: "unauthorized_state_changes == 0", score: 5}]
+            default_score: 1
+          refusal_calibration:
+            weight: 0.20
+            criteria: [{when: "refusal_overreach == 0", score: 5}]
+            default_score: 2
+          evidence_completeness:
+            weight: 0.05     # 权重和 = 0.95 ≠ 1 → 必须被拒（SPEC-M6-03④）
+            criteria: [{when: "evidence.three_part_ok", score: 5}]
+            default_score: 2
+      sheet:
+        anchor: eval-five-dim
+        pass_line: 4.0
+        dimensions:
+          factual_correctness:
+            weight: 0.25
+            criteria:
+              - {when: "outcome.status == COMPLETED", score: 5}
+              - {when: "outcome.status == FAILED || outcome.status == CANCELLED", score: 2}
+            default_score: 3
+          regulation_citation:
+            weight: 0.20
+            criteria:
+              - {when: "regulation_refs_count >= 2", score: 5}
+              - {when: "regulation_refs_count == 1", score: 4}
+            default_score: 1
+          state_change_discipline:
+            weight: 0.20
+            criteria:
+              - {when: "skipped_expectations == 0 && unauthorized_state_changes == 0", score: 5}
+              - {when: "unauthorized_state_changes == 0", score: 4}
+            default_score: 1
+          refusal_calibration:
+            weight: 0.20
+            criteria:
+              - {when: "refusals_expected > 0 && refusals_given == refusals_expected", score: 5}
+              - {when: "refusals_expected == 0 && refusal_overreach == 0", score: 4}
+            default_score: 2
+          evidence_completeness:
+            weight: 0.15
+            criteria:
+              - {when: "evidence.three_part_ok && trace_complete", score: 5}
+              - {when: "evidence.observed_present", score: 4}
+            default_score: 2
+      facts:
+        outcome: {status: COMPLETED}
+        regulation_refs_count: 1
+        skipped_expectations: 0
+        unauthorized_state_changes: 0
+        refusals_expected: 0
+        refusals_given: 0
+        refusal_overreach: 0
+        evidence: {observed_present: true, three_part_ok: true}
+        trace_complete: true
+    expect:
+      invalid_error_contains: 权重和
+      by_dimension: {factual_correctness: 5, regulation_citation: 4,
+                     state_change_discipline: 5, refusal_calibration: 4,
+                     evidence_completeness: 5}
+      total: 4.6
+      passed: true
+
+  - id: EVAL-M6-03-N
+    spec: SPEC-M6-03
+    title: facts 缺路径的判据表达式 → ExpressionError（未知标识符，判据不通过且错误原文可断言）
+    form: expression
+    executor: m6.judge_expression
+    params:
+      checks:
+        - expression: "outcome.status == COMPLETED"
+          facts: {}          # SPEC-M6-03②：未知标识符 → ExpressionError（JUDGE-SYNTAX §1.4）
+          error_contains: 未知标识符
+    expect: {}
+
+  # ================= SPEC-M6-04 Badcase 闭环 =================
+  - id: EVAL-M6-04-P
+    spec: SPEC-M6-04
+    title: 修复实验 candidate 92 / current 88（同黄金集） → ADOPTED + 实验归档 + 生产 release 不变
+    form: contract
+    executor: m6.badcase_ab
+    params:
+      golden_cases:
+        - case_id: case_ab_001
+          version: 1
+          task_input: A/B 用例 1
+          environment_seed: ab-seed-1
+          expected_behavior:
+            - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+            - {clause: eval-ab-rubric, judge: RUBRIC}
+          source: HANDWRITTEN
+          excluded_from: []
+        - case_id: case_ab_002
+          version: 1
+          task_input: A/B 用例 2（badcase 关联案例）
+          environment_seed: ab-seed-2
+          expected_behavior:
+            - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+            - {clause: eval-ab-rubric, judge: RUBRIC}
+          source: HANDWRITTEN
+          excluded_from: []
+      rubrics:
+        case_ab_001: &ab_sheet
+          anchor: eval-ab-rubric
+          pass_line: 4.0
+          dimensions:
+            factual_correctness:
+              weight: 0.25
+              criteria: [{when: "outcome.status == COMPLETED", score: 5}]
+              default_score: 2
+            regulation_citation:
+              weight: 0.20
+              criteria:
+                - {when: "regulation_refs_count >= 2", score: 5}
+                - {when: "regulation_refs_count == 1", score: 4}
+              default_score: 1
+            state_change_discipline:
+              weight: 0.20
+              criteria:
+                - {when: "skipped_expectations == 0 && unauthorized_state_changes == 0", score: 5}
+                - {when: "unauthorized_state_changes == 0", score: 4}
+              default_score: 1
+            refusal_calibration:
+              weight: 0.20
+              criteria: [{when: "refusals_expected == 0 && refusal_overreach == 0", score: 4}]
+              default_score: 2
+            evidence_completeness:
+              weight: 0.15
+              criteria:
+                - {when: "evidence.three_part_ok && trace_complete", score: 5}
+                - {when: "evidence.observed_present", score: 4}
+              default_score: 2
+        case_ab_002: *ab_sheet
+      current_release:
+        release_id: rel-current-88
+        kind: mock
+        cases:
+          case_ab_001: &ab_current_plan
+            advance_minutes: 30
+            expect_capabilities: [query.measurement, query.regulation, analyze.load_forecast]
+            plan:
+              - {at: "+5m", capability: query.measurement@v1, arguments: {device: TX-01}}
+              - {at: "+10m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
+          case_ab_002: *ab_current_plan
+      candidate_release:
+        release_id: rel-candidate-92
+        kind: mock
+        cases:
+          case_ab_001: &ab_candidate_plan
+            advance_minutes: 30
+            expect_capabilities: [query.measurement, query.regulation, analyze.load_forecast]
+            plan:
+              - {at: "+5m", capability: query.measurement@v1, arguments: {device: TX-01}}
+              - {at: "+10m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
+              - {at: "+20m", capability: analyze.load_forecast@v1, arguments: {device: TX-02, horizon_h: 24}}
+          case_ab_002: *ab_candidate_plan
+      badcase:
+        case_id: case_ab_002
+        reproduce_below: 4.5
+        summary: 执行完整性短板（expect_capabilities 未覆盖，rubric 总分 4.4）
+    expect:
+      decision: ADOPTED
+      current_total: 88
+      candidate_total: 92
+      production_unchanged: true
+
+  - id: EVAL-M6-04-N
+    spec: SPEC-M6-04
+    title: candidate 85 / current 88（弱化证据链） → REJECTED，生产 release 不变
+    form: negative_rejection
+    executor: m6.badcase_ab
+    params:
+      golden_cases:
+        - case_id: case_ab_001
+          version: 1
+          task_input: A/B 用例 1
+          environment_seed: ab-seed-1
+          expected_behavior:
+            - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+            - {clause: eval-ab-rubric, judge: RUBRIC}
+          source: HANDWRITTEN
+          excluded_from: []
+        - case_id: case_ab_002
+          version: 1
+          task_input: A/B 用例 2（badcase 关联案例）
+          environment_seed: ab-seed-2
+          expected_behavior:
+            - {clause: "outcome.status == COMPLETED", judge: DETERMINISTIC}
+            - {clause: eval-ab-rubric, judge: RUBRIC}
+          source: HANDWRITTEN
+          excluded_from: []
+      rubrics:
+        case_ab_001: &ab_sheet_n
+          anchor: eval-ab-rubric
+          pass_line: 4.0
+          dimensions:
+            factual_correctness:
+              weight: 0.25
+              criteria: [{when: "outcome.status == COMPLETED", score: 5}]
+              default_score: 2
+            regulation_citation:
+              weight: 0.20
+              criteria:
+                - {when: "regulation_refs_count >= 2", score: 5}
+                - {when: "regulation_refs_count == 1", score: 4}
+              default_score: 1
+            state_change_discipline:
+              weight: 0.20
+              criteria:
+                - {when: "skipped_expectations == 0 && unauthorized_state_changes == 0", score: 5}
+                - {when: "unauthorized_state_changes == 0", score: 4}
+              default_score: 1
+            refusal_calibration:
+              weight: 0.20
+              criteria: [{when: "refusals_expected == 0 && refusal_overreach == 0", score: 4}]
+              default_score: 2
+            evidence_completeness:
+              weight: 0.15
+              criteria:
+                - {when: "evidence.three_part_ok && trace_complete", score: 5}
+                - {when: "evidence.observed_present", score: 4}
+              default_score: 2
+        case_ab_002: *ab_sheet_n
+      current_release:
+        release_id: rel-current-88n
+        kind: mock
+        cases:
+          case_ab_001: &ab_current_plan_n
+            advance_minutes: 30
+            expect_capabilities: [query.measurement, query.regulation, analyze.load_forecast]
+            plan:
+              - {at: "+5m", capability: query.measurement@v1, arguments: {device: TX-01}}
+              - {at: "+10m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
+          case_ab_002: *ab_current_plan_n
+      candidate_release:
+        release_id: rel-candidate-85
+        kind: mock
+        cases:
+          case_ab_001: &ab_candidate_plan_n
+            advance_minutes: 30
+            expect_capabilities: [query.measurement, query.regulation, analyze.load_forecast]
+            plan:
+              - {at: "+5m", capability: query.measurement@v1, arguments: {device: TX-01}, degrade_issued: true}
+              - {at: "+10m", capability: query.regulation@v1, arguments: {rule_id: PHYS-TX-LOAD}}
+          case_ab_002: *ab_candidate_plan_n
+      badcase:
+        case_id: case_ab_002
+        reproduce_below: 4.5
+        summary: 候选弱化证据链（issued 缺失，总分 85 < current 88）
+    expect:
+      decision: REJECTED
+      current_total: 88
+      candidate_total: 85
+      production_unchanged: true
+
+  # ================= SPEC-M6-05 受控自进化（Skill 化） =================
+  - id: EVAL-M6-05-P
+    spec: SPEC-M6-05
+    title: 方法出现 3 个不同任务实例判据全过 → SkillDescriptor 候选（status=REVIEW+提升证明+skill.promoted 恰 1 条）
+    form: contract
+    executor: m6.skillize
+    params:
+      method_key: method.overload-response
+      occurrences:
+        - {trace_id: trace-t1, task_id: task-101, judge_passed: true, case_id: case_003}
+        - {trace_id: trace-t2, task_id: task-202, judge_passed: true, case_id: case_011}
+        - {trace_id: trace-t3, task_id: task-303, judge_passed: true, case_id: case_004}
+        - {trace_id: trace-t4, task_id: task-101, judge_passed: true, case_id: case_003}
+      skill_draft:
+        skill_id: skill.overload-response
+        version: 0.1.0
+        capability_domain: MAINTAIN
+        disclosure:
+          level0: 过载响应处置
+          level1: 变压器过载研判与处置动作序列（两票/审批/工单）
+          level2_ref: skills/overload-response/SKILL.md
+        entry: {prompt_ref: prompts/overload-response@v1, checklist: 过载研判清单}
+        evidence_policy: 需附环境回读证据
+        owner: m6-flywheel
+        status: DRAFT
+      badcase_id: bc-case_ab_002-0001
+      evidence_ref: runtime/experiments/bc-1.json
+    expect:
+      produced: true
+      status: REVIEW
+
+  - id: EVAL-M6-05-N
+    spec: SPEC-M6-05
+    title: 方法仅出现 2 个不同任务实例 → 不触发 Skill 化（MIN_OCCURRENCES=3，拒绝且零事件）
+    form: negative_rejection
+    executor: m6.skillize
+    params:
+      method_key: method.demand-margin
+      occurrences:
+        - {trace_id: trace-t1, task_id: task-101, judge_passed: true, case_id: case_006}
+        - {trace_id: trace-t2, task_id: task-202, judge_passed: true, case_id: case_006}
+      skill_draft:
+        skill_id: skill.demand-margin
+        version: 0.1.0
+        capability_domain: TRADE
+        disclosure:
+          level0: 需量裕度评估
+          level1: 需量限额核对与预警判定
+          level2_ref: skills/demand-margin/SKILL.md
+        entry: {prompt_ref: prompts/demand-margin@v1}
+        evidence_policy: 需附需量滑窗证据
+        owner: m6-flywheel
+        status: DRAFT
+    expect:
+      produced: false
+      error_contains: "3"
+
+  # ================= SPEC-M6-06 评估与调优单向（禁止类 → 负例） =================
+  - id: EVAL-M6-06-N
+    spec: SPEC-M6-06
+    title: 调优侧只读成绩可用；请求直改 release 状态 → 永远拒绝 + release.published{rejected:true} 审计
+    form: negative_rejection
+    executor: m6.release_flip
+    params:
+      release_id: rel-0009
+      to_status: PUBLISHED
+      release_manifest:
+        release_id: rel-0009
+        model_ref: mock@v1
+        golden_scores: {golden_set_version: dev-x, pass_rate: 0.9, by_domain: {}}
+    expect:
+      golden_scores: {golden_set_version: dev-x, pass_rate: 0.9, by_domain: {}}
+      error_contains: SPEC-M6-06
+
+  # ================= SPEC-M6-07 评估运行 run_golden 全流程 =================
+  - id: EVAL-M6-07-P
+    spec: SPEC-M6-07
+    title: evaluator 对 mock-rel-0001 全流程可跑（12 种子全过，离线） + runs/ 归档 + 二次评估确定性
+    form: contract
+    executor: m6.evaluator_flow
+    params:
+      release: mock-rel-0001
+      golden_dir: golden/dev
+    expect:
+      pass_rate: 1.0
+      cases: 12
+      failures: []
+      archive_exists: true
+  # 注：SPEC-M6-07 的 mode≠SIMULATION / CLI REAL 拒绝（⑩）无现成执行器可表达，不设用例；
+  # SPEC-M6-07⑪ 为 KNOWN-DEFECT（D-58）登记条款，故意不设用例（不得把缺陷固化为期望行为）。
+
+  # ================= SPEC-M6-08 黄金跑分签名凭证（attest） =================
+  - id: EVAL-M6-08-P
+    spec: SPEC-M6-08
+    title: 合法 M6 签名链：import_golden_scores 经 m6_flywheel.attest 产出口签名 → 消费侧校验通过
+    form: contract
+    executor: m7.six_elements          # 复用既有执行器：hand_filled/drop 为空时只走合法链
+    params:
+      register_repo_assets: true
+      drop: []
+      hand_filled: []
+    expect: {}
+
+  - id: EVAL-M6-08-N
+    spec: SPEC-M6-08
+    title: M6 签名凭证缺失/tampered/producer 错 → 消费侧重算比对拒绝（禁手工填报，attestation 重算链）
+    form: negative_rejection
+    executor: m7.six_elements
+    params:
+      register_repo_assets: true
+      hand_filled:
+        - {mode: no_attestation,     error_contains: [attestation]}   # 缺 M6 attest 凭证
+        - {mode: tampered_pass_rate, error_contains: [digest]}        # 成绩改动 → digest 失配
+        - {mode: wrong_producer,     error_contains: [producer]}      # 非 M6 签名方
+    expect: {}
+
+  - id: EVAL-M6-08-N2
+    spec: SPEC-M6-08
+    title: attest 载荷级签名重算比对 → 篡改载荷/伪造签名/非 M6 签名方/缺字段/expect 绑定不符全部拒绝；合法凭证确定性复算通过
+    form: negative_rejection
+    executor: m6.attest_verify         # tests/m6_eval_extra.py（SPEC-M6-08①② 直接探测面）
+    params:
+      report:                          # evaluator 报告形态（attestation_payload 读取字段）
+        release_id: rel-attest-probe
+        release_model_ref: mock-attest@offline
+        golden_dir: golden/dev
+        golden_set_version: dev-attest-probe
+        mode: SIMULATION
+        generated_at: "2026-09-28T00:00:00Z"
+        pass_rate: 1.0
+        failures: []
+        totals: {cases: 2, passed: 2, mean_rubric_total: 4.8, score_100: 96.0}
+        cases:
+          - {case_id: case_001, passed: true}
+          - {case_id: case_002, passed: true}
+      tamper_probes:                   # SPEC-M6-08②：任一 payload 字段被改动即失配拒绝
+        - {mode: tamper_payload_cases,     error_contains: [签名校验失败]}
+        - {mode: tamper_payload_pass_rate, error_contains: [签名校验失败]}
+        - {mode: tamper_signature,         error_contains: [签名校验失败]}
+        - {mode: wrong_producer,           error_contains: [签名方]}
+        - {mode: drop_payload_key,         error_contains: [缺字段]}
+        - {mode: expect_binding, expect_release_id: rel-other, error_contains: [release_id]}
+    expect:
+      producer: M6
+      kind: M6-GOLDEN-RUN-v1

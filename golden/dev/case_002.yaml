@@ -1,0 +1,18 @@
+# golden/dev/case_002.yaml
+# 12 条开发黄金集种子之一（specs/M6-flywheel.md §5 DoD；全部基于 PARK-001）。
+# 类别：正常（正常、台账）；判据语法见 src/m6_flywheel/JUDGE-SYNTAX.md。
+# source=HANDWRITTEN；excluded_from 为空（holdout 隔离：SPEC-M6-02，CI 断言零命中）。
+case_id: case_002
+version: 1
+task_input: 查一下 1 号配电变压器（TX-01）的台账信息和投运状态。
+environment_seed: golden-case-002
+scenario_ref: null
+expected_behavior:
+- clause: outcome.status == COMPLETED && actions.succeeded >= 1
+  judge: DETERMINISTIC
+- clause: '''SAFE-OP-REMOTE'' in regulation_refs'
+  judge: DETERMINISTIC
+- clause: behavior:asset-lookup
+  judge: RUBRIC
+source: HANDWRITTEN
+excluded_from: []

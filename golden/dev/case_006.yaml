@@ -1,0 +1,18 @@
+# golden/dev/case_006.yaml
+# 12 条开发黄金集种子之一（specs/M6-flywheel.md §5 DoD；全部基于 PARK-001）。
+# 类别：边界（边界、需量限额、无误报）；判据语法见 src/m6_flywheel/JUDGE-SYNTAX.md。
+# source=HANDWRITTEN；excluded_from 为空（holdout 隔离：SPEC-M6-02，CI 断言零命中）。
+case_id: case_006
+version: 1
+task_input: 核对 9 月需量与合同容量限额：当前需量比多少？要不要发需量预警？给出依据。
+environment_seed: golden-case-006
+scenario_ref: null
+expected_behavior:
+- clause: demand.ratio < 1.0 && 'PHYS-DEMAND' not in alarm_codes
+  judge: DETERMINISTIC
+- clause: '''OP-DEMAND-LIMIT'' in regulation_refs && actions.succeeded >= 2'
+  judge: DETERMINISTIC
+- clause: OP-DEMAND-LIMIT
+  judge: RUBRIC
+source: HANDWRITTEN
+excluded_from: []

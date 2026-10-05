@@ -1,0 +1,74 @@
+[
+  {
+    "id": "m7-writeonce-file-off",
+    "redline": true,
+    "target": "src/m7_registry/publish.py",
+    "find": "    if base.exists():\n        raise ImmutableReleaseError(\n            f\"releases/{release_id}/ 已存在，内容只写一次（SPEC-M7-05 immutable）：\"",
+    "replace": "    if False and base.exists():\n        raise ImmutableReleaseError(\n            f\"releases/{release_id}/ 已存在，内容只写一次（SPEC-M7-05 immutable）：\"",
+    "description": "SPEC-M7-12：write_release_file 向已发布目录补写拒绝失效——EVAL-M7-12-N 应杀"
+  },
+  {
+    "id": "m7-republish-off",
+    "redline": true,
+    "target": "src/m7_registry/publish.py",
+    "find": "    if base.exists():\n        raise ImmutableReleaseError(\n            f\"releases/{release_id}/ 已存在（SPEC-M7-05 只写一次）：二次发布被拒\")",
+    "replace": "    if False and base.exists():\n        raise ImmutableReleaseError(\n            f\"releases/{release_id}/ 已存在（SPEC-M7-05 只写一次）：二次发布被拒\")",
+    "description": "SPEC-M7-12：publish_release 二次发布拒绝失效——EVAL-M7-12-N/REL-P 应杀"
+  },
+  {
+    "id": "m7-manifest-hash-off",
+    "redline": true,
+    "target": "src/m7_registry/publish.py",
+    "find": "        elif _sha256_file(path) != str(digest):",
+    "replace": "        elif False and _sha256_file(path) != str(digest):",
+    "description": "SPEC-M7-12：resolve_release manifest sha256 逐文件复核（防篡改）失效——EVAL-M7-REL-P 应杀"
+  },
+  {
+    "id": "m7-golden-digest-off",
+    "redline": true,
+    "target": "src/m7_registry/release.py",
+    "find": "    if digest != str(signature.get(\"digest\")):",
+    "replace": "    if False and digest != str(signature.get(\"digest\")):",
+    "description": "SPEC-M7-09：golden_scores digest 重算比对失效（禁手工填报）——EVAL-M7-09-N 应杀"
+  },
+  {
+    "id": "m7-approved-gate-off",
+    "redline": true,
+    "target": "src/m7_registry/review.py",
+    "find": "    if journal_record.state != \"APPROVED\":",
+    "replace": "    if False and journal_record.state != \"APPROVED\":",
+    "description": "SPEC-M7-07：publish_asset 唯一入口 APPROVED 门禁失效——EVAL-M7-05-N 应杀"
+  },
+  {
+    "id": "m7-ontology-drift-off",
+    "redline": true,
+    "target": "src/m7_registry/release.py",
+    "find": "    if str(draft[\"ontology_version\"]) != actual_hash:",
+    "replace": "    if False and str(draft[\"ontology_version\"]) != actual_hash:",
+    "description": "SPEC-M7-11：ontology_version 与 M4 目录 hash 一致性（防本体已改 release 未更新）失效——EVAL-M7-11-N 应杀"
+  },
+  {
+    "id": "m7-floating-allow",
+    "redline": false,
+    "target": "src/m7_registry/assets.py",
+    "find": "    if version.lower() in FLOATING_TOKENS:",
+    "replace": "    if False and version.lower() in FLOATING_TOKENS:",
+    "description": "SPEC-M7-03：floating 版本封闭集拒绝失效——EVAL-M7-02-N 应杀"
+  },
+  {
+    "id": "m7-six-elements-empty-ok",
+    "redline": false,
+    "target": "src/m7_registry/release.py",
+    "find": "    missing = [name for name in SIX_ELEMENTS\n               if name not in draft or draft[name] in (None, \"\", [], {})]\n    if missing:",
+    "replace": "    missing = [name for name in SIX_ELEMENTS\n               if name not in draft or draft[name] in (None, \"\", [], {})]\n    if False and missing:",
+    "description": "SPEC-M7-08：Release 六要素缺失拒绝打包失效——EVAL-M7-08-N 应杀"
+  },
+  {
+    "id": "m7-release-table-edited",
+    "redline": false,
+    "target": "src/m7_registry/release.py",
+    "find": "    \"PUBLISHED\": (\"SUPERSEDED\",),",
+    "replace": "    \"PUBLISHED\": (\"GATED\", \"SUPERSEDED\"),",
+    "description": "SPEC-M7-12：Release 状态机冻结表加非法边——EVAL-M7-TABLE-P fixture diff 应杀"
+  }
+]

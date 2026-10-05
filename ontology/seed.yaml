@@ -1,0 +1,66 @@
+# ontology/seed.yaml
+# 机械落盘自 specs/00-ontology.md §3（种子实例）。运行期只读（M4/M5 加载）。
+# 实例加载协议（ADDENDUM §D）：按 ScenarioSpec.environment.park_instance 名称解析
+# 同构实例文件（去扩展名匹配）；默认搜索 ontology/，环境变量 PARK_INSTANCE_PATH
+# 以 ";" 分隔追加搜索目录。本文件即默认实例。
+meta:
+  source: specs/00-ontology.md §3
+  version: "1.0"
+
+park:
+  id: PARK-001
+  name: 示范园区
+  tariff: TARIFF-2026A
+  contract_capacity_kw: 2000
+  substations:
+    - id: SR-A
+      name: A 配电房
+      devices:
+        - {id: TX-01, type: Transformer, capacity_kva: 1600, cooling: ONAN}
+        - {id: TX-02, type: Transformer, capacity_kva: 1600, cooling: ONAN}
+        - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+        - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+        - {id: SG-A01, type: Switchgear, breaker_state: CLOSED}
+        - {id: SG-A02, type: Switchgear, breaker_state: CLOSED}
+        - {id: CB-A, type: CapacitorBank, capacity_kvar: 300, state: "OFF"}  # YAML1.1 裸 OFF 会解析为布尔 False，故加引号保持字符串语义（00§1.1 state 投/切）
+        - {id: PD-A01, type: PDSensor, target: SG-A01}
+        - {id: TH-A01, type: TempHumiditySensor}
+    - id: SR-B
+      name: B 配电房
+      devices:
+        - {id: TX-03, type: Transformer, capacity_kva: 1000}
+        - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+        - {id: PV-01, type: PV, capacity_kwp: 400}
+        - {id: EVC-01, type: EVCharger, total_power_kw: 480}
+
+relations:
+  - [TX-01, connected_to, BUS-A1]
+  - [TX-02, connected_to, BUS-A1]
+  - [TX-03, connected_to, BUS-A1]
+  - [BESS-01, part_of, SR-B]
+  - [PV-01, part_of, SR-B]
+  - [SG-A01, upstream_of, TX-01]
+  - [PD-A01, monitors, SG-A01]
+
+operators:
+  - {id: OP-001, name: 张工, role: 值班员}
+  - {id: OP-002, name: 李工, role: 调度员}
+  - {id: OP-003, name: 王工, role: 签发人}
+  - {id: OP-004, name: 赵总, role: 审批人}
+
+price_schedule:
+  id: TARIFF-2026A
+  effective_range: [2026-01-01, 2026-12-31]
+  periods:
+    - {type: VALLEY, start: "00:00", end: "08:00", price: 0.35}
+    - {type: FLAT,   start: "08:00", end: "10:00", price: 0.70}
+    - {type: PEAK,   start: "10:00", end: "12:00", price: 1.10}
+    - {type: FLAT,   start: "12:00", end: "18:00", price: 0.70}
+    - {type: PEAK,   start: "18:00", end: "21:00", price: 1.10}
+    - {type: FLAT,   start: "21:00", end: "24:00", price: 0.70}
+
+demand_2026_09: {peak_kw: 1720, month: 2026-09}
+
+load_curve_2026_09:  # 小时粒度日形状（用于生成仿真量测）
+  shape: [0.42, 0.40, 0.38, 0.38, 0.40, 0.44, 0.50, 0.58, 0.68, 0.78, 0.86, 0.90, 0.84, 0.76, 0.80, 0.88, 0.94, 0.98, 0.92, 0.84, 0.72, 0.60, 0.50, 0.44]
+  base_kw: 1400

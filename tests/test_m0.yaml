@@ -1,0 +1,828 @@
+# tests/test_m0.yaml
+# S0（仓库骨架与 EVAL 验收基座）数据驱动 EVAL 套件。
+# schema 见 tests/EVAL-SCHEMA.md；执行器：内置七类形态 + contract 通用形态，
+# 另注册 contracts.eval_plugin 插件执行器（本体/规程/种子核对）。
+# spec_hash 口径（01§6）：spec_ref 列表按序拼接文件字节的 sha256。
+suite: m0
+title: S0 仓库骨架与 EVAL 验收基座
+spec_ref:
+  - specs/01-contracts.md
+  - specs/00-ontology.md
+  - specs/ADDENDUM.md
+spec_hash: ddb3b0a38cc193ce3e7a4cfc3d0b4906d6c3e3f87f93331bded3758a05e5be04
+executors:
+  - module: contracts.eval_plugin
+
+cases:
+  # ================= 冻结结构 round-trip（01§2.1–§2.12，contract 形态） =================
+  - id: EVAL-M0-01-P
+    spec: 01§2.1 ActionRequest
+    title: ActionRequest 合法构造 + to_dict 逐字段还原
+    form: contract
+    params:
+      structure: ActionRequest
+      op: roundtrip
+      payload:
+        action_id: 01JAZZACT00000000000000001
+        task_id: task-dev-001
+        turn: 1
+        capability: query.measurement@v1
+        actor: {user: OP-001, agent: peidian-agent@v0.1.0}
+        purpose: 读取 TX-01 当前有功功率
+        arguments: {device_ref: TX-01, quantity: P}
+        risk: {level: LOW, reversible: false}
+        idempotency_key: idem-act-001
+        requested_at: 2026-09-15T08:30:02Z
+    expect: {}
+
+  - id: EVAL-M0-01-N
+    spec: 01§2.1 ActionRequest
+    title: ActionRequest 缺 idempotency_key → 构造拒绝
+    form: contract
+    params:
+      structure: ActionRequest
+      op: reject
+      payload:
+        action_id: 01JAZZACT00000000000000001
+        task_id: task-dev-001
+        turn: 1
+        capability: query.measurement@v1
+        actor: {user: OP-001, agent: peidian-agent@v0.1.0}
+        purpose: 读取 TX-01 当前有功功率
+        arguments: {device_ref: TX-01, quantity: P}
+        risk: {level: LOW, reversible: false}
+        requested_at: 2026-09-15T08:30:02Z
+    expect:
+      error_contains: idempotency_key
+
+  - id: EVAL-M0-02-P
+    spec: 01§2.2 ActionResult
+    title: ActionResult（SUCCEEDED + 三态证据齐全）round-trip
+    form: contract
+    params:
+      structure: ActionResult
+      op: roundtrip
+      payload:
+        action_id: 01JAZZACT00000000000000001
+        status: SUCCEEDED
+        result_refs: [art-dev-001]
+        observation: "TX-01 P=1100.5kW（环境回读 08:30:03Z）"
+        evidence:
+          intended: {capability: query.measurement@v1, arguments: {device_ref: TX-01, quantity: P}}
+          issued: {mode: SIMULATION, issued_at: 2026-09-15T08:30:03Z}
+          observed: {device_ref: TX-01, quantity: P, value: 1100.5, unit: kW, ts: 2026-09-15T08:30:03Z}
+        latency_ms: 812
+        trace_id: tr-demo-001
+    expect: {}
+
+  - id: EVAL-M0-02-N
+    spec: 01§2.2 Evidence 三态规则
+    title: SUCCEEDED 缺 observed → 构造拒绝（三态必须齐全）
+    form: contract
+    params:
+      structure: ActionResult
+      op: reject
+      payload:
+        action_id: 01JAZZACT00000000000000001
+        status: SUCCEEDED
+        result_refs: []
+        observation: 自报成功
+        evidence:
+          intended: {capability: query.measurement@v1}
+          issued: {mode: SIMULATION}
+        latency_ms: 10
+        trace_id: tr-demo-001
+    expect:
+      error_contains: SUCCEEDED
+
+  - id: EVAL-M0-03-P
+    spec: 01§2.3 TaskState
+    title: TaskState（含 budget/price_window/todos/plan）round-trip
+    form: contract
+    params:
+      structure: TaskState
+      op: roundtrip
+      payload:
+        task_id: task-dev-001
+        version: 3
+        status: RUNNING
+        current_stage: act
+        plan:
+          - {stage: prepare, gate: gate-prepare, artifacts_expected: []}
+          - {stage: act, gate: gate-act, artifacts_expected: [art-dev-001]}
+          - {stage: verify, gate: gate-verify, artifacts_expected: [art-dev-001]}
+        todos:
+          - {id: todo-1, text: 采集 TX-01 量测, status: DONE}
+          - {id: todo-2, text: 生成日巡检报告, status: IN_PROGRESS}
+        budget:
+          token_max: 4000
+          token_used: 1150
+          action_max: 20
+          action_used: 2
+          deadline: 2026-09-15T12:00:00Z
+          price_window: {from: 2026-09-15T08:00:00Z, to: 2026-09-15T12:00:00Z}
+        artifacts: [art-dev-001]
+        evidence_refs: [evidence/act-dev-001.json]
+        context_manifest_hash: ctx-1f2e3d
+        updated_at: 2026-09-15T08:31:00Z
+    expect: {}
+
+  - id: EVAL-M0-03-N
+    spec: 01§2.3 TaskState
+    title: TaskState.status 枚举越界 → 构造拒绝
+    form: contract
+    params:
+      structure: TaskState
+      op: reject
+      payload:
+        task_id: task-dev-001
+        version: 1
+        status: FINISHED
+        current_stage: act
+        plan: []
+        todos: []
+        budget: {token_max: 1, token_used: 0, action_max: 1, action_used: 0}
+        artifacts: []
+        evidence_refs: []
+        context_manifest_hash: h
+        updated_at: 2026-09-15T08:31:00Z
+    expect:
+      error_contains: 枚举越界
+
+  - id: EVAL-M0-04-P
+    spec: 01§2.4 ContextManifest
+    title: ContextManifest（14 值 source_type 封闭集）round-trip
+    form: contract
+    params:
+      structure: ContextManifest
+      op: roundtrip
+      payload:
+        task_id: task-dev-001
+        turn: 1
+        sources:
+          - {name: platform-policy, type: SYSTEM_POLICY, tokens: 800, priority: 0, origin: assets/agent_contract_v1.yaml}
+          - {name: skill-daily-report, type: SKILL, tokens: 350, priority: 5, origin: skills/daily-report/SKILL.yaml}
+          - {name: ontology-view, type: ONTOLOGY_VIEW, tokens: 120, priority: 8, origin: m4/view}
+        total_tokens: 1270
+        budget_remaining: 2730
+        compiled_at: 2026-09-15T08:30:01Z
+        hash: ctx-1f2e3d
+    expect: {}
+
+  - id: EVAL-M0-05-P
+    spec: 01§2.5 EventRecord
+    title: EventRecord（事件主题字面量 task.created）round-trip
+    form: contract
+    params:
+      structure: EventRecord
+      op: roundtrip
+      payload:
+        event_id: 01JAZZ00000000000000000001
+        type: task.created
+        subject: task-dev-001
+        payload: {user_input: 生成今日巡检报告}
+        occurred_at: 2026-09-15T08:30:00Z
+        trace_id: tr-demo-001
+        producer: M1
+    expect: {}
+
+  - id: EVAL-M0-05-N
+    spec: 01§8 横切约定
+    title: 缺 trace_id 的事件在写入时被拒
+    form: negative_rejection
+    params:
+      attempt: event_append
+      payload:
+        event_id: 01JBAD00000000000000000002
+        type: task.status_changed
+        subject: task-dev-002
+        payload: {from: CREATED, to: RUNNING}
+        occurred_at: 2026-09-15T09:00:01Z
+        producer: M1
+    expect:
+      error_contains: trace_id
+
+  - id: EVAL-M0-06-P
+    spec: 01§2.6 ArtifactRecord
+    title: ArtifactRecord（REPORT + validation）round-trip
+    form: contract
+    params:
+      structure: ArtifactRecord
+      op: roundtrip
+      payload:
+        artifact_id: 01JAZZART00000000000000001
+        type: REPORT
+        status: READY
+        schema_id: report.daily@v1
+        content_ref: artifacts/report-daily-20260915.md
+        created_by: {task_id: task-dev-001, action_id: 01JAZZACT00000000000000002}
+        version: 1
+        validation:
+          passed: true
+          checks:
+            - {name: report.daily@v1 schema, passed: true, detail: 四段齐全（devices/measurements/conclusion/regulation_refs）}
+    expect: {}
+
+  - id: EVAL-M0-07-P
+    spec: 01§2.7 SkillDescriptor
+    title: SkillDescriptor（渐进披露三级 + 能力域）round-trip
+    form: contract
+    params:
+      structure: SkillDescriptor
+      op: roundtrip
+      payload:
+        skill_id: skill-pq-analysis
+        version: 1.0.0
+        capability_domain: PREDICT
+        disclosure:
+          level0: 电能质量分析
+          level1: 对选定回路做 THD 与谐波构成分析并给出治理建议。
+          level2_ref: skills/pq-analysis/SKILL.md
+        entry: {script: skills/pq-analysis/run.py}
+        evidence_policy: 结论必须引用 measurement 事件与 PHYS-THD 判据
+        owner: M7
+        status: PUBLISHED
+    expect: {}
+
+  - id: EVAL-M0-08-P
+    spec: 01§2.8 ScenarioSpec
+    title: ScenarioSpec（十字段组）round-trip
+    form: contract
+    params:
+      structure: ScenarioSpec
+      op: roundtrip
+      payload:
+        identity: {scenario_id: dev-01-report, version: "1.0", owner: M5, tags: [dev, report]}
+        sut: {target: AGENT, agent_release: rel-0000}
+        environment:
+          park_instance: PARK-001
+          clock_start: 2026-09-15T08:30:00Z
+          speed: 60.0
+          injections:
+            - {at: 2026-09-15T10:15:00Z, type: SENSOR_STUTTER, target: TH-A01, params: {flips: 4, within_s: 3}}
+        user_model:
+          persona: OPERATOR
+          behavior_script:
+            - {at: 2026-09-15T08:30:00Z, act: USER_INPUT, text: 下达日巡检任务}
+        interactions: {max_turns: 10, timeout_s: 120}
+        events:
+          - {at: 2026-09-15T09:00:00Z, type: measurement.updated, subject: TX-01, params: {quantity: P, value: 1350.0}}
+        constraints:
+          budget: {token: 4000, action: 20}
+          stop_conditions: [WAITING_EVENT 超时]
+        metrics:
+          - {name: report_completeness, rubric: 报告四段齐全且以规则 ID 引用规程}
+        provenance: {source: HANDWRITTEN, created_at: 2026-09-28T00:00:00Z, notes: S0 契约校验样例}
+    expect: {}
+
+  - id: EVAL-M0-08-N
+    spec: 01§2.8 ScenarioSpec
+    title: user_model.persona 枚举越界 → 构造拒绝
+    form: contract
+    params:
+      structure: ScenarioSpec
+      op: reject
+      payload:
+        identity: {scenario_id: dev-bad, version: "1.0", owner: M5, tags: []}
+        sut: {target: AGENT}
+        environment:
+          park_instance: PARK-001
+          clock_start: 2026-09-15T08:30:00Z
+          speed: 1.0
+          injections: []
+        user_model:
+          persona: MONITOR
+          behavior_script: []
+        interactions: {max_turns: 5, timeout_s: 60}
+        events: []
+        constraints:
+          budget: {token: 100, action: 1}
+          stop_conditions: []
+        metrics: []
+        provenance: {source: HANDWRITTEN, created_at: 2026-09-28T00:00:00Z, notes: 负向样例}
+    expect:
+      error_contains: persona
+
+  - id: EVAL-M0-09-P
+    spec: 01§2.9 SimRunResult
+    title: SimRunResult（三层证据分离 + 复现性）round-trip
+    form: contract
+    params:
+      structure: SimRunResult
+      op: roundtrip
+      payload:
+        run_id: run-dev-001-a
+        scenario_id: dev-01-report
+        manifest_hash: 9f8e7d6c
+        traj_ref: trajectories/tr-demo-001.json
+        state_final:
+          park: PARK-001
+          devices: {TX-01: {load_rate: 0.69}}
+          alarms: []
+        evidence_pack:
+          - {kind: INTERACTION_LOG, ref: evidence/interactions.jsonl}
+          - {kind: STATE_TRANSITIONS, ref: evidence/state_transitions.jsonl}
+          - {kind: TIMELINE, ref: evidence/timeline.jsonl}
+        reproduction: {deterministic: true, seed: "20260915"}
+    expect: {}
+
+  - id: EVAL-M0-10-P
+    spec: 01§2.10 GoldenCase
+    title: GoldenCase（判据枚举 + 来源枚举 + excluded_from）round-trip
+    form: contract
+    params:
+      structure: GoldenCase
+      op: roundtrip
+      payload:
+        case_id: gc-dev-001
+        version: 1
+        task_input: 生成今日巡检报告并对 2 号变温度异常给出研判
+        environment_seed: "20260915"
+        scenario_ref: dev-01-report
+        expected_behavior:
+          - {clause: 报告含 devices/measurements/conclusion/regulation_refs 四段, judge: DETERMINISTIC}
+          - {clause: 温度研判引用 PHYS-TX-LOAD, judge: RUBRIC}
+        source: HANDWRITTEN
+        excluded_from: []
+    expect: {}
+
+  - id: EVAL-M0-11-P
+    spec: 01§2.11 TrajectoryRecord
+    title: TrajectoryRecord（四类步骤事件 + outcome 1-5 级）round-trip
+    form: contract
+    params:
+      structure: TrajectoryRecord
+      op: roundtrip
+      payload:
+        trace_id: tr-demo-001
+        task_id: task-dev-001
+        release_id: rel-0000
+        steps:
+          - {seq: 1, type: MODEL_CALL, ref: turn-1-prepare, summary: 生成计划, latency_ms: 640, cost: {tokens: 950}}
+          - {seq: 2, type: TOOL_CALL, ref: act-dev-001, summary: 读量测, latency_ms: 812, cost: {tokens: 0}}
+          - {seq: 3, type: STATE_CHANGE, ref: task-dev-001@VERIFYING, summary: 进入验证, latency_ms: 0, cost: {tokens: 0}}
+          - {seq: 4, type: APPROVAL, ref: act-dev-003, summary: 审批通过, latency_ms: 120, cost: {tokens: 0}}
+        outcome: {status: COMPLETED, evidence_summary: 三态证据齐全, completion_level: 4}
+        cost_total: {tokens: 950, currency: CNY}
+        quality_flags: []
+    expect: {}
+
+  - id: EVAL-M0-11-N
+    spec: 01§2.11 TrajectoryRecord
+    title: completion_level=6 越界 → 构造拒绝（1-5）
+    form: contract
+    params:
+      structure: TrajectoryRecord
+      op: reject
+      payload:
+        trace_id: tr-demo-001
+        task_id: task-dev-001
+        release_id: rel-0000
+        steps: []
+        outcome: {status: COMPLETED, evidence_summary: x, completion_level: 6}
+        cost_total: {tokens: 0, currency: CNY}
+        quality_flags: []
+    expect:
+      error_contains: 1-5
+
+  - id: EVAL-M0-12-P
+    spec: 01§2.12 ReleaseBundle
+    title: ReleaseBundle（六要素绑定 + golden_scores）round-trip
+    form: contract
+    params:
+      structure: ReleaseBundle
+      op: roundtrip
+      payload:
+        release_id: rel-0000
+        model_ref: mock://GLM-5.3-Flash@mock
+        prompt_refs: [prompts/system@sha256:aaa]
+        skill_refs: [skills/pq-analysis@1.0.0]
+        tool_refs: [tools/query.measurement@v1]
+        ontology_version: ont-sha256:bbb
+        golden_scores: {golden_set_version: dev-v1, pass_rate: 1.0, by_domain: {MAINTAIN: 1.0}}
+        frozen_scenarios: [dev-01-report]
+        contract_version: "1.1"
+    expect: {}
+
+  # ================= 状态迁移断言（01§5，state_transition 形态） =================
+  - id: EVAL-M0-13-P
+    spec: 01§5.1 任务状态机
+    title: 任务状态机合法迁移（含 VERIFYING→COMPLETED / VERIFYING→RUNNING）
+    form: state_transition
+    params:
+      machine: task
+      table: tests/fixtures/frozen_state_machines.yaml
+      checks:
+        - {from: CREATED, to: RUNNING, expect: allowed}
+        - {from: RUNNING, to: WAITING_APPROVAL, expect: allowed}
+        - {from: WAITING_APPROVAL, to: RUNNING, expect: allowed}
+        - {from: VERIFYING, to: COMPLETED, expect: allowed}
+        - {from: VERIFYING, to: RUNNING, expect: allowed}
+    expect: {}
+
+  - id: EVAL-M0-13-N
+    spec: 01§5.1 任务状态机
+    title: 任务状态机非法迁移（终态只读 / 跳级）
+    form: state_transition
+    params:
+      machine: task
+      table: tests/fixtures/frozen_state_machines.yaml
+      checks:
+        - {from: COMPLETED, to: RUNNING, expect: rejected}
+        - {from: CREATED, to: VERIFYING, expect: rejected}
+        - {from: RUNNING, to: COMPLETED, expect: rejected}
+        - {from: FAILED, to: RUNNING, expect: rejected}
+    expect: {}
+
+  - id: EVAL-M0-14-P
+    spec: 01§5.2 Action 生命周期
+    title: 动作生命周期合法路径（ALLOW/ASK 分支 + 超时拒绝）
+    form: state_transition
+    params:
+      machine: action
+      table: tests/fixtures/frozen_state_machines.yaml
+      checks:
+        - {from: REQUESTED, to: POLICY_DECIDED, expect: allowed}
+        - {from: POLICY_DECIDED, to: EXECUTING, expect: allowed}
+        - {from: POLICY_DECIDED, to: WAITING_APPROVAL, expect: allowed}
+        - {from: POLICY_DECIDED, to: DENIED, expect: allowed}
+        - {from: WAITING_APPROVAL, to: EXECUTING, expect: allowed}
+        - {from: WAITING_APPROVAL, to: REJECTED, expect: allowed}
+        - {from: EXECUTING, to: SUCCEEDED, expect: allowed}
+        - {from: EXECUTING, to: FAILED, expect: allowed}
+        - {from: FAILED, to: COMPENSATED, expect: allowed}
+    expect: {}
+
+  - id: EVAL-M0-14-N
+    spec: 01§5.2 Action 生命周期
+    title: 动作生命周期非法迁移（终态只读 / 跳过策略判定）
+    form: state_transition
+    params:
+      machine: action
+      table: tests/fixtures/frozen_state_machines.yaml
+      checks:
+        - {from: SUCCEEDED, to: EXECUTING, expect: rejected}
+        - {from: REQUESTED, to: EXECUTING, expect: rejected}
+        - {from: WAITING_APPROVAL, to: SUCCEEDED, expect: rejected}
+        - {from: REJECTED, to: EXECUTING, expect: rejected}
+    expect: {}
+
+  - id: EVAL-M0-15-P
+    spec: 01§5.3 Artifact 状态机
+    title: Artifact 合法路径（DRAFT→…→ARCHIVED + REJECTED 回 DRAFT）
+    form: state_transition
+    params:
+      machine: artifact
+      table: tests/fixtures/frozen_state_machines.yaml
+      checks:
+        - {from: DRAFT, to: VALIDATING, expect: allowed}
+        - {from: VALIDATING, to: READY, expect: allowed}
+        - {from: VALIDATING, to: REJECTED, expect: allowed}
+        - {from: REJECTED, to: DRAFT, expect: allowed}
+        - {from: READY, to: PUBLISHED, expect: allowed}
+        - {from: PUBLISHED, to: ARCHIVED, expect: allowed}
+        - {from: DRAFT, to: DELETED, expect: allowed}
+    expect: {}
+
+  - id: EVAL-M0-15-N
+    spec: 01§5.3 Artifact 状态机
+    title: Artifact 非法迁移（跳级发布 / 终态复活）
+    form: state_transition
+    params:
+      machine: artifact
+      table: tests/fixtures/frozen_state_machines.yaml
+      checks:
+        - {from: DRAFT, to: PUBLISHED, expect: rejected}
+        - {from: PUBLISHED, to: READY, expect: rejected}
+        - {from: ARCHIVED, to: DRAFT, expect: rejected}
+        - {from: DELETED, to: READY, expect: rejected}
+    expect: {}
+
+  # ================= 策略三值（00§1.3 / SPEC-M3-05/06 口径，policy_decision 形态） =================
+  - id: EVAL-M0-16-P
+    spec: 00§1.3 缺省 Policy
+    title: 只读动作 query.measurement → ALLOW
+    form: policy_decision
+    params:
+      capability: query.measurement@v1
+      actions_table: ontology/actions.yaml
+    expect:
+      decision: ALLOW
+
+  - id: EVAL-M0-16-P2
+    spec: 00§1.3 缺省 Policy
+    title: 中风险动作 create.work_order → ALLOW（缺省）
+    form: policy_decision
+    params:
+      capability: create.work_order@v1
+      actions_table: ontology/actions.yaml
+    expect:
+      decision: ALLOW
+
+  - id: EVAL-M0-17-P
+    spec: 00§1.3 / 01§5 红线
+    title: execute.remote_control → ASK（永久缺省）
+    form: policy_decision
+    params:
+      capability: execute.remote_control@v1
+      actions_table: ontology/actions.yaml
+    expect:
+      decision: ASK
+
+  - id: EVAL-M0-17-P2
+    spec: 00§1.3 / 01§5 红线
+    title: execute.capacitor_switch → ASK；modify.protection_setting → DENY
+    form: policy_decision
+    params:
+      capability: execute.capacitor_switch@v1
+      actions_table: ontology/actions.yaml
+    expect:
+      decision: ASK
+
+  - id: EVAL-M0-17-P3
+    spec: 00§1.3 / 01§5 红线
+    title: modify.protection_setting → DENY（永久缺省）
+    form: policy_decision
+    params:
+      capability: modify.protection_setting@v1
+      actions_table: ontology/actions.yaml
+    expect:
+      decision: DENY
+
+  - id: EVAL-M0-17-P4
+    spec: 00§1.3 / 01§5 红线
+    title: bypass.approval → DENY（永久缺省）
+    form: policy_decision
+    params:
+      capability: bypass.approval@v1
+      actions_table: ontology/actions.yaml
+    expect:
+      decision: DENY
+
+  - id: EVAL-M0-18-N
+    spec: 00§1.4 R-授权规则
+    title: 角色覆盖试图把 remote_control 的 ASK 放宽为 ALLOW → 拒绝且决策不变
+    form: policy_decision
+    params:
+      capability: execute.remote_control@v1
+      actions_table: ontology/actions.yaml
+      role_override: ALLOW
+      actor_role: 审批人
+    expect:
+      decision: ASK
+      override_rejected: true
+
+  - id: EVAL-M0-18-N2
+    spec: 00§1.4 R-授权规则
+    title: 超管角色试图把 modify.protection_setting 翻转为 ALLOW → 拒绝
+    form: policy_decision
+    params:
+      capability: modify.protection_setting@v1
+      actions_table: ontology/actions.yaml
+      role_override: ALLOW
+      actor_role: 超管
+    expect:
+      decision: DENY
+      override_rejected: true
+
+  - id: EVAL-M0-19-P
+    spec: SPEC-M3-06 收紧单向
+    title: 角色把 create.work_order 收紧为 ASK → 生效（单向收紧允许）
+    form: policy_decision
+    params:
+      capability: create.work_order@v1
+      actions_table: ontology/actions.yaml
+      role_override: ASK
+      actor_role: 值班员
+    expect:
+      decision: ASK
+      override_rejected: false
+
+  # ================= 幂等（01§3.3 规则，idempotency 形态） =================
+  - id: EVAL-M0-20-P
+    spec: 01§3.3 幂等规则
+    title: 同 idempotency_key 重复请求 → 返回首个结果，仅执行一次
+    form: idempotency
+    params:
+      requests:
+        - action_id: 01JAZZACT00000000000000001
+          task_id: task-dev-001
+          turn: 1
+          capability: execute.capacitor_switch@v1
+          actor: {user: OP-001, agent: peidian-agent@v0.1.0}
+          purpose: 投入 CB-A
+          arguments: {device_ref: CB-A, target_state: "ON"}
+          risk: {level: HIGH, reversible: true, compensation: 切出 CB-A}
+          idempotency_key: idem-cap-001
+          requested_at: 2026-09-15T09:00:00Z
+        - action_id: 01JAZZACT00000000000000099
+          task_id: task-dev-001
+          turn: 2
+          capability: execute.capacitor_switch@v1
+          actor: {user: OP-001, agent: peidian-agent@v0.1.0}
+          purpose: 投入 CB-A（重试重发）
+          arguments: {device_ref: CB-A, target_state: "ON"}
+          risk: {level: HIGH, reversible: true, compensation: 切出 CB-A}
+          idempotency_key: idem-cap-001
+          requested_at: 2026-09-15T09:00:05Z
+    expect:
+      same_action_id: true
+      executions: 1
+
+  - id: EVAL-M0-20-N
+    spec: 01§3.3 幂等规则
+    title: 不同幂等键各自执行（不误合并）→ 执行两次
+    form: idempotency
+    params:
+      requests:
+        - action_id: 01JAZZACT000000000000000A1
+          task_id: task-dev-001
+          turn: 1
+          capability: query.measurement@v1
+          actor: {user: OP-001, agent: peidian-agent@v0.1.0}
+          purpose: 读 TX-01
+          arguments: {device_ref: TX-01}
+          risk: {level: LOW, reversible: false}
+          idempotency_key: idem-q-001
+          requested_at: 2026-09-15T09:00:00Z
+        - action_id: 01JAZZACT000000000000000A2
+          task_id: task-dev-001
+          turn: 2
+          capability: query.measurement@v1
+          actor: {user: OP-001, agent: peidian-agent@v0.1.0}
+          purpose: 读 TX-02
+          arguments: {device_ref: TX-02}
+          risk: {level: LOW, reversible: false}
+          idempotency_key: idem-q-002
+          requested_at: 2026-09-15T09:00:10Z
+    expect:
+      same_action_id: false
+      executions: 2
+
+  # ================= 表达式判据（01§6 / M6 deterministic 口径，expression 形态） =================
+  - id: EVAL-M0-21-P
+    spec: 01§6 判据表达式
+    title: deterministic 判据（引用路径 + && 组合）求值为真
+    form: expression
+    params:
+      expression: "outcome.status == 'COMPLETED' && evidence.observed_present"
+      facts:
+        outcome: {status: COMPLETED}
+        evidence: {observed_present: true}
+    expect:
+      result: true
+
+  - id: EVAL-M0-21-P2
+    spec: 01§6 判据表达式
+    title: 全大写裸标识符按枚举常量处理（outcome.status==COMPLETED）
+    form: expression
+    params:
+      expression: "outcome.status == COMPLETED"
+      facts:
+        outcome: {status: COMPLETED}
+    expect:
+      result: true
+
+  - id: EVAL-M0-21-P3
+    spec: 01§6 rubric 口径
+    title: 加权评分表达式（算术 + 比较）
+    form: expression
+    params:
+      expression: "score.fact * 0.4 + score.regulation * 0.6 >= 0.8"
+      facts:
+        score: {fact: 0.9, regulation: 0.8}
+    expect:
+      result: true
+
+  - id: EVAL-M0-21-N
+    spec: 01§6 判据表达式
+    title: 证据缺失时判据为假（不得放行）
+    form: expression
+    params:
+      expression: "outcome.status == 'COMPLETED' && evidence.observed_present"
+      facts:
+        outcome: {status: COMPLETED}
+        evidence: {observed_present: false}
+    expect:
+      result: false
+
+  # ================= 事件序回放（event_sequence 形态） =================
+  - id: EVAL-M0-22-P
+    spec: 01§4 事件清单 / 01§8 trace 贯穿
+    title: 任务全生命周期事件序按模式回放匹配
+    form: event_sequence
+    params:
+      file: tests/fixtures/sample_events.jsonl
+      pattern: [task.created, task.status_changed, "*", action.completed, artifact.state_changed, "*", task.status_changed]
+    expect:
+      matched: true
+
+  - id: EVAL-M0-22-N
+    spec: 01§8 横切约定
+    title: 事件文件含缺 trace_id 记录 → 整体拒绝
+    form: event_sequence
+    params:
+      file: tests/fixtures/events_missing_trace.jsonl
+      pattern: [task.created]
+    expect:
+      error_contains: trace_id
+
+  # ================= 负向拒绝（negative_rejection 形态） =================
+  - id: EVAL-M0-23-N
+    spec: SPEC-M4-01 加载校验口径
+    title: 本体数据枚举越界 → 拒绝加载（启动失败优于带病运行）
+    form: negative_rejection
+    params:
+      attempt: ontology_load
+      file: tests/fixtures/bad_ontology.yaml
+    expect:
+      error_contains: 枚举越界
+
+  # ================= 性能门槛（performance 形态） =================
+  - id: EVAL-M0-24-P
+    spec: S0 基座性能
+    title: 本体+规程 10 文件全量加载 < 2000ms
+    form: performance
+    params:
+      workload: ontology_load_all
+      iterations: 1
+    expect:
+      max_ms: 2000
+
+  - id: EVAL-M0-25-P
+    spec: S0 基座性能
+    title: 契约构造+序列化 500 次 < 3000ms
+    form: performance
+    params:
+      workload: contract_roundtrip
+      structure: ActionRequest
+      iterations: 500
+      payload:
+        action_id: 01JAZZACT00000000000000001
+        task_id: task-dev-001
+        turn: 1
+        capability: query.measurement@v1
+        actor: {user: OP-001, agent: peidian-agent@v0.1.0}
+        purpose: 读取 TX-01 当前有功功率
+        arguments: {device_ref: TX-01, quantity: P}
+        risk: {level: LOW, reversible: false}
+        idempotency_key: idem-perf-001
+        requested_at: 2026-09-15T08:30:02Z
+    expect:
+      max_ms: 3000
+
+  # ================= 插件执行器（模块自定义执行器机制 + 数据 vs 规格核对） =================
+  - id: EVAL-M0-26-P
+    spec: 00§2 受控词表
+    title: contracts 枚举与 ontology/enums.yaml 封闭集一致（插件执行器）
+    form: policy_decision
+    executor: contracts.enum_closure
+    params:
+      vocabulary_file: ontology/enums.yaml
+    expect: {}
+
+  - id: EVAL-M0-27-P
+    spec: 00§1.3 动作表 / SPEC-M3-03
+    title: ontology/actions.yaml 与 00§1.3 动作表（16 条）完全一致（插件执行器）
+    form: policy_decision
+    executor: contracts.actions_table
+    params:
+      actions_file: ontology/actions.yaml
+    expect: {}
+
+  - id: EVAL-M0-28-P
+    spec: 00§1.4 / ADDENDUM §A
+    title: 规则注册表与四份规程条款覆盖完整（插件执行器）
+    form: policy_decision
+    executor: contracts.rules_registry
+    params:
+      rules_file: ontology/rules.yaml
+      regulations_dir: regulations
+    expect: {}
+
+  - id: EVAL-M0-29-P
+    spec: 00§3 种子实例
+    title: 种子实例完整性（引用可解析/电价时段覆盖 24h/曲线 24 点）（插件执行器）
+    form: policy_decision
+    executor: contracts.seed_check
+    params:
+      seed_file: ontology/seed.yaml
+    expect: {}
+
+  - id: EVAL-M0-30-P
+    spec: 01§2.10 GoldenCase
+    title: 插件路径 round-trip（contracts.roundtrip 执行器）
+    form: contract
+    executor: contracts.roundtrip
+    params:
+      structure: GoldenCase
+      payload:
+        case_id: gc-dev-002
+        version: 1
+        task_input: 对 TX-02 过载给出研判并生成报告
+        environment_seed: "20260915"
+        expected_behavior:
+          - {clause: 研判引用 PHYS-TX-LOAD, judge: RUBRIC}
+        source: REGENERATED
+        excluded_from: []
+    expect: {}

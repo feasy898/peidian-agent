@@ -1,0 +1,10 @@
+[
+  {
+    "id": "m5-business-nohub-wall-fallback",
+    "redline": true,
+    "target": "src/m5_simulation/clock.py",
+    "find": "    if mode in (ClockMode.BUSINESS, ClockMode.SIM_LOGICAL) and service is None:",
+    "replace": "    if False and mode in (ClockMode.BUSINESS, ClockMode.SIM_LOGICAL) and service is None:",
+    "description": "SPEC-M5-02：BUSINESS/SIM_LOGICAL 无 ClockHub 抛 ValueError（禁墙钟兜底）解除——探测 EVAL 是否覆盖"
+  }
+]

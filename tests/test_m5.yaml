@@ -1,0 +1,556 @@
+# tests/test_m5.yaml
+# M5（仿真层：环境/四时钟/场景引擎）数据驱动 EVAL 套件 —— v2 重生成版。
+#
+# v2 重生成（2026-09-29，资产工程阶段）：依据 specs-v2/M5-simulation.md（SPEC-M5-01..15）
+# 机械重生成，整体替换 v1 套件（v1 12 条表内用例由 specs/M5-simulation.md §5 生成，
+# 后扩至 20 条；本版 27 条 = 重生成 26 + 变异补缺 EVAL-M5-02-N2，登记见 tests/CHANGELOG.md
+# 2026-09-29「M5 EVAL 变异缺口修复」节）。执行器与 fixtures 约定不变（13 个执行器注册于
+# src/m5_simulation/eval_plugin.py EXECUTORS + tests/fixtures/m5_eval_plugin.py 1 个；断言数据
+# 全部取自本文件 params/expect，零案例特判）。spec_ref 自 v2 起指向 specs-v2（M6 先例同款；
+# ADDENDUM v2 未交付前仍引 specs/ADDENDUM.md v1 原文，D-70 实例协议依赖），v1→v2 的
+# spec_hash→eval_hash 对登记于 tests/CHANGELOG.md（01 v2 §6 协议）。
+#
+# 条款映射（v2 SPEC-M5-01..15，双向表见 specs-v2/M5-simulation.md §5）：
+#   01 确定性/种子/审计列  → 01-P（dev-01）、01-P2（dev-02b 桩链重放，D-42）、01-P3（性能）
+#   02 四类时间/时钟纪律   → 02-P（边界+墙钟篡改）、02-N（词面扫描）
+#   03 simulate 路由      → 03-P（读写回读）、03-N（DENY→DENIED 零副作用）、
+#                            03-N2（未注册拒绝）
+#   04 用户模拟           → 04-P（脚本逐字+LLM mock/降级）
+#   05 故障注入五类       → 05-P（outage）、05-P2（stutter）、05-P3（storm）、05-P5（trip）；
+#                            COMM_LOSS 注入经 11-N 覆盖（审批超时语义归 SPEC-M5-11）
+#   06 三层证据           → 06-P
+#   07 场景隔离           → 07-P
+#   08 规程同源           → 08-P（改阈值→行为变化；禁止硬编码的行为级 enforcement）
+#   09 物理模型           → 09-P（1100kW/1250kVA→0.88→P2）
+#   10 场景引擎           → 10-P（三开发场景一键跑，原 EVAL-M5-DEV-P）
+#   11 SUT 桩链/审批链    → 11-N（COMM_LOSS 超时拒绝，原 EVAL-M5-05-P4）、
+#                            11-N2（无票遥控拒绝）
+#   12 计划环境事件族     → 12-P（device.temp_rise 事件落时间线）
+#   13 电价时钟/需量滑窗  → 13-P（demand_window 滑窗激活）、02-P（时段边界，跨映射）
+#   14 实例加载/EVAL 注入 → 08-P / 09-P（instance: dev-sim-park 经 PARK_INSTANCE_PATH）、
+#                            10-P（seed 缺省加载）跨映射
+#   15 SAFE 三规约判据层  → 15-N1（签发纪律）、15-N2（顺序）、15-N3（互斥）、
+#                            15-N4（桩链签发人角色）
+# v1→v2 用例 id 改名对照：EVAL-M5-PHYS-P→09-P、EVAL-M5-DEV-P→10-P、
+#   EVAL-M5-05-P4→11-N、EVAL-M5-SAFE1..4-N→15-N1..N4、EVAL-M5-PERF-P→01-P3；
+#   其余 id 沿用（05-P5 保留原号，P4 槽位让渡给 11-N，见上）。
+# 新增负例依据：v2 禁止类条款必须有负例——03（未注册禁止执行/DENY 动作禁止执行）、
+#   11（无票遥控必须拒）、15（三规约禁止）；02-N 沿用。03-N/03-N2 复用
+#   m5.safety_rules kind=issue_human 的数据驱动断言面（status/error_code/order_absent），
+#   11-N2 复用 kind=order_seq（空票号→不预置票）。
+# schema 见 tests/EVAL-SCHEMA.md；spec_hash 口径（01§6）：spec_ref 列表按序拼接文件字节的 sha256。
+suite: m5
+title: M5 仿真层（环境/四时钟/场景引擎）EVAL（v2）
+spec_ref:
+  - specs-v2/M5-simulation.md
+  - specs-v2/00-ontology.md
+  - specs-v2/01-contracts.md
+  - specs/ADDENDUM.md
+spec_hash: 641cab4d9261324dae2bdd23009f39ff07e7c139d755897d3d3e176bc7de4e5d
+executors:
+  - module: m5_simulation.eval_plugin
+  - module: tests.fixtures.m5_eval_plugin
+
+cases:
+  # ================= SPEC-M5-01 确定性与可复现（种子派生/审计列剔除） =================
+  - id: EVAL-M5-01-P
+    spec: SPEC-M5-01
+    title: 同 spec（含派生 seed）跑 dev-01 两次 → 轨迹逐步 diff 空、三层证据与终态一致
+    form: expression
+    executor: m5.determinism
+    params:
+      scenario: scenarios/dev-01-report.yaml
+    expect: {}
+
+  - id: EVAL-M5-01-P2
+    spec: SPEC-M5-01
+    title: dev-02b（含 SUT 桩链动作与审批链）同 spec 两次重放 → 逐步 diff 空（latency_ms 审计列不泄漏进重放轨迹）
+    form: expression
+    executor: m5.determinism
+    params:
+      scenario: scenarios/dev-02b-remote.yaml
+    expect: {}
+
+  - id: EVAL-M5-01-P3
+    spec: SPEC-M5-01
+    title: 100×24h 仿真步（15min 步长，深拷贝隔离逐日跑）完成时间 < 30s（DoD §6 性能门槛）
+    form: performance
+    executor: m5.perf_ticks
+    params:
+      instance: seed
+      clock_start: 2026-09-15T00:00:00Z
+      days: 100
+      step_minutes: 15
+    expect:
+      max_ms: 30000
+
+  # ================= SPEC-M5-02 四类时间 / 时钟纪律 =================
+  - id: EVAL-M5-02-P
+    spec: SPEC-M5-02
+    title: clock_start=10:00 跨 12:00 边界推进 → PEAK→FLAT 事件恰在 12:00:00（BUSINESS）；篡改墙钟不改变电价判定
+    form: event_sequence
+    executor: m5.price_boundary
+    params:
+      instance: seed
+      clock_start: 2026-09-15T10:00:00Z
+      advance_minutes: 150
+    expect:
+      boundary_at: "2026-09-15T12:00:00Z"
+      from_period: PEAK
+      to_period: FLAT
+
+  - id: EVAL-M5-02-N
+    spec: SPEC-M5-02
+    title: 词面扫描业务代码 [src,tools,scripts] → 无 wall-clock 峰谷判定（clock.py 为只读真实时钟唯一合法实现位）
+    form: negative_rejection
+    executor: m5.no_wallclock_pricing
+    params:
+      scan_dirs: [src, tools, scripts]   # 业务代码全口径（SPEC-M5-02/README§4：src+tools+scripts）
+      exclude:
+        - m5_simulation/clock.py      # WALL/MONOTONIC 只读源的唯一实现位（SPEC-M5-02）
+        - m5_simulation/eval_plugin.py  # 扫描器自身（含被检词面）
+      forbidden:
+        - datetime.now
+        - datetime.today
+        - utcnow
+        - time.localtime
+        - time.gmtime
+        - time.time
+      price_markers: [price, period, tariff, peak, valley, 峰, 谷, FLAT]
+    expect: {}
+
+  - id: EVAL-M5-02-N2
+    spec: SPEC-M5-02
+    title: BUSINESS/SIM_LOGICAL 无 ClockHub 调用 clock() → ValueError（业务时钟不落回墙钟兜底，
+      红线 6 兜底面；WALL/MONOTONIC 无 hub 合法）——变异 m5-business-nohub-wall-fallback 钉死
+    form: negative_rejection
+    executor: m5.clock_discipline
+    params:
+      probes:
+        - {mode: BUSINESS, expect: reject}
+        - {mode: SIM_LOGICAL, expect: reject}
+        - {mode: BUSINESS, expect: reading, with_hub: true, clock_start: "2026-09-15T08:30:00Z"}
+        - {mode: SIM_LOGICAL, expect: reading, with_hub: true, clock_start: "2026-09-15T08:30:00Z"}
+        - {mode: WALL, expect: reading}
+        - {mode: MONOTONIC, expect: reading}
+    expect:
+      error_contains: ClockHub
+
+  # ================= SPEC-M5-03 环境接口（simulate 仿真路由） =================
+  - id: EVAL-M5-03-P
+    spec: SPEC-M5-03
+    title: simulate(query.measurement) 返回带时标快照；写动作后回读状态变化、evidence 三态齐
+    form: expression
+    executor: m5.simulate_interface
+    params:
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      query: {device: TX-01}
+      write:
+        capability: execute.capacitor_switch@v1
+        args: {device: CB-A, state: "ON"}
+      readback: {device: CB-A}
+    expect:
+      readback_state: "ON"
+
+  - id: EVAL-M5-03-N
+    spec: SPEC-M5-03
+    title: 缺省 Policy=DENY 动作（modify.protection_setting，ontology 数据驱动）simulate → DENIED/POLICY_DENIED，零副作用
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: issue_human            # 复用 issue_human 分支的数据驱动断言面（status/error_code/order_absent）
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      create_args:
+        capability: modify.protection_setting@v1
+        args: {code: SO-DENY-901, device: R1, setting: {overcurrent: 1.2}}
+    expect:
+      status: DENIED
+      error_code: POLICY_DENIED
+      order_absent: true
+
+  - id: EVAL-M5-03-N2
+    spec: SPEC-M5-03
+    title: 未登记动作 simulate → FAILED/UNREGISTERED_CAPABILITY（红线 1：未注册能力禁止执行，零副作用）
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: issue_human
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      create_args:
+        capability: query.ghost@v1
+        args: {code: SO-GHOST-902}
+    expect:
+      status: FAILED
+      error_code: UNREGISTERED_CAPABILITY
+      order_absent: true
+
+  # ================= SPEC-M5-04 用户模拟 =================
+  - id: EVAL-M5-04-P
+    spec: SPEC-M5-04
+    title: OPERATOR 脚本 persona 走 5 轮追问 → 逐字回放两次一致；LLM 模式经 model_client(mock) 正常产出、失败 provider 走降级
+    form: expression
+    executor: m5.persona_script
+    params:
+      persona: OPERATOR
+      clock_start: 2026-09-15T08:30:00Z
+      script:
+        - {at: "+5m",  act: USER_INPUT, text: "开始今日日巡检，把两个配电房的状态过一遍。"}
+        - {at: "+35m", act: USER_INPUT, text: "2 号变压器负载率多少？"}
+        - {at: "+65m", act: USER_INPUT, text: "温度有没有爬升？"}
+        - {at: "+95m", act: USER_INPUT, text: "对比昨天同期呢？"}
+        - {at: "+125m", act: USER_INPUT, text: "好，出一份日巡检报告。"}
+    expect: {}
+
+  # ================= SPEC-M5-05 故障注入（五类） =================
+  - id: EVAL-M5-05-P
+    spec: SPEC-M5-05
+    title: SENSING_OUTAGE 注入 → 量测返回 stale 标志+中断区间（窗口内不伪造新读数）
+    form: expression
+    executor: m5.fault
+    params:
+      kind: outage
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      at: "+30m"
+      settle_s: 0
+      target: TX-01
+      injections:
+        - {at: "+30m", type: SENSING_OUTAGE, target: TX-01, params: {duration_s: 1800}}
+    expect:
+      outage_from: "2026-09-15T09:00:00Z"
+
+  - id: EVAL-M5-05-P2
+    spec: SPEC-M5-05
+    title: SENSOR_STUTTER 注入 → 3 秒内 4 次翻转，去抖后状态稳定
+    form: expression
+    executor: m5.fault
+    params:
+      kind: stutter
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      at: "+30m"
+      settle_s: 15
+      target: SG-A01
+      injections:
+        - {at: "+30m", type: SENSOR_STUTTER, target: SG-A01,
+           params: {flips: 4, window_s: 3, debounce_s: 2}}
+    expect:
+      flips: 4
+      window_s: 3
+      final_state: CLOSED
+
+  - id: EVAL-M5-05-P3
+    spec: SPEC-M5-05
+    title: ALARM_STORM 注入（50 条）→ 引擎按级别聚合输出，事件总数=注入数（聚合不丢事件）
+    form: expression
+    executor: m5.fault
+    params:
+      kind: storm
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      at: "+30m"
+      settle_s: 120
+      target: BUS-A1
+      injections:
+        - {at: "+30m", type: ALARM_STORM, target: BUS-A1,
+           params: {count: 50, window_s: 60, levels: [P2, P3]}}
+    expect:
+      count: 50
+
+  - id: EVAL-M5-05-P5
+    spec: SPEC-M5-05
+    title: DEVICE_TRIP 注入 → 设备 FAULT+保护动作 grid.event，负载归零
+    form: expression
+    executor: m5.fault
+    params:
+      kind: trip
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      at: "+30m"
+      settle_s: 900
+      target: TX-03
+      injections:
+        - {at: "+30m", type: DEVICE_TRIP, target: TX-03, params: {breaker_to: OPEN}}
+    expect:
+      device_state: FAULT
+      load_zero: true
+
+  # （COMM_LOSS 注入经 EVAL-M5-11-N 覆盖：审批超时语义归 SPEC-M5-11，跨映射见 §5 表）
+
+  # ================= SPEC-M5-06 三层证据 =================
+  - id: EVAL-M5-06-P
+    spec: SPEC-M5-06
+    title: 任意场景跑完 → 三层证据文件齐全且 TIMELINE 含四类时间对齐（monotonic/wall 为审计列）
+    form: expression
+    executor: m5.evidence_pack
+    params:
+      scenario: scenarios/dev-02-alarm.yaml
+    expect: {}
+
+  # ================= SPEC-M5-07 场景隔离 =================
+  - id: EVAL-M5-07-P
+    spec: SPEC-M5-07
+    title: 2 场景并发（dev-01 与 dev-02）→ 终态互不串扰（各自告警计数独立）
+    form: expression
+    executor: m5.concurrent_isolation
+    params:
+      scenarios:
+        - scenarios/dev-01-report.yaml
+        - scenarios/dev-02-alarm.yaml
+      checks:
+        - {scenario: scenarios/dev-01-report.yaml, path: alarms_total, expect: 0}
+        - {scenario: scenarios/dev-02-alarm.yaml, path: alarms_total, expect: 1}
+    expect: {}
+
+  # ================= SPEC-M5-08 规程同源（判据唯一来源=REG-TECH） =================
+  - id: EVAL-M5-08-P
+    spec: SPEC-M5-08
+    title: 改 REG-TECH 阈值（PHYS-TX-LOAD 0.80→0.50）后重跑 → 告警行为随之变化（0→1 条，零硬编码阈值）
+    form: expression
+    executor: m5.regulation_sourced
+    params:
+      rule_id: PHYS-TX-LOAD
+      threshold_index: 0
+      new_value: 0.5
+      instance: dev-sim-park
+      device: TX-02
+      load_kw: 700          # 700/1250=0.56：原阈值(>0.80)不告警，改后(>0.50)告警
+      at: "+30m"
+      load_duration_s: 21600
+      clock_start: 2026-09-15T08:30:00Z
+      regulation_file: regulations/REG-TECH.yaml
+    expect:
+      baseline_alarms: 0
+      mutated_alarms: 1
+      mutated_level: P2
+
+  # ================= SPEC-M5-09 物理模型（§2 条款化） =================
+  - id: EVAL-M5-09-P
+    spec: SPEC-M5-09
+    title: TX-02 回路聚合 1100kW/1250kVA → load_rate=0.88 → PHYS-TX-LOAD P2 过载预警告警生成
+    form: expression
+    executor: m5.physics_load_rate
+    params:
+      instance: dev-sim-park
+      device: TX-02
+      kw: 1100
+      at: "+30m"
+      load_duration_s: 21600
+      clock_start: 2026-09-15T08:30:00Z
+    expect:
+      load_rate: 0.88
+      capacity_kva: 1250
+      rule: PHYS-TX-LOAD
+      level: P2
+      text_contains: 过载预警
+
+  # ================= SPEC-M5-10 场景引擎（一站式/停止条件） =================
+  - id: EVAL-M5-10-P
+    spec: SPEC-M5-10
+    title: dev-01/02/02b 一键跑通（run_scenario 一站式；dev-02b 走操作票+ASK→GRANT→分闸成功链，DoD §6）
+    form: expression
+    executor: m5.dev_scenarios
+    params:
+      scenarios:
+        - scenario: scenarios/dev-01-report.yaml
+          expect_state:
+            - {path: park_id, expect: PARK-001}
+        - scenario: scenarios/dev-02-alarm.yaml
+          expect_events:
+            - {type: alarm.raised, payload: {rule: PHYS-TX-LOAD, level: P2}}
+        - scenario: scenarios/dev-02b-remote.yaml
+          expect_events:
+            - {type: approval.granted}
+            - {type: action.completed, payload: {status: SUCCEEDED}}
+            - {type: sim.injected, payload: {fault_type: SENSOR_STUTTER}}
+          expect_state:
+            - {path: breakers.SG-A02, expect: OPEN}
+            - {path: switch_orders.SO-0915-002.status, expect: COMPLETED}
+    expect: {}
+
+  # ================= SPEC-M5-11 SUT 桩链与审批链 =================
+  - id: EVAL-M5-11-N
+    spec: SPEC-M5-11
+    title: COMM_LOSS 注入 → 审批 GRANT 在中断窗口内不可达，approval.timeout 且动作 REJECTED（审批不可达不得放行；COMM_LOSS 注入行为跨映射 SPEC-M5-05）
+    form: negative_rejection
+    executor: m5.fault
+    params:
+      kind: comm_loss
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      at: "+30m"
+      settle_s: 2700
+      timeout_s: 600
+      injections:
+        - {at: "+55m", type: COMM_LOSS, target: approval_channel, params: {duration_s: 3600}}
+      behavior_script:
+        - {at: "+75m", act: GRANT}
+      events:
+        - at: "+60m"
+          type: action.request
+          subject: SG-A02
+          params:
+            capability: execute.remote_control@v1
+            purpose: 通道中断下的遥控请求（应超时拒绝）
+            args: {device: SG-A02, operation: OPEN, switch_order: SO-COMM-001, issuer: OP-003}
+    expect:
+      final_action_status: REJECTED
+
+  - id: EVAL-M5-11-N2
+    spec: SPEC-M5-11
+    title: 无操作票的 execute.remote_control → FAILED/NO_SWITCH_ORDER（SAFE-TWO-TICKET 红线，断路器零副作用）
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: order_seq              # 空 code → 不预置操作票
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      order: {code: ""}
+      remote_steps:
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-NONE-905, step: 1}
+          expect: {status: FAILED, error_code: NO_SWITCH_ORDER, breaker_state: CLOSED}
+    expect: {}
+
+  # ================= SPEC-M5-12 计划环境事件族 =================
+  - id: EVAL-M5-12-P
+    spec: SPEC-M5-12
+    title: "dev-01 温度缓升计划事件 device.temp_rise → 按 at 计划触发并落 grid.event（kind=temp_rise，PHYS-TX-TEMP 量测口径的事件注入近似）"
+    form: event_sequence
+    executor: m5.dev_scenarios
+    params:
+      scenarios:
+        - scenario: scenarios/dev-01-report.yaml
+          expect_events:
+            - {type: grid.event, payload: {kind: temp_rise}}
+          expect_state:
+            - {path: park_id, expect: PARK-001}
+    expect: {}
+
+  # ================= SPEC-M5-13 电价时钟与月度需量 =================
+  - id: EVAL-M5-13-P
+    spec: SPEC-M5-13
+    title: dev-01 24h 推进 → 月度需量 15min 滑窗激活（month=2026-09，基线 peak=1720kW，合同容量 2000kW；demand_ratio 注入告警引擎）
+    form: expression
+    executor: m5.dev_scenarios
+    params:
+      scenarios:
+        - scenario: scenarios/dev-01-report.yaml
+          expect_state:
+            - {path: demand_window.month, expect: "2026-09"}
+            - {path: demand_window.peak_kw, expect: 1720}
+            - {path: demand_window.contract_capacity_kw, expect: 2000}
+    expect: {}
+
+  # （SPEC-M5-13 的时段边界与 BUSINESS 判定由 EVAL-M5-02-P 跨映射覆盖）
+
+  # ================= SPEC-M5-15 SAFE 三规约 M5 判据层 =================
+  - id: EVAL-M5-15-N1
+    spec: SPEC-M5-15
+    title: agent 请求登记 status=ISSUED 操作票 → FAILED/SAFE_ISSUE_HUMAN（签发不属于任何 agent 动作集，零副作用）；DRAFT 草稿登记正常放行
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: issue_human
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      create_args:
+        capability: create.switch_order@v1
+        args: {code: SO-EVAL-901, steps: ["断开 SG-A02"], devices: [SG-A02],
+               issuer: OP-003, status: ISSUED}
+      draft_followup:
+        capability: create.switch_order@v1
+        args: {code: SO-EVAL-901, steps: ["断开 SG-A02"], devices: [SG-A02], issuer: OP-001}
+    expect:
+      status: FAILED
+      error_code: SAFE_ISSUE_HUMAN
+      order_absent: true
+      followup_status: SUCCEEDED
+      followup_order_status: DRAFT
+
+  - id: EVAL-M5-15-N2
+    spec: SPEC-M5-15
+    title: 遥控步骤跳步 → FAILED/SAFE_ORDER_SEQ；按声明顺序执行逐步放行，全部步骤完成才 COMPLETED
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: order_seq
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      order:
+        code: SO-EVAL-902
+        status: ISSUED
+        steps: ["断开 SG-A02", "检查 SG-A02", "合闸恢复 SG-A02"]
+        devices: [SG-A02]
+        issuer: OP-003
+      remote_steps:
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-902, step: 2}
+          expect: {status: FAILED, error_code: SAFE_ORDER_SEQ, breaker_state: CLOSED, order_status: ISSUED}
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-902, step: 1}
+          expect: {status: SUCCEEDED, breaker_state: OPEN, order_status: ISSUED}
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-902, step: 3}
+          expect: {status: FAILED, error_code: SAFE_ORDER_SEQ, breaker_state: OPEN, order_status: ISSUED}
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-902, step: 2}
+          expect: {status: SUCCEEDED, breaker_state: OPEN, order_status: ISSUED}
+        - args: {device: SG-A02, operation: CLOSE, switch_order: SO-EVAL-902, step: 3}
+          expect: {status: SUCCEEDED, breaker_state: CLOSED, order_status: COMPLETED}
+    expect: {}
+
+  - id: EVAL-M5-15-N3
+    spec: SPEC-M5-15
+    title: 操作票已有执行流在执行 → FAILED/SAFE_SINGLE_OP（一票同一时刻仅一个执行流，互斥）
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: single_op
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      warmup_s: 1800
+      order:
+        code: SO-EVAL-903
+        status: ISSUED
+        steps: ["断开 SG-A02"]
+        devices: [SG-A02]
+        issuer: OP-003
+      hold_executing: true          # 预置并发执行流持票（互斥前提）
+      remote_steps:
+        - args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-903, step: 1}
+          expect: {status: FAILED, error_code: SAFE_SINGLE_OP, breaker_state: CLOSED, order_status: ISSUED}
+    expect: {}
+
+  - id: EVAL-M5-15-N4
+    spec: SPEC-M5-15
+    title: 桩链计划票票面签发人非持证签发人（OP-001 值班员）→ 仅登记 DRAFT+合规事件，GRANT 后遥控仍被两票制拒绝（NO_SWITCH_ORDER；跨映射 SPEC-M5-11）
+    form: negative_rejection
+    executor: m5.safety_rules
+    params:
+      kind: scenario_issue_role
+      instance: seed
+      clock_start: 2026-09-15T08:30:00Z
+      at: "+10m"
+      settle_s: 2700
+      timeout_s: 600
+      behavior_script:
+        - {at: "+20m", act: GRANT}
+      events:
+        - at: "+10m"
+          type: action.request
+          subject: SG-A02
+          params:
+            capability: execute.remote_control@v1
+            purpose: 票面签发人不是持证签发人（应登记 DRAFT 并拒绝遥控）
+            args: {device: SG-A02, operation: OPEN, switch_order: SO-EVAL-904, issuer: OP-001}
+            user: OP-001
+    expect:
+      order_status: DRAFT
+      compliance_event: true
+      action_completed_status: FAILED
+      breaker_state: CLOSED

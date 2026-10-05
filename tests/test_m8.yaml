@@ -1,0 +1,164 @@
+# tests/test_m8.yaml
+# M8（需量分析与容需切换技能 skills/demand-analysis）数据驱动 EVAL 套件 —— 新增
+# （2026-09-30 汇报前夜，应现场观众需求「园区整体需量规律 + 容需切换数据支撑」）。
+# 行为规格 = skills/demand-analysis/SKILL.yaml 的 SPEC-M8-01..07 条款 + SKILL.md
+# §数据与口径/统计定义/输出结构。合计 7 例（P 6 / N 1），对应观众需求六要素：
+# 需量统计正确性 / 临界点数学 / 判据引用 / 参数敏感性 / 确定性重放 / 输出 schema，
+# 外加无效参数负向拒绝。
+# 执行器：tests/m8_eval_extra.py 5 个（m8.stats / m8.billing / m8.criteria /
+# m8.determinism / m8.negative），断言全部取自本文件 params/expect，零案例特判；
+# 沙箱 runtime/m8_eval/ 独立可复跑（CLI 重放探针只写沙箱）。
+# 运行方式：run_evals.py 的 MODULES 固定 m0..m7（文件只读，不纳入新模块，与 M9 套件
+# 同口径），故本套件经插件入口 `python tests/m8_eval_extra.py` 以同一 runner 路径执行
+# （schema 校验 + spec_hash 重算比对 + 插件加载 + 逐用例执行）；
+# `python run_evals.py --module all` 门禁范围 m0..m7 不受影响。
+# spec_hash 口径（01§6；run_evals.py:819-825）：spec_ref 列表按序拼接文件字节的 sha256。
+suite: m8
+title: M8 需量分析与容需切换技能（demand-analysis）EVAL（7 条）
+spec_ref:
+  - skills/demand-analysis/SKILL.yaml
+  - skills/demand-analysis/SKILL.md
+spec_hash: 4de1a3d9d760077535c183371c7fec3f51217e6cd90cd3f0e0412b12373f9f1c
+executors:
+  - module: tests.m8_eval_extra
+
+# ============================================================================
+# SPEC-M8-01 · 需量统计正确性：月峰标定/发生时刻/Top5/峰段占比/负荷率
+# ============================================================================
+cases:
+  - id: EVAL-M8-01-P
+    spec: SPEC-M8-01
+    title: 月最大需量标定=台账 1720kW（09-16 17:00，FLAT 段）+ Top5 高峰日 + 峰段占比 + 负荷率
+    form: expression
+    executor: m8.stats
+    params: {}
+    expect:
+      park_id: PARK-001
+      tariff: TARIFF-2026A
+      contract_capacity_kw: 2000
+      ledger_peak_kw: 1720
+      points: 2880
+      month_peak_kw: 1720.0
+      month_peak_at: "2026-09-16T17:00:00Z"
+      month_peak_period: FLAT
+      top5_dates: ["2026-09-16", "2026-09-24", "2026-09-01", "2026-09-23", "2026-09-11"]
+      top5_peaks_kw: [1720.0, 1716.981, 1712.041, 1711.861, 1709.076]
+      peak_windows: ["10:00-12:00", "18:00-21:00"]
+      peak_energy_ratio_range: [0.24, 0.28]
+      load_factor_range: [0.60, 0.66]
+      period_ratio_sum_to: 1.0
+      calibration_note_contains: ["等比标定", "1720"]
+
+  # ================= SPEC-M8-02 · 临界点数学：两档基本电费与分界 ============
+  - id: EVAL-M8-02-P
+    spec: SPEC-M8-02
+    title: 按需 1720×48=82560 vs 按容 2000×32=64000，临界点 1333.33kW（容划算）+ 分界两侧假设检验
+    form: expression
+    executor: m8.billing
+    params:
+      month_peak_kw: 1720
+      contract_capacity_kw: 2000
+      demand_price: 48
+      capacity_price: 32
+      hypothetical_md_kw: [1200, 1333.33, 1400]
+    expect:
+      demand_billing_yuan: 82560.0
+      capacity_billing_yuan: 64000.0
+      threshold_kw: 1333.33
+      threshold_tolerance: 0.01
+      cheaper: capacity
+      saving_yuan_per_month: 18560.0
+      hypothetical_cheaper: [demand, capacity, capacity]
+      param_note_contains: ["演示参数", "按当地目录电价替换"]
+
+  # ================= SPEC-M8-03 · 判据引用：PHYS-DEMAND 分级与规则 ID =======
+  - id: EVAL-M8-03-P
+    spec: SPEC-M8-03
+    title: 需量分级按 REG-TECH PHYS-DEMAND（>1.0 P2 / >1.05 P0）逐点核对 + 结论引用规则 ID
+    form: policy_decision
+    executor: m8.criteria
+    params:
+      contract_capacity_kw: 2000
+      whatif_kw: [1720, 2000, 2001, 2050, 2100, 2101, 2150]
+    expect:
+      levels: [NORMAL, NORMAL, P2, P2, P2, P0, P0]
+      ratios: [0.86, 1.0, 1.0005, 1.025, 1.05, 1.0505, 1.075]
+      rule_ids: [PHYS-DEMAND]
+      warn_kw: 2000.0
+      breach_kw: 2100.0
+      thresholds_source: regulations/REG-TECH.yaml
+      conclusion_contains: ["PHYS-DEMAND", "预警线", "越限线", "regulations/REG-TECH.yaml"]
+
+  # ================= SPEC-M8-04 · 参数敏感性：电价可替换、结论随数据 ========
+  - id: EVAL-M8-04-P
+    spec: SPEC-M8-04
+    title: 换当地目录电价（40/30 与 30/40 两变体）临界点/更省档/建议随之反转
+    form: expression
+    executor: m8.billing
+    params:
+      month_peak_kw: 1720
+      contract_capacity_kw: 2000
+      variants:
+        - {demand_price: 40, capacity_price: 30}
+        - {demand_price: 30, capacity_price: 40}
+    expect:
+      variant_thresholds_kw: [1500.0, 2666.67]
+      variant_cheaper: [capacity, demand]
+      variant_savings_yuan_per_month: [8800.0, 28400.0]
+      variant_recommendation_contains:
+        - ["按容量计费更省"]
+        - ["按需量计费更省"]
+
+  # ================= SPEC-M8-05 · 确定性重放：同 seed 逐字节一致 ============
+  - id: EVAL-M8-05-P
+    spec: SPEC-M8-05
+    title: API 三轮 + CLI(--json) 双跑逐字节一致；换 seed 序列分化（非缓存假象）
+    form: idempotency
+    executor: m8.determinism
+    params:
+      runs: 3
+      seed: 20260901
+      alt_seed: 987654321
+    expect:
+      api_identical: true
+      cli_identical: true
+      cli_matches_api: true
+      alt_seed_differs: true
+
+  # ================= SPEC-M8-06 · 输出 schema：键封闭与类型 ================
+  - id: EVAL-M8-06-P
+    spec: SPEC-M8-06
+    title: 结果对象五段键封闭（park/series_stats/billing/criteria/recommendation）+ 标量类型
+    form: contract
+    executor: m8.schema
+    params: {}
+    expect:
+      top_keys: [meta, park, series_stats, billing, criteria, recommendation, skill]
+      park_keys: [contract_capacity_kw, demand_month, id, ledger_peak_kw, synthesis, tariff, base_kw]
+      series_stats_keys: [energy_kwh, load_factor, mean_kw, month_peak_at, month_peak_kw,
+                          month_peak_period, peak_energy_ratio, peak_windows, period_energy_ratio,
+                          points, top5_days]
+      billing_keys: [capacity_billing_yuan, capacity_price_yuan_per_kw_month, cheaper,
+                     demand_billing_yuan, demand_price_yuan_per_kw_month, param_note,
+                     saving_yuan_per_month, saving_yuan_per_year, threshold_kw, threshold_note]
+      criteria_keys: [breach_kw, breach_over, conclusion, demand_ratio, level, margin_to_warn_kw,
+                      rule_ids, source, warn_kw, warn_over]
+      top5_day_keys: [date, peak_at, peak_kw]
+
+  # ================= SPEC-M8-07 · 无效参数拒绝（负向）=====================
+  - id: EVAL-M8-07-N
+    spec: SPEC-M8-07
+    title: 零/负电价、零天数、日因子区间倒置 → ValueError 拒绝（不带病出数）
+    form: negative_rejection
+    executor: m8.negative
+    params:
+      probes:
+        - {name: 零需量电价, params: {demand_price_yuan_per_kw_month: 0},
+           error_contains: ["必须为正数", "分母"]}
+        - {name: 负容量电价, params: {capacity_price_yuan_per_kw_month: -5},
+           error_contains: ["不得为负"]}
+        - {name: 零天数, params: {days: 0}, error_contains: ["days 必须为正"]}
+        - {name: 日因子区间倒置, params: {day_factor_range: [1.0, 0.86]},
+           error_contains: ["day_factor_range"]}
+    expect:
+      exception_type: ValueError

@@ -1,0 +1,33 @@
+# regulations/REG-COMM.yaml
+# 经营规则 · 机械落盘自 specs/00-ontology.md §1.4 R-经营规则（条款 ID 逐条对应）。
+meta:
+  id: REG-COMM
+  title: 园区配电经营规则
+  domain: COMMERCIAL
+  source: specs/00-ontology.md §1.4 R-经营规则
+  version: "1.0"
+
+rules:
+  - id: COMM-TARIF-SYNC
+    title: 电价版本同步
+    category: commercial
+    clauses:
+      - 电价判断以 PriceSchedule 当前生效版本为准；跨版本边界以 effective_range 判定。
+
+  - id: COMM-PF-BONUS
+    title: 力调电费
+    category: commercial
+    clauses:
+      - cosφ ≥ 0.95 月度电费奖励，0.90-0.95 无奖罚（虚拟条款 R-PF-02）。
+
+  - id: COMM-DEMAND-CHARGE
+    title: 基本电费
+    category: commercial
+    clauses:
+      - 基本电费按月最大需量与合同容量孰大计（虚拟条款 R-DC-01）。
+
+  - id: COMM-TOU-ARBITRAGE
+    title: 储能峰谷套利约束
+    category: commercial
+    clauses:
+      - 储能充放策略只允许引用已生效 PriceSchedule 时段。

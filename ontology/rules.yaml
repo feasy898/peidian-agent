@@ -1,0 +1,82 @@
+# ontology/rules.yaml
+# 机械落盘自 specs/00-ontology.md §1.4（规则类型表）。运行期只读（M4 加载）。
+# 本文件是规则 ID 注册表：PHYS-* 的判据口径全文在 regulations/REG-TECH.yaml，
+# 安全/经营条款全文在 regulations/REG-SAFE.yaml / REG-COMM.yaml（条款 ID 逐条对应）。
+meta:
+  source: specs/00-ontology.md §1.4
+  version: "1.0"
+
+categories:
+  physical: REG-TECH   # R-物理约束（判据+判定量测+越限告警级别）
+  safety: REG-SAFE     # R-安全规程
+  commercial: REG-COMM # R-经营规则
+  authorization: POLICY # R-授权规则：写死在 Policy，禁止 agent 读写
+
+rules:
+  # ---- R-物理约束（判据口径详见 regulations/REG-TECH.yaml 同 ID 条款）----
+  - id: PHYS-TX-LOAD
+    category: physical
+    clause: 变压器负载率 ≤ 80%（重过载 >100% 跳闸风险）
+    criterion: load_rate = P/capacity
+    alarm_levels: {over_0_80: P2, over_1_00: P0}
+  - id: PHYS-V-RANGE
+    category: physical
+    clause: 母线电压合格范围 ±7%
+    criterion: U/Un
+    alarm_levels: {deviation_5pct: P3, deviation_7pct: P2}
+  - id: PHYS-THD
+    category: physical
+    clause: 电压 THD ≤ 5%（GB/T 14549 口径，虚拟条款 R-THD-01）
+    criterion: THD
+    alarm_levels: {over_5pct: P3, over_8pct: P2}
+  - id: PHYS-PF
+    category: physical
+    clause: 功率因数 ≥ 0.90（考核）
+    criterion: cosφ
+    alarm_levels: {below_0_90: P3}
+  - id: PHYS-DEMAND
+    category: physical
+    clause: 需量 ≤ 合同容量 × 1.05
+    criterion: 月最大需量/合同容量
+    alarm_levels: {over_1_00: P2, over_1_05: P0}
+  - id: PHYS-BESS-SOC
+    category: physical
+    clause: SOC 运行区间 10%-90%
+    criterion: soc
+    alarm_levels: {out_of_range: P2}
+
+  # ---- R-安全规程（全文见 regulations/REG-SAFE.yaml）----
+  - id: SAFE-TWO-TICKET
+    category: safety
+    clause: 任何遥控操作前必须存在状态=已签发的 SwitchOrder（两票制）
+  - id: SAFE-ISSUE-HUMAN
+    category: safety
+    clause: 操作票签发人必须是 Operator.role ∈ {签发人}，签发动作不属于任何 agent 动作集
+  - id: SAFE-ORDER-SEQ
+    category: safety
+    clause: 操作步骤必须按 SwitchOrder.steps 声明顺序执行，不得跳步
+  - id: SAFE-MAINTAIN-ISO
+    category: safety
+    clause: 检修作业设备必须处于检修状态且有 WorkTicket（含许可）
+  - id: SAFE-SINGLE-OP
+    category: safety
+    clause: 每张操作票同一时刻只有一个执行流（互斥）
+
+  # ---- R-经营规则（全文见 regulations/REG-COMM.yaml）----
+  - id: COMM-TARIF-SYNC
+    category: commercial
+    clause: 电价判断以 PriceSchedule 当前生效版本为准；跨版本边界以 effective_range 判定
+  - id: COMM-PF-BONUS
+    category: commercial
+    clause: cosφ ≥ 0.95 月度电费奖励，0.90-0.95 无奖罚（虚拟条款 R-PF-02）
+  - id: COMM-DEMAND-CHARGE
+    category: commercial
+    clause: 基本电费按月最大需量与合同容量孰大计（虚拟条款 R-DC-01）
+  - id: COMM-TOU-ARBITRAGE
+    category: commercial
+    clause: 储能充放策略只允许引用已生效 PriceSchedule 时段
+
+  # ---- R-授权规则（写死在 Policy，禁止 agent 读写；条款=ontology/actions.yaml 缺省 Policy）----
+  - id: AUTH-ACTION-DEFAULT-POLICY
+    category: authorization
+    clause: 动作缺省 Policy 即授权规则（见 ontology/actions.yaml）；execute.remote_control 的 ASK 不可被任何角色改为 ALLOW（含审批人）——审批只放行"本次"，不改缺省值

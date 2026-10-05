@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>peidian-agent · 园区配电数字孪生</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2334d399' stroke-width='2'><path d='M13 2 3 14h7l-1 8 10-12h-7l1-8z'/></svg>">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+    </span>
+    peidian-agent <small>园区配电数字孪生</small>
+  </div>
+  <select id="park-select" class="select" title="选择园区"></select>
+  <span id="tier-badge" class="badge">—</span>
+  <span id="fault-badge" class="badge" style="display:none">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    <span id="fault-badge-text">故障注入中</span>
+  </span>
+  <div class="spacer"></div>
+  <span class="link-dot" id="net-dot" title="遥测数据链"></span>
+  <span class="muted" style="font-size:12px">人机对比</span>
+  <div class="mode-switch">
+    <span id="mode-label">Agent 自动</span>
+    <div class="switch" id="mode-switch" title="切换 Agent 自动 / 人工定位"><div class="knob"></div></div>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="main">
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid hsl(var(--border))">
+      <div class="tabs" id="view-tabs">
+        <button class="tab active" data-view="overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          全景</button>
+        <button class="tab" data-view="local">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/></svg>
+          局部</button>
+        <button class="tab" data-view="curves">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 15l4-6 4 3 5-8"/></svg>
+          曲线</button>
+      </div>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:12px">遥测步长 <span class="num" id="step-label">15s</span> · 更新 <span class="num" id="tick-label">2s</span></span>
+    </div>
+
+    <!-- 视角一：全景 -->
+    <section class="view active" id="view-overview">
+      <div class="topo-wrap" id="panorama-wrap">
+        <div class="topo-toolbar">
+          <button class="btn ghost" id="btn-clear-fault" title="清除当前故障">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg>
+            清除故障</button>
+        </div>
+        <svg id="panorama-svg" width="100%" height="100%"></svg>
+      </div>
+      <aside style="width:340px;flex:none;border-left:1px solid hsl(var(--border));overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px">
+        <div class="card">
+          <div class="card-head"><span class="card-title" id="intro-title">园区简介</span></div>
+          <div class="card-body">
+            <div class="kicker" id="intro-name">—</div>
+            <p class="muted" style="font-size:12.8px;margin:8px 0 10px;line-height:1.65" id="intro-desc"></p>
+            <div class="stat-grid">
+              <div class="stat"><div class="k">合同容量</div><div class="v"><span id="intro-cap">—</span><small>kW</small></div></div>
+              <div class="stat"><div class="k">进线电压</div><div class="v" id="intro-volt">—</div></div>
+              <div class="stat"><div class="k">配电房 / 元件</div><div class="v"><span id="intro-subs">—</span> / <span id="intro-nodes">—</span></div></div>
+              <div class="stat"><div class="k">遥测种子</div><div class="v num" id="intro-seed">—</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">全园功率实时</span><span class="kicker" style="margin-left:auto">kW</span></div>
+          <div class="card-body stat-grid">
+            <div class="stat"><div class="k"><span class="swatch" style="background:hsl(var(--foreground))"></span>下网功率</div><div class="v" id="tot-grid">—</div></div>
+            <div class="stat"><div class="k"><span class="swatch" style="background:hsl(var(--c-load))"></span>总负荷</div><div class="v" id="tot-load">—</div></div>
+            <div class="stat"><div class="k"><span class="swatch" style="background:hsl(var(--c-pv))"></span>光伏出力</div><div class="v" id="tot-pv">—</div></div>
+            <div class="stat"><div class="k"><span class="swatch" style="background:hsl(var(--c-bess))"></span>储能充放</div><div class="v" id="tot-bess">—</div></div>
+          </div>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="card-head"><span class="card-title">设备清单</span></div>
+          <div class="card-body" id="device-inventory" style="font-size:12.5px"></div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- 视角二：局部 -->
+    <section class="view" id="view-local">
+      <div class="local-head">
+        <span class="kicker">配电房</span>
+        <div id="sub-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="local-body">
+        <div class="local-topo topo-wrap"><svg id="local-svg" width="100%" height="100%"></svg></div>
+        <aside class="dev-cards" id="dev-cards"></aside>
+      </div>
+    </section>
+
+    <!-- 视角三：曲线 -->
+    <section class="view" id="view-curves">
+      <div class="curves">
+        <aside class="curve-side">
+          <div class="kicker" style="margin-bottom:8px">元件选择（功率/电压/电流）</div>
+          <div class="comp-list" id="comp-list"></div>
+        </aside>
+        <div class="curve-main">
+          <div class="card">
+            <div class="card-head"><span class="card-title">全园总加</span>
+              <div style="margin-left:auto;display:flex;gap:6px">
+                <button class="btn ghost active metric-tab" data-metric="power">功率 kW</button>
+              </div>
+            </div>
+            <div class="card-body"><canvas class="chart" id="chart-totals"></canvas></div>
+          </div>
+          <div class="card" style="flex:1;display:flex;flex-direction:column">
+            <div class="card-head"><span class="card-title">元件曲线</span>
+              <div style="margin-left:auto;display:flex;gap:6px" id="metric-tabs">
+                <button class="btn ghost" data-metric="p">功率 kW</button>
+                <button class="btn ghost" data-metric="v">电压 V</button>
+                <button class="btn ghost" data-metric="i">电流 A</button>
+              </div>
+            </div>
+            <div class="card-body" style="flex:1;display:flex"><canvas class="chart" id="chart-comp" style="height:100%"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 右侧 Dock：故障注入 + agent 反应 / 人工定位 -->
+  <aside class="dock">
+    <div class="dock-head">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--destructive))" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+      <span class="card-title">故障注入与处置</span>
+      <span class="badge" id="agent-source-badge" style="margin-left:auto">mock</span>
+    </div>
+    <div class="dock-body">
+      <div>
+        <div class="kicker" style="margin-bottom:7px">用自然语言向配电网注入故障</div>
+        <div style="display:flex;gap:7px">
+          <input class="input" id="fault-input" style="flex:1" placeholder="例：2 号变压器重瓦斯跳闸">
+          <button class="btn danger" id="btn-inject">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+            注入</button>
+        </div>
+        <div class="fault-presets" id="fault-presets" style="margin-top:8px"></div>
+      </div>
+
+      <div id="human-panel" style="display:none">
+        <div class="hint">人工定位挑战：在左侧拓扑图上<b style="color:hsl(var(--foreground))">点选故障元件</b>（可多选），提交后与真值判分。Agent 处置时间线已隐藏。</div>
+        <div style="display:flex;gap:7px;margin-top:9px">
+          <button class="btn primary" id="btn-human-submit" disabled>提交判分（<span id="human-pick-count">0</span>）</button>
+          <button class="btn ghost" id="btn-human-reset">重选</button>
+        </div>
+        <div id="human-result" style="margin-top:10px"></div>
+      </div>
+
+      <div id="agent-panel">
+        <div class="kicker" style="margin-bottom:7px">Agent 处置时间线</div>
+        <div id="timeline" class="tl"><div class="empty">注入一次故障，观察 agent 的定位与处置步骤</div></div>
+      </div>
+
+      <div id="fault-result"></div>
+    </div>
+  </aside>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/topo.js"></script>
+<script src="js/faults.js"></script>
+<script src="js/curves.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

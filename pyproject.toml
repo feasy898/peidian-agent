@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "peidian-agent"
+version = "0.1.0"
+description = "园区配电运维智能体：受控行动网关 + 两票制红线 + 仿真驱动 EVAL 与黄金集飞轮"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "networkx>=3.0",
+]
+
+# src 布局：全部包位于 src/ 之下（contracts / m1_core .. m7_registry）
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["contracts", "m1_core", "m2_information", "m3_action", "m4_semantic", "m5_simulation", "m6_flywheel", "m7_registry"]
+namespaces = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -1,0 +1,133 @@
+# ontology/actions.yaml
+# 机械落盘自 specs/00-ontology.md §1.3（动作类型表，16 条）。运行期只读（M4 加载，M3 注册表对齐依据）。
+# 字段约定：
+#   risk_level      — 00 原文风险级（低/中/高/极高）映射 contracts.RiskLevel（LOW/MEDIUM/HIGH/CRITICAL）
+#   reversible      — 布尔；read_only 动作（00 原文可逆列 "—"）取 false，原意见 reversible_note
+#   reversible_note — 00 原文可逆列文本
+#   default_policy  — 缺省 Policy（ALLOW/ASK/DENY），即 00 §1.4 R-授权规则
+#   policy_locked   — true 表示缺省值系统级不可覆盖（ASK（永久）/DENY（永久））；M3 不可改清单的数据源
+meta:
+  source: specs/00-ontology.md §1.3
+  version: "1.0"
+  policy_notes: >-
+    动作缺省 Policy 即授权规则；ASK/DENY 标注（永久）者不可被任何角色覆盖（含审批人）——
+    审批只放行"本次"，不改缺省值（00 §1.4 R-授权规则）。
+
+actions:
+  - id: query.measurement
+    name_cn: 读量测
+    risk_level: LOW
+    reversible: false
+    reversible_note: "—"
+    default_policy: ALLOW
+    policy_locked: false
+  - id: query.asset
+    name_cn: 查台账
+    risk_level: LOW
+    reversible: false
+    reversible_note: "—"
+    default_policy: ALLOW
+    policy_locked: false
+  - id: query.regulation
+    name_cn: 检索规程
+    risk_level: LOW
+    reversible: false
+    reversible_note: "—"
+    default_policy: ALLOW
+    policy_locked: false
+  - id: analyze.load_forecast
+    name_cn: 负荷预测
+    risk_level: LOW
+    reversible: false
+    reversible_note: "—"
+    default_policy: ALLOW
+    policy_locked: false
+  - id: analyze.power_quality
+    name_cn: 电能质量分析
+    risk_level: LOW
+    reversible: false
+    reversible_note: "—"
+    default_policy: ALLOW
+    policy_locked: false
+  - id: analyze.transformer_economy
+    name_cn: 变压器经济运行
+    risk_level: LOW
+    reversible: false
+    reversible_note: "—"
+    default_policy: ALLOW
+    policy_locked: false
+  - id: analyze.demand_forecast
+    name_cn: 需量预测
+    risk_level: LOW
+    reversible: false
+    reversible_note: "—"
+    default_policy: ALLOW
+    policy_locked: false
+  - id: write.report
+    name_cn: 生成报告 Artifact
+    risk_level: LOW
+    reversible: true
+    reversible_note: 是（可归档）
+    default_policy: ALLOW
+    policy_locked: false
+  - id: create.work_order
+    name_cn: 创建工单
+    risk_level: MEDIUM
+    reversible: true
+    reversible_note: 是（可撤销）
+    default_policy: ALLOW
+    policy_locked: false
+  - id: create.switch_order
+    name_cn: 创建操作票
+    risk_level: MEDIUM
+    reversible: true
+    reversible_note: 是
+    default_policy: ALLOW
+    policy_locked: false
+    note: 创建操作票（≠执行）
+  - id: create.inspection_record
+    name_cn: 登记巡检记录
+    risk_level: MEDIUM
+    reversible: true
+    reversible_note: 是
+    default_policy: ALLOW
+    policy_locked: false
+  - id: execute.remote_control
+    name_cn: 遥控分/合闸
+    risk_level: HIGH
+    reversible: false
+    reversible_note: 否
+    default_policy: ASK
+    policy_locked: true
+    note: ASK（永久）——审批只放行单次，不改缺省
+  - id: execute.capacitor_switch
+    name_cn: 电容投切
+    risk_level: HIGH
+    reversible: true
+    reversible_note: 是
+    default_policy: ASK
+    policy_locked: false
+  - id: modify.protection_setting
+    name_cn: 修改保护定值
+    risk_level: CRITICAL
+    reversible: false
+    reversible_note: 否
+    default_policy: DENY
+    policy_locked: true
+    note: DENY（永久）
+  - id: modify.asset_history
+    name_cn: 改台账历史
+    risk_level: CRITICAL
+    reversible: false
+    reversible_note: 否
+    default_policy: DENY
+    policy_locked: true
+    note: DENY（永久）
+  - id: bypass.approval
+    name_cn: 绕过审批
+    risk_level: CRITICAL
+    reversible: false
+    reversible_note: 否
+    default_policy: DENY
+    policy_locked: true
+    note: DENY（永久）

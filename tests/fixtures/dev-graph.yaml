@@ -1,0 +1,90 @@
+# tests/fixtures/dev-graph.yaml
+# M4 EVAL 图查询开发实例（tests/test_m4.yaml 数据引用；非 holdout 材料）。
+# 格式与 ontology/seed.yaml 同构；经 ADDENDUM §D 按名加载机制解析
+# （PARK_INSTANCE_PATH 追加 tests/fixtures 目录后按名 "dev-graph" 匹配）。
+# 覆盖 00 §1.2 三种查询模式所需的运行对象：告警/工单/检修计划/负荷曲线/馈线/回路。
+meta:
+  source: tests/test_m4.yaml（EVAL-M4-03/04 场景数据）
+  version: "1.0"
+
+park:
+  id: PARK-001
+  name: 示范园区（图查询开发快照）
+  tariff: TARIFF-2026A
+  contract_capacity_kw: 2000
+  substations:
+    - id: SR-A
+      name: A 配电房
+      devices:
+        - {id: TX-01, type: Transformer, capacity_kva: 1600, cooling: ONAN}
+        - {id: TX-02, type: Transformer, capacity_kva: 1600, cooling: ONAN}
+        - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+        - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+        - {id: SG-A01, type: Switchgear, breaker_state: CLOSED}
+        - {id: SG-A02, type: Switchgear, breaker_state: CLOSED}
+        - {id: CB-A, type: CapacitorBank, capacity_kvar: 300, state: "OFF"}
+        - {id: PD-A01, type: PDSensor, target: SG-A01}
+        - {id: TH-A01, type: TempHumiditySensor}
+    - id: SR-B
+      name: B 配电房
+      devices:
+        - {id: TX-03, type: Transformer, capacity_kva: 1000}
+        - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+        - {id: PV-01, type: PV, capacity_kwp: 400}
+        - {id: EVC-01, type: EVCharger, total_power_kw: 480}
+
+relations:
+  # 电气连接：三台变压器挂同一 10kV 母线（告警影响面查询路径）
+  - [TX-01, connected_to, BUS-A1]
+  - [TX-02, connected_to, BUS-A1]
+  - [TX-03, connected_to, BUS-A1]
+  - [TX-01, connected_to, BUS-A2]
+  # 传感/计量绑定
+  - [PD-A01, monitors, SG-A01]
+  - [TH-A01, monitors, BUS-A1]
+  # 供电方向：变压器 → 馈线（过载研判查询路径：负荷→回路（计量点）→变压器）
+  - [TX-01, upstream_of, F-A1]
+  - [SG-A01, upstream_of, TX-01]
+  # 告警溯源（告警影响面/消缺闭环查询路径）
+  - [AL-0201, raised_by, TX-01]
+  - [AL-0302, raised_by, PV-01]
+  # 工单响应（消缺闭环查询路径：工单→告警）
+  - [WO-D0021, responds_to, AL-0201]
+  # 检修计划绑定（消缺闭环查询路径：检修计划→设备）
+  - [MP-TX01, schedules, TX-01]
+  # 计量点（过载研判查询路径：负荷曲线→馈线）
+  - [LC-A0901, metered_at, F-A1]
+  # 空间包含
+  - [BESS-01, part_of, SR-B]
+  - [PV-01, part_of, SR-B]
+  # 责任归属
+  - [TX-01, owned_by, OP-002]
+
+operators:
+  - {id: OP-001, name: 张工, role: 值班员}
+  - {id: OP-002, name: 李工, role: 调度员}
+  - {id: OP-003, name: 王工, role: 签发人}
+  - {id: OP-004, name: 赵总, role: 审批人}
+
+feeders:
+  - {id: F-A1, name: A 区 1 号馈线, voltage_level: 10kV}
+
+circuits:
+  - {id: C-A1, name: A 区 1 号回路}
+
+alarms:
+  - {id: AL-0201, level: P2, code: TX-OVERTEMP, source_ref: TX-01,
+     text: TX-01 绕组温度越限, raised_at: 2026-09-15T08:31:00Z}
+  - {id: AL-0302, level: P3, code: PV-OUTPUT-LOW, source_ref: PV-01,
+     text: PV-01 出力异常偏低, raised_at: 2026-09-15T09:05:00Z}
+
+work_orders:
+  - {id: WO-D0021, code: WO-0915-001, type: 消缺, status: OPEN, priority: HIGH,
+     related_alarm: AL-0201, assignee: OP-001}
+
+maintenance_plans:
+  - {id: MP-TX01, cycle: 180d, next_due: 2026-12-05, last_done: 2026-06-08,
+     items: [绕组直流电阻, 冷却系统检查]}
+
+load_curves:
+  - {id: LC-A0901, granularity: 1h, park: PARK-001}

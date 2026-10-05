@@ -1,0 +1,34 @@
+[
+  {
+    "id": "m7-writeonce-file-off",
+    "redline": true,
+    "target": "src/m7_registry/publish.py",
+    "find": "    if base.exists():\n        raise ImmutableReleaseError(\n            f\"releases/{release_id}/ 已存在，内容只写一次（SPEC-M7-05 immutable）：\"",
+    "replace": "    if False and base.exists():\n        raise ImmutableReleaseError(\n            f\"releases/{release_id}/ 已存在，内容只写一次（SPEC-M7-05 immutable）：\"",
+    "description": "SPEC-M7-12：write_release_file 向已发布目录补写拒绝失效——EVAL-M7-12-N 应杀"
+  },
+  {
+    "id": "m7-republish-off",
+    "redline": true,
+    "target": "src/m7_registry/publish.py",
+    "find": "    if base.exists():\n        raise ImmutableReleaseError(\n            f\"releases/{release_id}/ 已存在（SPEC-M7-05 只写一次）：二次发布被拒\")",
+    "replace": "    if False and base.exists():\n        raise ImmutableReleaseError(\n            f\"releases/{release_id}/ 已存在（SPEC-M7-05 只写一次）：二次发布被拒\")",
+    "description": "SPEC-M7-12：publish_release 二次发布拒绝失效——EVAL-M7-12-N 应杀"
+  },
+  {
+    "id": "m7-manifest-hash-off",
+    "redline": true,
+    "target": "src/m7_registry/publish.py",
+    "find": "        elif _sha256_file(path) != str(digest):",
+    "replace": "        elif False and _sha256_file(path) != str(digest):",
+    "description": "SPEC-M7-12：resolve_release manifest sha256 逐文件复核（防篡改）失效——EVAL-M7-REL-P 应杀"
+  },
+  {
+    "id": "m7-golden-digest-off",
+    "redline": true,
+    "target": "src/m7_registry/release.py",
+    "find": "    if digest != str(signature.get(\"digest\")):",
+    "replace": "    if False and digest != str(signature.get(\"digest\")):",
+    "description": "SPEC-M7-09：golden_scores digest 重算比对失效（禁手工填报）——EVAL-M7-09-N 应杀"
+  }
+]

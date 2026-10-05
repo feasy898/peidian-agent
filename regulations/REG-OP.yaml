@@ -1,0 +1,66 @@
+# regulations/REG-OP.yaml
+# 运维操作规程（ADDENDUM A 要求的最小条款集；条款文字自拟，不与 00-ontology.md 冲突）。
+# 从属关系：parent 指向 REG-SAFE / 本文件的规则 ID。
+# OP-DEMAND-LIMIT 判据口径与 PHYS-DEMAND（REG-TECH）一致：ratio>1.0 预警、>1.05 越限。
+meta:
+  id: REG-OP
+  title: 园区配电运维操作规程
+  domain: OPERATION
+  source: specs/ADDENDUM.md §A
+  version: "1.0"
+
+rules:
+  - id: SAFE-OP-TWO-TICKET
+    title: 两票操作实施细则
+    parent: SAFE-TWO-TICKET
+    category: safety_operation
+    clauses:
+      - 遥控操作实行"一票一任务"：每张 SwitchOrder 仅对应一个操作任务。
+      - 操作票状态必须为 ISSUED（已签发）方可进入 EXECUTING；DRAFT 票不得执行。
+      - 操作票执行前须完成监护核对（guard_check）：执行人与监护人双重确认设备编号与目标状态。
+      - 执行过程中发现与操作票步骤不符的现场状态时，立即中止操作并上报，不得擅自变更步骤。
+      - 操作完成后执行人回读设备状态并在操作票上记录完成时间（BUSINESS 时钟）。
+
+  - id: SAFE-OP-REMOTE
+    title: 遥控操作细则
+    parent: SAFE-ORDER-SEQ, SAFE-SINGLE-OP
+    category: safety_operation
+    clauses:
+      - 遥控操作（execute.remote_control）必须逐条对应 SwitchOrder.steps 的声明顺序执行，不得跳步、不得并发。
+      - 同一操作票的步骤严格串行：上一步骤未确认（环境回读一致）前不得发出下一步骤遥控指令。
+      - 每次遥控下发前必须重新核对该设备当前状态与步骤前置条件一致。
+      - 遥控结果以环境回读（状态回读）为准；执行器自报成功而回读状态未变化时，判定为操作失败并按异常处置。
+      - 遥控操作被拒绝（DENY/REJECTED/timeout）后不得以任何变体绕行重试同一操作目标。
+
+  - id: SAFE-OP-MAINTAIN
+    title: 检修作业细则
+    parent: SAFE-MAINTAIN-ISO
+    category: safety_operation
+    clauses:
+      - 检修作业开始前，目标设备 OperatingState 必须已置为检修（MAINTENANCE）。
+      - 检修作业必须持有含许可（permit）状态的 WorkTicket，无票不得开工。
+      - 检修隔离范围内设备的遥控操作在作业期间一律禁止（策略层维持 ASK/DENY 原判）。
+      - 作业结束后，由值班员确认设备状态恢复并关闭 WorkTicket，方可解除检修状态。
+
+  - id: OP-QCOMP-CAP
+    title: 无功补偿电容投切操作要求
+    category: operation
+    clauses:
+      - 电容投切（execute.capacitor_switch）属高风险动作，单次投切均须审批（缺省 ASK）。
+      - 投切前必须确认：CapacitorBank 无故障标志、母线电压与功率因数读数为新鲜数据（非 stale）。
+      - 同一 CapacitorBank 两次投切操作之间必须留出放电间隔，禁止连续频繁投切。
+      - 投切后必须回读 state（投/切）与 Q/cosφ 变化，确认补偿效果与预期一致。
+      - 手动投切期间必须退出 auto_mode，操作完成后按原方式恢复。
+
+  - id: OP-DEMAND-LIMIT
+    title: 需量限额与预警
+    category: operation
+    clauses:
+      - 需量比值（月最大需量/合同容量）大于 1.0 时发布需量预警（P2），启动负荷优化与储能响应。
+      - 需量比值大于 1.05 时判定需量越限（P0），立即执行需量控制措施并上报审批人。
+      - 本条判据口径与 PHYS-DEMAND（REG-TECH）一致；阈值变更只允许修改 REG-TECH，不得另行口径。
+      - 需量滑窗跨月切换时发布 demand.month_rolled 事件，冻结上月峰值（frozen_peak_kw）后重置当月窗口。
+    criteria:
+      metric: demand_ratio
+      warn_over: 1.0    # >1.0 → P2 预警（与 PHYS-DEMAND 一致）
+      breach_over: 1.05 # >1.05 → P0 越限（与 PHYS-DEMAND 一致）

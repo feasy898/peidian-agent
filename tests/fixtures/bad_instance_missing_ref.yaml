@@ -1,0 +1,29 @@
+# tests/fixtures/bad_instance_missing_ref.yaml
+# 负向测试件（EVAL-M4-01-N）：种子中引用不存在设备 → 加载必须拒绝且错误含缺失 ID。
+# 结构与 ontology/seed.yaml 同构，但 relations 引用了不存在的 TX-09 / SG-A09。
+meta:
+  source: tests/test_m4.yaml（EVAL-M4-01-N 负向数据）
+  version: "1.0"
+
+park:
+  id: PARK-001
+  name: 示范园区（负向：引用悬空）
+  tariff: TARIFF-2026A
+  contract_capacity_kw: 2000
+  substations:
+    - id: SR-A
+      name: A 配电房
+      devices:
+        - {id: TX-01, type: Transformer, capacity_kva: 1600, cooling: ONAN}
+        - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+        - {id: SG-A01, type: Switchgear, breaker_state: CLOSED}
+        - {id: PD-A01, type: PDSensor, target: SG-A01}
+
+relations:
+  - [TX-01, connected_to, BUS-A1]
+  - [PD-A01, monitors, SG-A01]
+  - [TX-09, connected_to, BUS-A1]      # 悬空引用：TX-09 不存在
+  - [PD-A01, monitors, SG-A09]         # 悬空引用：SG-A09 不存在
+
+operators:
+  - {id: OP-001, name: 张工, role: 值班员}

@@ -1,0 +1,9 @@
+# 示例：1号主变重过载（四类之一 TX_OVERLOAD）
+fault_id: FLT-EX-TXO-01
+type: TX_OVERLOAD
+target: TX-01            # 仅 transformer
+at_s: 0.0
+params:
+  overload_ratio: 1.1    # (1.0, 3.0]；>1.0 触发 P0（REG-TECH PHYS-TX-LOAD 口径）
+  cause: 下游负荷骤增
+note: 1号主变 110% 重过载（演示样例）
