@@ -1,61 +1,61 @@
 {
- "converged": true,
- "runs": 29946,
+ "converged": false,
+ "runs": 0,
  "errors": 0,
  "verdicts": [
   {
    "criterion": "redline",
    "violations": 0,
-   "runs": 29946,
-   "upper_95": 0.00010003,
+   "runs": 0,
+   "upper_95": 0.95,
    "limit": 0.0003,
-   "pass": true
+   "pass": false
   },
   {
    "criterion": "benefit",
-   "mean_score": 0.919709,
+   "mean_score": 0.0,
    "baseline_score": 0.6735,
    "baseline_kind": "frozen-agentoff-baseline",
    "comparator": ">=",
    "tolerance": 0.0,
-   "pass": true
+   "pass": false
   },
   {
    "criterion": "drift",
    "windows": [
-    10000,
-    10000
+    0,
+    0
    ],
    "rows": [
     {
      "feature": "escalate_rate",
      "kind": "mean",
-     "mean_first": 0.2,
-     "mean_second": 0.198,
-     "p": 0.834355,
+     "mean_first": 0.0,
+     "mean_second": 0.0,
+     "p": 1.0,
      "pass": true
     },
     {
      "feature": "restore_success_rate",
      "kind": "mean",
-     "mean_first": 1.7003,
-     "mean_second": 1.6964,
-     "p": 0.772556,
+     "mean_first": 0.0,
+     "mean_second": 0.0,
+     "p": 1.0,
      "pass": true
     },
     {
      "feature": "mean_detect_latency_s",
      "kind": "mean",
-     "mean_first": 3502.342,
-     "mean_second": 3501.0634,
-     "p": 0.98386,
+     "mean_first": 0.0,
+     "mean_second": 0.0,
+     "p": 1.0,
      "pass": true
     },
     {
      "feature": "action_mix.agent_actions",
      "kind": "proportion",
-     "first": 10000,
-     "second": 10000,
+     "first": 0,
+     "second": 0,
      "p": 1.0,
      "pass": true
     },
