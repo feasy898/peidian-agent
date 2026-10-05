@@ -9,6 +9,12 @@
 
 ---
 
+## ⚠️ 证据完整性注记（2026-10-05 登记）
+
+`converge-judgment.json` 曾于 2026-10-05 被"推 GitHub 前留底"WIP 快照提交（98758e2）覆盖为 `converged:false, runs:0` 空壳，导致本报告（数字逐位引自 JSON）一度失去仓内证据支撑。现已从 git 历史 commit e77c468（2026-10-02 判定会话产物）原样恢复，恢复后三判据复核：redline 0/29946（上界 0.00010003 ≤ 0.0003）、benefit 0.919709 ≥ 0.6735、drift 两窗 p 均不显著，与本报告全文逐位一致。原始 run 记录按 keep-every=20 抽样丢弃（判定时即如此），如需完全复现可按 `arena/converge.py judge --frozen-only` 重跑（约 5-6 小时）。本注记为唯一一次证据链修复，登记于九项目盘点 P0 工单。
+
+---
+
 ## 一、判定结论
 
 **CONVERGED**（`converge-judgment.json` `converged: true`）。总 run 数 **29946**，errors **0**（`error_samples: []`）。三条判据全部通过：
