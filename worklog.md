@@ -539,3 +539,9 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
 - **Higress 桥（协同项）**：fault/llm_bridge.HigressClient 的设计入口 governance:8080 当前仅允许 consumer=glue-core（旧 jiuwen 体系，owner 已裁决作废）且 auto-router 上游连接失败——LLM 网关重建属 OPC-harness 集群范围，桥的真调待其放行后一行 env 即通。
 - **active_at_end（P2）**：arena/engine.py 只计 status=="active"（cleared 留存 detector.active 供验证相/状态面用）。S-202 复测：detected=2/cleared=2/cleared_by_agent=2/**active_at_end=0**（原误报 2）。
 - 门禁：run_evals 233/233 PASS + fault 15/15 PASS（改动零回归）。
+
+## 2026-10-06 · Higress 桥真调闭环（"OPC consumer 放行"事项澄清并关闭）
+
+- 澄清：OpenBao `company/gpu/models/higress-consumer` 的 consumer 名**就是 glue-core**（.allowedConsumers 白名单本就放行），此前 403/连接失败系 auto-router 上游断连+模型名不在路由谓词（glm-4-flash/fast），并非 consumer 未放行——无需 OPC 侧任何变更。
+- 真调：`HIGRESS_BASE_URL=http://100.64.0.6:8080 HIGRESS_API_KEY=<bao注入> HigressClient(model="glm-plan")`（llm-plan 路由→zcode-plan→GLM-5.3-Flash，实测 200），`nl_to_fault("2号主变 TX-02 过载…")` → `TX_OVERLOAD@TX-02` 正确解析注入。桥的 LLM 路径至此真调验证（此前仅规则回退）。
+- 使用口径：模型名必须是路由谓词内的（glm-plan/glm-5.3/kimi-for-coding/…），qoder-default 走 llm-main→stepfun-main（按量，另行核费后再用）。
