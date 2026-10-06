@@ -1,10 +1,12 @@
 #!/usr/bin/env python3.12
 """run_gen.py · ParkDSL 生成提示词运行器（worker-A 线1）
 
-真实模型调用面：OpenAI 兼容 /v1/chat/completions（Higress 100.100.0.6:8080）。
+真实模型调用面：OpenAI 兼容 /chat/completions——**经 arena.model_gateway 收编**
+（module-map #18/#19；env 优先序 LLM_API_KEY/BIGMODEL_API_KEY/OPENAI_API_KEY，
+base 同理；--base-url/--model 显式参数优先，历史缺省不变）。
 配额纪律：线1 全程 ≤3 次真实调用；每次成功调用自动追加 quota-ledger.md。
 
-密钥纪律（红线1）：API key 只经 env(LLM_API_KEY) 或 stdin(--api-key-stdin) 进入，
+密钥纪律（红线1）：API key 只经 env(优先序见 model_gateway) 或 stdin(--api-key-stdin) 进入，
 绝不进 argv/日志/产物。argv-free。
 
 用法:
@@ -15,15 +17,16 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import json
 import os
 import re
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+if str(ROOT) not in sys.path:      # arena.model_gateway 在仓根 arena/ 包内
+    sys.path.insert(0, str(ROOT))
 VALIDATE = HERE.parent / "validate.py"
 LEDGER = HERE / "quota-ledger.md"
 TIERS = ("simple", "medium", "complex")
@@ -42,26 +45,23 @@ def _ledger_append(tier: str, status: str, model: str, note: str) -> None:
         f.write(f"| {ts} | {tier} | {model} | {status} | {note} |\n")
 
 
+def _find_key() -> str:
+    """env key 探测收编 model_gateway（优先序 LLM_API_KEY > BIGMODEL_API_KEY > OPENAI_API_KEY）。"""
+    from arena.model_gateway import find_api_key   # sys.path 已在模块头指向仓根
+    return find_api_key() or ""
+
+
 def _read_key_from_stdin() -> str:
     print("粘贴 API key 后回车（输入不回显、不落日志）：", file=sys.stderr)
     return sys.stdin.readline().strip()
 
 
 def _chat(base: str, model: str, key: str, system: str, user: str, timeout: int = 120) -> str:
-    url = base.rstrip("/") + "/chat/completions"
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": user}],
-        "temperature": 0.4,
-    }).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {key}",   # 只进请求头，不进 argv/日志
-    })
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    return data["choices"][0]["message"]["content"]
+    """经 model_gateway 发 OpenAI 兼容对话（key 只进请求头；失败如实抛异常）。"""
+    from arena.model_gateway import ModelGateway   # sys.path 已在模块头指向仓根
+
+    gw = ModelGateway(api_key=key, base_url=base, model=model, timeout_s=timeout)
+    return gw.chat(system, user, temperature=0.4)
 
 
 def _extract_yaml(text: str) -> str | None:
@@ -87,10 +87,10 @@ def main(argv=None) -> int:
     if _ledger_count() >= QUOTA_LIMIT:
         print(f"[QUOTA] 线1 真实调用配额已用满（{QUOTA_LIMIT} 次），拒绝调用。台账: {LEDGER}")
         return 2
-    key = os.environ.get("LLM_API_KEY", "") or (_read_key_from_stdin() if args.api_key_stdin else "")
+    key = _find_key() or (_read_key_from_stdin() if args.api_key_stdin else "")
     if not key:
-        print("[E-NOKEY] 无 API key：设 env LLM_API_KEY 或 --api-key-stdin。"
-              "（密钥零打印：key 不进 argv/日志）")
+        print("[E-NOKEY] 无 API key：设 env LLM_API_KEY/BIGMODEL_API_KEY/OPENAI_API_KEY "
+              "或 --api-key-stdin。（密钥零打印：key 不进 argv/日志）")
         return 2
 
     prompt_file = HERE / f"gen-{args.tier}.prompt.md"

@@ -4,8 +4,10 @@
 职责：接收异常 + 遥测 + 故障库知识 → 发送 LLM → 获取结构化诊断/处置方案。
 与 mock agent 的区别：诊断结论由 LLM 推理生成（非预编程规则）。
 
-API 端点：OpenAI 兼容 chat/completions（BigModel GLM / 任何 OpenAI 兼容端点）。
-认证：环境变量 BIGMODEL_API_KEY 或 PD_MODEL_API_KEY（fail-closed，无 key 回退 mock）。
+API 端点：OpenAI 兼容 chat/completions——**经 arena.model_gateway 统一收编**
+（module-map #19；env 优先序 LLM_API_KEY/BIGMODEL_API_KEY/OPENAI_API_KEY，
+base 同理，PD_MODEL_API_KEY 作 legacy 尾位兼容）。
+认证：fail-closed，无 key 回退 mock（收编前后行为一致）。
 
 用法::
 
@@ -18,9 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -28,22 +28,21 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from arena.model_gateway import KEY_ENV_VARS, GatewayError, ModelGateway, find_api_key  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["LLMDiagnosisAgent", "LLM_AVAILABLE"]
 
-# 检测可用的 API key
-_API_KEY_VARS = ("BIGMODEL_API_KEY", "PD_MODEL_API_KEY", "OPENAI_API_KEY")
+# 历史 env 名别名（兼容用途）；权威优先序见 arena.model_gateway.KEY_ENV_VARS
+_API_KEY_VARS = KEY_ENV_VARS
 _DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
 _DEFAULT_MODEL = "glm-4-flash"
 
 
 def _find_api_key() -> str | None:
-    for var in _API_KEY_VARS:
-        key = os.environ.get(var, "").strip()
-        if key:
-            return key
-    return None
+    """兼容别名：env 探测已收编 model_gateway.find_api_key（优先序以网关为准）。"""
+    return find_api_key()
 
 
 LLM_AVAILABLE = _find_api_key() is not None
@@ -54,11 +53,16 @@ class LLMDiagnosisAgent:
 
     def __init__(self, *, base_url: str | None = None, model: str | None = None,
                  api_key: str | None = None, timeout_s: float = 30.0) -> None:
-        self.api_key = api_key or _find_api_key()
-        self.base_url = (base_url or os.environ.get("LLM_BASE_URL", "") or _DEFAULT_BASE_URL).rstrip("/")
-        self.model = model or os.environ.get("LLM_MODEL", "") or _DEFAULT_MODEL
+        # 凭证/base/model 解析收编 model_gateway（显式参数 > env > 历史缺省，行为不变）
+        self._gateway = ModelGateway(api_key=api_key, base_url=base_url, model=model,
+                                     default_base=_DEFAULT_BASE_URL,
+                                     default_model=_DEFAULT_MODEL,
+                                     timeout_s=timeout_s)
+        self.api_key = self._gateway.api_key
+        self.base_url = self._gateway.base_url
+        self.model = self._gateway.model
         self.timeout_s = timeout_s
-        self.enabled = bool(self.api_key)
+        self.enabled = self._gateway.enabled
         self.call_count = 0
         self.total_tokens = 0
         if not self.enabled:
@@ -137,40 +141,20 @@ class LLMDiagnosisAgent:
 
     # ================================================================ LLM 调用
     def _call_llm(self, prompt: str) -> str | None:
-        """调用 OpenAI 兼容 API。失败返回 None（fail-closed，不 crash）。"""
-        import urllib.request
-        import urllib.error
-
-        url = f"{self.base_url}/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-        }
-        body = json.dumps({
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": "你是园区配电运维专家，精通10kV/0.4kV配电系统运维。"},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.1,
-            "max_tokens": 500,
-        }, ensure_ascii=False).encode("utf-8")
-
+        """经 model_gateway 调用 OpenAI 兼容 API。失败返回 None（fail-closed，不 crash）。"""
+        import time
         try:
-            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
             start = time.time()
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+            content = self._gateway.chat(
+                "你是园区配电运维专家，精通10kV/0.4kV配电系统运维。", prompt,
+                temperature=0.1, max_tokens=500, timeout_s=self.timeout_s)
             elapsed = time.time() - start
-            self.call_count += 1
-            usage = data.get("usage", {})
-            self.total_tokens += usage.get("total_tokens", 0)
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            self.call_count = self._gateway.call_count
+            self.total_tokens = self._gateway.total_tokens
             logger.info("LLM call #%d: %.1fs, %d tokens", self.call_count, elapsed,
-                        usage.get("total_tokens", 0))
+                        self._gateway.total_tokens)
             return content
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
-                json.JSONDecodeError, KeyError, IndexError) as exc:
+        except GatewayError as exc:
             logger.warning("LLM call failed: %s", exc)
             return None
 

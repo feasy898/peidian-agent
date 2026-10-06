@@ -1,0 +1,90 @@
+# arena/scenarios/S-222.yaml · 练习场场景 S-222（主题：台风灾害）
+# 生成：arena/gen_scenario.py（LLM 起草 dsl 校验 arena 干跑入库；来源 glm-4-flash）
+# 模拟什么：模拟台风导致的配电系统故障，考察运维人员对环境类异常故障的响应和处理能力。
+# 判据出处（真实 R 编号，均经库绑定核对）：R35
+# 故障类型（∈ arena/faults 库）：environmental
+# 拓扑基底：PARK-202（生成器固定基底，故障/日历/注入计划由本场景定义）
+# 校验：python dsl/validate.py validate arena/scenarios/S-222.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-222.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+source: llm-draft+glm-4-flash（gen_scenario.py 起草，非文献来源；dsl.validate_dsl 与 arena 干跑双门通过后入库）
+park: {id: PARK-202, tier: medium, contract_capacity_kw: 2000, incoming_voltage: 10kV, seed: 202, name: 台风灾害模拟场景,
+  description: PARK-202 拓扑，包含 GRID-01，SG-A00，BUS-A1，SG-A01，TX-A01，BUS-A2，LD-A01，LD-A02，EVC-01，BUS-B1，SG-B00，TX-B01，SG-B01，BUS-B2，PV-01，BESS-01，LD-B01，LD-B02，LN-01，LN-02，CP-01
+    元件和线路。}
+grid_inlets:
+- {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+substations:
+- id: SR-A
+  name: A 配电房（动力中心）
+  devices:
+  - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+  - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+  - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+  - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+  - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+  - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+  - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+  - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+- id: SR-B
+  name: B 配电房（源网荷储示范）
+  devices:
+  - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+  - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+  - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+  - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+  - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+  - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+  - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+  - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+  - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+links:
+- {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+- {from: SG-A00, to: BUS-A1, kind: direct}
+- {from: BUS-A1, to: SG-A01, kind: direct}
+- {from: SG-A01, to: TX-A01, kind: direct}
+- {from: TX-A01, to: BUS-A2, kind: direct}
+- {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+- {from: BUS-B1, to: SG-B00, kind: direct}
+- {from: SG-B00, to: TX-B01, kind: direct}
+- {from: TX-B01, to: SG-B01, kind: direct}
+- {from: SG-B01, to: BUS-B2, kind: direct}
+- {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+- {from: BUS-A2, to: LD-A01, kind: direct}
+- {from: BUS-A2, to: LD-A02, kind: direct}
+- {from: BUS-A2, to: EVC-01, kind: direct}
+- {from: BUS-B2, to: LD-B01, kind: direct}
+- {from: BUS-B2, to: LD-B02, kind: direct}
+- {from: BUS-B2, to: PV-01, kind: direct}
+- {from: BUS-B2, to: BESS-01, kind: direct}
+faults:
+- id: F-ENV-001
+  kind: environmental
+  target: BUS-A1
+  severity: alarm
+  criteria_ref: R35
+  detection: {metric: room_temp_c, threshold: 40, comparator: '>', duration_sec: 300}
+  note: 配电房高温告警，需采取措施降温。
+calendar:
+  shifts: ['00:00-08:00', '08:00-16:00', '16:00-24:00']
+  events:
+  - id: CAL-SHIFT
+    type: shift_handover
+    params:
+      times: ['08:00', '16:00', '00:00']
+  - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: '09:00', scope: all}
+  - id: CAL-IR
+    type: infrared_scan
+    every_days: 1
+    at: '14:00'
+    params: {kind: temperature_check}
+scenario:
+  seed: 1222
+  duration_sim_s: 172800
+  clock_speed: 1800
+  description: 模拟台风导致配电房温度升高，考察运维人员对环境类异常的响应和处理能力，需确认故障、采取措施降温并闭环。
+  agent: {enabled: true, model: mock}
+  injections:
+  - fault: F-ENV-001
+    at_sim_s: 36000
+    params: {mode: high_temp, room_temp_c: 45, repair_s: 7200}
+    note: 台风来临后 10 小时注入高温故障，持续 300 秒后告警。

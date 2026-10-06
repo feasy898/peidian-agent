@@ -8,3 +8,5 @@
 
 | 时间 | tier | model | 状态 | 备注 |
 |---|---|---|---|---|
+| 2026-10-06 15:17 | simple | qwen3-32b | CALL_FAIL | HTTP 400 from https://open.bigmodel.cn/api/coding/paas/v4 |
+| 2026-10-06 15:18 | simple | glm-4-flash | OK | 979B out=/tmp/gen-park-simple.yaml |

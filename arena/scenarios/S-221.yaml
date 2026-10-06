@@ -1,0 +1,106 @@
+# arena/scenarios/S-221.yaml · 练习场场景 S-221（主题：台风灾害）
+# 生成：arena/gen_scenario.py（LLM 起草 dsl 校验 arena 干跑入库；来源 glm-4-flash）
+# 模拟什么：模拟台风灾害导致的配电运维场景，重点关注状态型异常（如局部放电、变压器故障等）的处理及与业务日历的交互。
+# 判据出处（真实 R 编号，均经库绑定核对）：R38/R40
+# 故障类型（∈ arena/faults 库）：partial_discharge、transformer_fault
+# 拓扑基底：PARK-202（生成器固定基底，故障/日历/注入计划由本场景定义）
+# 校验：python dsl/validate.py validate arena/scenarios/S-221.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-221.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+source: llm-draft+glm-4-flash（gen_scenario.py 起草，非文献来源；dsl.validate_dsl 与 arena 干跑双门通过后入库）
+park: {id: PARK-202, tier: medium, contract_capacity_kw: 2000, incoming_voltage: 10kV, seed: 202, name: 台风灾害状态型异常演练,
+  description: 基于PARK-202拓扑，模拟台风灾害期间配电运维的演练场景。}
+grid_inlets:
+- {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+substations:
+- id: SR-A
+  name: A 配电房（动力中心）
+  devices:
+  - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+  - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+  - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+  - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+  - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+  - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+  - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+  - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+- id: SR-B
+  name: B 配电房（源网荷储示范）
+  devices:
+  - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+  - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+  - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+  - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+  - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+  - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+  - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+  - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+  - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+links:
+- {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+- {from: SG-A00, to: BUS-A1, kind: direct}
+- {from: BUS-A1, to: SG-A01, kind: direct}
+- {from: SG-A01, to: TX-A01, kind: direct}
+- {from: TX-A01, to: BUS-A2, kind: direct}
+- {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+- {from: BUS-B1, to: SG-B00, kind: direct}
+- {from: SG-B00, to: TX-B01, kind: direct}
+- {from: TX-B01, to: SG-B01, kind: direct}
+- {from: SG-B01, to: BUS-B2, kind: direct}
+- {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+- {from: BUS-A2, to: LD-A01, kind: direct}
+- {from: BUS-A2, to: LD-A02, kind: direct}
+- {from: BUS-A2, to: EVC-01, kind: direct}
+- {from: BUS-B2, to: LD-B01, kind: direct}
+- {from: BUS-B2, to: LD-B02, kind: direct}
+- {from: BUS-B2, to: PV-01, kind: direct}
+- {from: BUS-B2, to: BESS-01, kind: direct}
+faults:
+- id: F-PD-202
+  kind: partial_discharge
+  target: SG-A01
+  severity: alarm
+  criteria_ref: R38
+  detection: {metric: tev_db, threshold: 20, comparator: '>', duration_sec: 600}
+  note: 台风导致局部放电异常，需及时消缺闭环。
+- id: F-TF-202
+  kind: transformer_fault
+  target: TX-A01
+  severity: alarm
+  criteria_ref: R40
+  detection: {metric: oil_temp_c, threshold: 85, comparator: '>', duration_sec: 1800}
+  note: 台风导致变压器过热故障，需及时处理。
+calendar:
+  shifts: ['00:00-08:00', '08:00-16:00', '16:00-24:00']
+  events:
+  - id: CAL-SHIFT
+    type: shift_handover
+    params:
+      times: ['08:00', '16:00', '00:00']
+  - id: CAL-PATROL-T
+    type: patrol
+    every_days: 1
+    at: 09:00
+    scope: all
+    params: {kind: 台风后巡检}
+  - id: CAL-WORKORDER
+    type: work_order_95598
+    every_days: 1
+    at: '10:00'
+    scope: all
+    params: {kind: 故障报修}
+scenario:
+  seed: 1221
+  duration_sim_s: 172800
+  clock_speed: 1800
+  description: 台风灾害导致局部放电和变压器过热故障，需要运维人员及时处理。
+  agent: {enabled: true, model: mock}
+  injections:
+  - fault: F-PD-202
+    at_sim_s: 21600
+    params: {baseline_db: 10, growth_db_per_h: 1.5, threshold_db: 20, repair_s: 14400}
+    note: 台风过后 24 小时注入局部放电异常。
+  - fault: F-TF-202
+    at_sim_s: 36000
+    params: {target_oil_temp_c: 95, rise_k_per_h: 6, repair_s: 28800}
+    note: 台风过后 40 小时注入变压器过热故障。
