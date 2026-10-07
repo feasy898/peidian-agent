@@ -1,0 +1,128 @@
+# arena/scenarios/S-207.yaml · 10kV 母线单相接地：非故障相升压 + 选线隔离 + 转供
+# 叙事：B 段 10kV 母线（BUS-B1）绝缘薄弱点击穿，发生金属性单相接地——故障相电压降为 0、
+#       两非故障相升至线电压（√3≈1.73pu，R45）、线电压仍对称、用户不停电。
+#       agent 应：确认接地告警→零序选线排除各馈线、锁定母线段→在 ≤2h 带故障运行窗口
+#       （R44 惯例）内拉开 B 段进线间隔 SG-B02 隔离母线→合母联 CP-01 转供恢复
+#       BUS-B2 低压负荷→10kV 侧 BUS-B1/TX-B01 停电待检修、安排巡线消缺闭环。
+# 目标口径：faults.target 命名空间 = 设备 ID ∪ 链接 LN/CP ID（dsl/validate.py:95-111、
+#       dsl_spec.yaml id_rules.note），链接目标合法（S-213/S-220 的 LN-02 目标已过校验
+#       与干跑）；本场景按任务给定的"single_phase_ground→10kV 母线/线路"两可口径取
+#       母线目标 BUS-B1（引擎 compat SINGLE_PHASE_GROUND ∈ {bus,line}，fault/dsl.py:49）。
+# 判据出处（docs/theory/references.md）：R45 = 中性点非有效接地系统单相接地特征（非故障相 √3 升压）；
+#       R43 = GB/T 14285-2023《继电保护和安全自动装置技术规程》（选线装置配置）；
+#       R44 = GB/T 50064-2014（中性点接地方式/带故障运行绝缘配合）。
+#       检测阈值 1.15pu/300s = arena/faults/single_phase_ground.yaml 权威判据（覆盖高阻接地）。
+# 容量口径：TX-A01 取 2000kVA——隔离 B 段并经 CP-01 转供后 A 变负载率约 0.62
+#           （油温模型 ≈77℃ < 85℃，无级联异常），转供演示不失真。
+# 校验：python dsl/validate.py validate arena/scenarios/S-207.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-207.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+source: "S-207 单相接地演练：single_phase_ground@BUS-B1 非故障相升至 √3≈1.73pu（R45），选线配置依据 R43、带故障运行窗口依据 R44，agent 应选线+拉开 SG-B02 隔离+CP-01 转供。"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（S-207 单相接地演练）
+  description: |-
+    PARK-202 结构（SR-A + SR-B + 常开母联 CP-01），10kV 联络电缆 LN-02 的 B 侧设
+    进线间隔开关 SG-B02。演练：B 段 10kV 母线单相接地 → 选线 → 隔离 → 转供。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 2000, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+      - {id: SG-B02, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  # 10kV 联络电缆 LN-02 的 B 侧进线间隔开关 SG-B02：隔离 B 段母线时可形成明显断开点
+  # （仅设 B 侧开关：park_adapter ③.5 以线路侧为 frm 的方向规则要求受电开关位于线路末端）
+  - {from: BUS-A1, to: SG-B02, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: SG-B02, to: BUS-B1, kind: direct}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# v1.1 · faults：故障库引用条（kind ∈ arena/faults 库；criteria_ref → docs/theory/references.md）
+# ============================================================================
+faults:
+  - id: F-SPGND-207                               # 小电流接地系统单相接地
+    kind: single_phase_ground
+    target: BUS-B1
+    severity: alarm
+    criteria_ref: R45                             # 中性点非有效接地系统特征（非故障相升 √3）
+    detection: {metric: phase_voltage_pu, threshold: 1.15, comparator: ">", duration_sec: 300}
+    note: 金属性接地：故障相对地 0、两非故障相升至线电压（√3≈1.73pu）、线电压仍对称
+      【R45】；检测阈值 1.15pu 持续 300s = arena/faults/single_phase_ground.yaml 权威判据
+      （对应零序电压≈15%Un 告警量级，覆盖高阻接地）；选线装置配置要求 GB/T 14285-2023
+      【R43】；允许带故障运行一般 ≤2h，期间须完成选线/定位/倒负荷准备，超时风险为发展为
+      相间短路【R44 惯例】。期望 agent：确认→零序选线排除各馈线、锁定 B 段 10kV 母线→
+      拉开 B 段进线间隔 SG-B02 隔离母线（形成明显断开点）→合 CP-01 转供 BUS-B2→
+      BUS-B1/TX-B01 停电待检修、巡线消缺闭环。
+
+# ============================================================================
+# v1.1 · calendar：业务日历（三班制 + 交接班/巡检/报告/选线装置专项）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-SEL, type: preventive_test, every_days: 1, at: "10:00", params: {item: 接地选线装置零序回路巡检}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# ============================================================================
+# v1.1 · scenario：倍速场景 + 注入计划（D-1 09:00 交接班巡检时段）
+# ============================================================================
+scenario:
+  seed: 1207
+  duration_sim_s: 86400                           # 1 仿真日（干跑快）
+  clock_speed: 600                                # 每墙钟秒 = 600 仿真秒
+  description: 母线单相接地演练：09:00 BUS-B1（B 段 10kV 母线）金属性接地
+    （非故障相 1.73pu，R45），检测 300s 防抖后告警（P0）。agent 应在 ≤2h 窗口
+    （R44 惯例）内完成零序选线、拉开 B 段进线间隔 SG-B02 隔离母线并合母联 CP-01
+    转供 BUS-B2，低压负荷全部恢复、10kV 侧 BUS-B1/TX-B01 停电待检修。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-SPGND-207, at_sim_s: 32400, params: {phase_voltage_pu: 1.73, allowed_s: 7200, repair_s: 14400}}
+    # 09:00=32400s 注入；allowed_s=7200（2h 带故障运行窗口）；1.73=√3 金属性接地【R45】

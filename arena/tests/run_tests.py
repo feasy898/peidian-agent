@@ -11,6 +11,8 @@
   F. 故障库：11 条目装配 + 判据覆盖 + compat 零信任
   G. 零信任：未知 kind / 幽灵注入在 DSL 层被拒（E-FAULT/E-SCEN）
   H. eval 摘要字段完整（收敛统计所需口径）
+  I. llm_agent prompt 遥测序列化：全量遥测进 prompt / target 不匹配兜底 /
+     不可序列化值退化 str / 空遥测如实声明（2026-10-05 首调改进项回归）
 
 退出码: 0=全过  1=有失败。用法: python arena/tests/run_tests.py
 """
@@ -195,6 +197,40 @@ def main() -> int:
                {"actions_total", "rejected"} <= set(d["gateway"]))
         eval_file = json.loads((ae.run_dir / "eval.json").read_text(encoding="utf-8"))
         record("落盘 eval 与返回一致", eval_file == json.loads(json.dumps(d)))
+
+    # I. llm_agent prompt 遥测序列化（2026-10-05 首调"未提供遥测数据"改进项回归）
+    # 全部为确定性 prompt 侧断言（不发网络请求；真调证据另见 evidence/ 真调日志）。
+    print("== I. llm_agent prompt 遥测序列化 ==")
+    from arena.llm_agent import LLMDiagnosisAgent
+
+    agent = LLMDiagnosisAgent(api_key="unit-test-key")  # 仅构造，不发起调用
+    telem = {"SG-A01": {"tev_db": 20.51, "state": "CLOSED"},
+             "BUS-A1": {"v_pu": 1.0}, "TX-A01": {"load_rate": 0.6}}
+    # I-1 target 命中：目标元件带标注且全量元件都在
+    p_hit = agent._build_prompt({"hint": "PARTIAL_DISCHARGE", "target": "SG-A01",
+                                 "severity": "P2", "evidence": {"metric": "tev_db"}},
+                                telem, None, None)
+    record("I-1 遥测全量进 prompt（目标命中）",
+           "【目标元件】" in p_hit and all(k in p_hit for k in telem)
+           and "20.51" in p_hit and "共 3 元件" in p_hit)
+    # I-2 target 对不上任何元件（旧版根因：遥测段为空）→ 现仍全量进 prompt
+    p_miss = agent._build_prompt({"hint": "HARMONIC", "target": "TX-99",
+                                  "severity": "P2", "evidence": {}},
+                                 telem, None, None)
+    record("I-2 target 不匹配仍全量进 prompt（旧版此处为空）",
+           all(k in p_miss for k in telem) and "共 3 元件" in p_miss)
+    # I-3 不可 JSON 序列化的值 → default=str 兜底，不炸不丢
+    p_raw = agent._build_prompt({"hint": "HARMONIC", "target": "BUS-A1",
+                                 "severity": "P2", "evidence": {"obj": object()}},
+                                {"BUS-A1": {"thdu_pct": 6.8, "tags": {"odd"}}},
+                                None, None)
+    record("I-3 不可序列化值兜底 str 不炸不丢",
+           "thdu_pct" in p_raw and "odd" in p_raw)
+    # I-4 空遥测：如实声明并禁止编造（不再是无标题空段）
+    p_empty = agent._build_prompt({"hint": "HARMONIC", "target": "BUS-A1",
+                                   "severity": "P2", "evidence": {}},
+                                  {}, None, None)
+    record("I-4 空遥测如实声明", "本拍无遥测样本" in p_empty)
 
     failed = [n for n, o in CASES if not o]
     print(f"\nTOTAL cases={len(CASES)} failed={len(failed)}")

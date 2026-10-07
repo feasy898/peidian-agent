@@ -1,0 +1,120 @@
+# arena/scenarios/S-214.yaml · 营业日场景（场景编撰段 S-2XX · 运维业务流）
+# 模拟什么：正常营业日的任务响应考核——高密度业务日历（交接班/日巡检/熄灯夜巡/红外测温/
+#   日报/一级保电/停电计划公告/柴油发电机空载试机/两笔 95598 工单）穿插 1 个轻微注入
+#   （晴午光伏逆变器过压脱网，info 级），考 agent 在正常营业流中的任务排队与响应：
+#   保电任务落实（R14 重要用户保安负荷口径）、停电计划提前 7 天公告（R95 十项承诺）、
+#   95598 工单 45 分钟到场承诺与产权分流流程（R95/R96）、配变巡视周期（R91 DL/T 1102）。
+# 判据出处：R14（GB/T 29328-2018 重要用户/保电；运维域原 R93 已并入本条，见 references.md
+#           去重记录 #1）、R91（DL/T 1102-2021 配变运行规程）、R95（十项承诺：45min/7 天
+#           公告/95598 全天）、R96（95598 报修流程与产权分流）、R65（值班配置）
+# 拓扑基底 = dsl/examples/park-arena-01.yaml 的 PARK-202 园区（SR-A+SR-B+母联 CP-01 常开）。
+# 注：pv_trip 为既有引擎白名单类型，无 criteria_ref（同样板 F-PVTRIP-01 口径）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-214.yaml
+api: parkdsl/1
+source: "calendar 业务口径=docs/theory R14/R91/R95/R96/R65（references.md 现行编号，原 R93 已并入 R14）；pv_trip 注入口径同 dsl/examples/park-arena-01.yaml F-PVTRIP-01"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（练习场配置）
+  description: |-
+    与 park-arena-01 同拓扑的练习场配置：本场景为正常营业流——无重故障，仅 1 个 info 级
+    光伏脱网轻微注入，重点考日历任务密度下的响应排队、工单流程与保电/停电计划管理。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# faults：仅 1 个轻微注入——光伏逆变器过压脱网（info，消缺=转运维复位/检修）
+# ============================================================================
+faults:
+  - id: F-PVTRIP-01                               # 光伏脱网（既有引擎白名单类型，无 criteria_ref）
+    kind: pv_trip
+    target: PV-01
+    severity: info
+    detection: {metric: pv_output_kw, threshold: 0, comparator: "==", duration_sec: 300}
+    note: 判据见 fault/detect.py（日照正常而出力≈0 征兆，PV_TRIP hint）；逆变器过压脱网
+      转运维消缺复位，消缺前异常保持、不假报清除
+
+# ============================================================================
+# calendar：营业日高密度（交接班三班 + 巡检两班次 + 红外 + 日报 + 保电 + 停电计划
+#            + 柴油机试机 + 两笔 95598 工单）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 7, at: "14:00", params: {basis: "DL/T 664-2016"}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+    - {id: CAL-BAODIAN, type: baodian, every_days: 90, at: "08:10", params: {level: "一级", basis: "GB/T 29328-2018 重要用户保安负荷（R14）"}}
+    - {id: CAL-OUTAGE, type: outage_plan, every_days: 365, at: "09:30", params: {reason: "10kV 进线柜预防性试验", notify_days_ahead: 7}}
+    - {id: CAL-DIESEL, type: preventive_test, every_days: 30, at: "10:00", params: {item: diesel_start}}
+    - {id: CAL-95598-A, type: work_order_95598, at: "10:20", params: {response_min: 45, kind: 咨询, channel: 95598}}
+    - {id: CAL-95598-B, type: work_order_95598, at: "15:40", params: {response_min: 45, kind: 报修, channel: 95598}}
+
+# ============================================================================
+# scenario：seed=1214；1 仿真日（营业日）；注入 D1 11:00 光伏脱网（轻微，info 级）
+# ============================================================================
+scenario:
+  seed: 1214
+  duration_sim_s: 86400                           # 1 仿真日
+  clock_speed: 1200                               # 每墙钟秒 = 1200 仿真秒
+  description: >-
+    正常营业流考核：08:10 早班布置一级保电任务（R14 保安负荷口径）→09:30 10kV 进线柜预试
+    停电计划公告（提前 7 天，R95）；08:30 日报→08:50/16:00 交接班→09:00 日巡检（配变巡视
+    周期口径 R91）→10:00 柴油机空载试机→10:20 95598 咨询工单（45 分钟到场承诺，R95/R96
+    流程）→11:00 晴午光伏逆变器过压脱网（info 级，转运维复位消缺，不假报清除）→14:00 红外
+    测温→15:40 95598 报修工单→23:00 熄灯夜巡。考 agent 在多任务并行下的排队、复电承诺与
+    回单闭环。注：日历事件按引擎口径只触发场景起点之后的时刻（at 不落在 00:00）。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-PVTRIP-01, at_sim_s: 39600, params: {reason: over_voltage}}    # D1 11:00 晴午

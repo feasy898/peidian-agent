@@ -93,6 +93,12 @@ class LLMDiagnosisAgent:
         ]
 
     # ================================================================ Prompt
+    @staticmethod
+    def _j(x: Any) -> str:
+        """prompt 内数据统一 JSON 序列化：非原生类型退化为 str，绝不让字段静默丢失
+        或因单值不可序列化炸掉整段遥测（2026-10-05 首调"未提供遥测数据"归因之一）。"""
+        return json.dumps(x, ensure_ascii=False, sort_keys=True, default=str)
+
     def _build_prompt(self, anomaly: dict, telemetry: dict,
                       fault_entry: dict | None, context: dict | None) -> str:
         parts = [
@@ -102,26 +108,49 @@ class LLMDiagnosisAgent:
             f"- 类型: {anomaly.get('hint', '未知')}",
             f"- 目标元件: {anomaly.get('target', '未知')}",
             f"- 严重度: {anomaly.get('severity', 'P2')}",
-            f"- 证据: {json.dumps(anomaly.get('evidence', {}), ensure_ascii=False)}",
+            f"- 证据: {self._j(anomaly.get('evidence', {}))}",
             "",
-            "## 当前遥测（相关元件）",
         ]
-        target = anomaly.get("target", "")
+        # 遥测序列化（2026-10-06 改进，worklog 2026-10-05 登记项）：
+        # 旧版只输出与 target 相等/子串匹配的元件——target 命名对不上或信号挂在
+        # 邻元件时，遥测段为空，模型自述"未提供遥测数据"。现改为**全量遥测进
+        # prompt**（目标相关元件排前并标注），逐项 _j 兜底序列化；空遥测如实
+        # 声明并禁止模型编造量测。防炸护栏：最多列 120 元件，超出如实计数略去。
+        target = str(anomaly.get("target", "") or "")
+        matched: list[tuple[str, Any]] = []
+        others: list[tuple[str, Any]] = []
         for eid, sig in telemetry.items():
-            if eid == target or (target and target in eid):
-                parts.append(f"- {eid}: {json.dumps(sig, ensure_ascii=False)}")
+            name = str(eid)
+            if (name == target) or (target and target in name):
+                matched.append((name, sig))
+            else:
+                others.append((name, sig))
+        ordered = matched + others
+        if ordered:
+            head = f"## 当前遥测（共 {len(ordered)} 元件·当前拍实测·目标元件在前）"
+            parts.append(head)
+            matched_names = {name for name, _ in matched}
+            for i, (eid, sig) in enumerate(ordered):
+                if i >= 120:
+                    parts.append(f"- （其余 {len(ordered) - 120} 元件遥测略）")
+                    break
+                mark = "【目标元件】" if eid in matched_names else ""
+                parts.append(f"- {eid}{mark}: {self._j(sig)}")
+        else:
+            parts.append("## 当前遥测")
+            parts.append("- （本拍无遥测样本：请如实说明遥测缺失，不得编造量测值）")
 
         if fault_entry:
             parts.extend([
                 "",
                 "## 故障库知识",
                 f"- 机理: {fault_entry.get('mechanism', '')}",
-                f"- 检测判据: {json.dumps(fault_entry.get('detection', {}), ensure_ascii=False)}",
-                f"- 处置锚点: {json.dumps(fault_entry.get('agent_expectations', {}), ensure_ascii=False)}",
+                f"- 检测判据: {self._j(fault_entry.get('detection', {}))}",
+                f"- 处置锚点: {self._j(fault_entry.get('agent_expectations', {}))}",
             ])
 
         if context:
-            parts.extend(["", "## 上下文", json.dumps(context, ensure_ascii=False)])
+            parts.extend(["", "## 上下文", self._j(context)])
 
         parts.extend([
             "",

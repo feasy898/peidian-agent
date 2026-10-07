@@ -1,19 +1,19 @@
 {
  "converged": true,
- "runs": 29946,
+ "runs": 30000,
  "errors": 0,
  "verdicts": [
   {
    "criterion": "redline",
    "violations": 0,
-   "runs": 29946,
-   "upper_95": 0.00010003,
+   "runs": 30000,
+   "upper_95": 9.985e-05,
    "limit": 0.0003,
    "pass": true
   },
   {
    "criterion": "benefit",
-   "mean_score": 0.919709,
+   "mean_score": 0.919553,
    "baseline_score": 0.6735,
    "baseline_kind": "frozen-agentoff-baseline",
    "comparator": ">=",
@@ -31,24 +31,24 @@
      "feature": "escalate_rate",
      "kind": "mean",
      "mean_first": 0.2,
-     "mean_second": 0.198,
-     "p": 0.834355,
+     "mean_second": 0.2,
+     "p": 1.0,
      "pass": true
     },
     {
      "feature": "restore_success_rate",
      "kind": "mean",
      "mean_first": 1.7003,
-     "mean_second": 1.6964,
-     "p": 0.772556,
+     "mean_second": 1.7006,
+     "p": 0.982275,
      "pass": true
     },
     {
      "feature": "mean_detect_latency_s",
      "kind": "mean",
      "mean_first": 3502.342,
-     "mean_second": 3501.0634,
-     "p": 0.98386,
+     "mean_second": 3502.342,
+     "p": 1.0,
      "pass": true
     },
     {

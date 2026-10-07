@@ -1,0 +1,136 @@
+# arena/scenarios/S-205.yaml · 复合场景：谐波越限 + 局放趋势 错时并行（设备量测类 · 状态型）
+# 模拟什么：S-201+S-203 的压缩复合版——18:00 晚高峰充电桩集中启用使 A 房 0.4kV 母线
+#   BUS-A2 谐波越限（阶跃型，18:15 判识）；22:30 夜巡发现 B 房馈线柜 SG-B01 局放背景
+#   偏高后 TEV 趋势爬升（趋势型，约 23:50 越 20dB 注意级、次日 00:00 前后判识）。
+#   23:50 起两条状态型异常并行在册（谐波未消缺 + 局放新告警），考 agent 并行处置：
+#   分诊不混淆（电能质量溯源 vs 绝缘劣化确诊）、两单并行派工、互不假报清除。
+# 来源（真实 R 编号，docs/theory/references.md）：
+#   R32 = GB/T 14549-1993《电能质量 公用电网谐波》（0.38kV THDu ≤5%）；
+#   R37 =《35kV 开关柜局部放电故障分析案例》（TEV ≤20dB 正常 / >20dB 异常，
+#         Q/GDW 11060-2013 体系，横向+纵向趋势判读）；
+#   R38 = Q/GDW 11063-2013 局放检测仪技术规范（仪器规范勘误线索，判据以 R37 为准）。
+# 拓扑基底 = 样板 park-arena-01 的 PARK-202 园区（SR-A+SR-B+母联 CP-01 常开）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-205.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-205.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+park:
+  id: PARK-202
+  name: 星辰智造产业园（S-205 谐波+局放复合练习）
+  description: |-
+    与 park-arena-01 同拓扑的设备量测练习场配置：两条状态型故障错时注入——
+    A 房 0.4kV 母线谐波越限（阶跃型）与 B 房馈线柜局放趋势爬升（趋势型），
+    夜间并行在册考分诊与并行派工。判据底座 R32/R37/R38
+    （docs/theory/equipment.md §2.2.2/§2.4/§3.1/§3.7）。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# faults：故障库引用条（kind ∈ arena/faults 库 15 类；criteria_ref → references.md）
+faults:
+  - id: F-HARM-205
+    kind: harmonic
+    target: BUS-A2
+    severity: warn
+    criteria_ref: R32
+    detection: {metric: thdu_pct, threshold: 5, comparator: ">", duration_sec: 900}
+    note: >-
+      THDu 限值按电压等级分档（GB/T 14549-1993，R32）：0.4kV 母线取 5% 口径；
+      主导 5/7 次特征谐波指向 6 脉波整流来源（充电桩/UPS）；负荷侧治理，禁止拉闸。
+  - id: F-PD-205
+    kind: partial_discharge
+    target: SG-B01
+    severity: warn
+    criteria_ref: R37
+    detection: {metric: tev_db, threshold: 20, comparator: ">", duration_sec: 600, window: trend}
+    note: >-
+      TEV 分级：≤20dB 正常 / >20dB 异常 / 30dB 级严重（Q/GDW 11060-2013 体系，
+      经 R37 案例转述；检测仪器规范另见 R38）；横向+纵向趋势三法并用，
+      绝缘劣化确诊派工消缺，禁止未确认拉闸与假报清除。
+
+# calendar：三班制 + 交接班/巡检/红外/报告 + 局放与电能质量两类专项
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 1, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 1, at: "14:00"}
+    - {id: CAL-PD-TEST, type: preventive_test, every_days: 1, at: "10:00",
+       params: {item: 开关柜带电检测局放复测（TEV+超声）, scope: SR-B}}
+    - {id: CAL-PQ-TEST, type: preventive_test, every_days: 1, at: "17:00",
+       params: {item: 电能质量专项监测（THDu 频谱录波·充电桩启用前后对比）, scope: SR-A}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# scenario：2 仿真日，seed=1205（1000+序号 205），两状态型故障错时注入并行在册
+scenario:
+  seed: 1205
+  duration_sim_s: 172800                        # 2 仿真日
+  clock_speed: 1800                             # 每墙钟秒 = 1800 仿真秒
+  description: >-
+    复合场景（S-201+S-203 压缩版）：18:00 晚高峰 BUS-A2 谐波越限（18:15 判识），
+    22:30 夜巡后 SG-B01 局放趋势爬升（约 23:50 越 20dB 注意级、次日 00:00 判识），
+    此后两条异常并行在册（间隔 16200s 错时注入）；考 agent 分诊不混淆、两单并行
+    派工（电能质量治理 vs 绝缘消缺）、互不假报清除。判据 R32/R37/R38。
+  agent: {enabled: true, model: mock}
+  injections:
+    - fault: F-HARM-205
+      at_sim_s: 64800                           # 第 1 日 18:00（晚高峰）
+      params: {thdu_pct: 6.6, dominant_order: 5, repair_s: 10800}
+      note: >-
+        充电桩晚高峰集中启用：BUS-A2 THDu 阶跃至 6.6%，持续 900s 后判识；
+        负荷侧治理派工 10800s 消缺复测闭环。
+    - fault: F-PD-205
+      at_sim_s: 81000                           # 第 1 日 22:30（夜巡时段，与上一条间隔 16200s）
+      params: {baseline_db: 16, growth_db_per_h: 3.0, threshold_db: 20, repair_s: 7200}
+      note: >-
+        夜巡发现 SG-B01 背景偏高后隐患显性化：TEV 自 16dB 以 3dB/h 爬升，
+        约 23:50 越过 20dB 注意级，持续 600s 后判识（次日凌晨，与谐波告警并行在册）。

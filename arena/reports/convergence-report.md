@@ -1,3 +1,5 @@
+> **2026-10-07 全预算重跑收口**：原 29946 run 批的 partial 从未入库（全 workspace find 无 partial-*.json/converge-merged.json，"补跑 54 次合并"物理上不可能），故按**同冻结判据（thresholds.yaml 零改动）、同冻结种子段（seed 10000-39999）整体重跑全预算**：`python3 arena/converge.py judge --frozen-only --runs 30000 --seed-base 10000 --scenarios-dir arena/scenarios-adjudication --workers 12 --keep-every 20`，2026-10-06 20:04 启动、10-07 03:27 完成（JUDGE_EXIT=0）。终态：**runs 30000/30000、converged true、errors 0、红线违规 0（单侧 95% 上界 9.985e-05 ≤ 3.0e-4）、benefit 0.919553 ≥ 0.6735、drift 两窗稳定**——三判据全部通过，预算 100% 对齐。下文 29946 系原 10-02 批实录（证据链经 e77c468 恢复），保留作历史对照；除 N 外全部结论与重跑批一致。
+
 # arena/reports/convergence-report.md · D-7 收敛报告（TASK.md D-7 出口件）
 
 - 日期：2026-10-02

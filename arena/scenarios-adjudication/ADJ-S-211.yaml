@@ -1,0 +1,121 @@
+# arena/scenarios/S-211.yaml · 直流系统接地（场景编撰段 S-2XX · 运维业务线）
+# 模拟什么：B 配电房直流屏（220V 操作电源）对地绝缘电阻夜间骤降至 12kΩ——绝缘监测
+#   一点接地告警（R41 DL/T 1392-2014 装置功能定位；25kΩ 为 220V 系统工程惯例口径，
+#   GB/T 19826-2014 另有 220V<50kΩ 口径，R42 两说并存），agent 应复核直流屏遥测、
+#   拉路查找接地支路并报修消缺，同时预控两点接地致保护误动/拒动的风险（R41 机理）。
+#   午后保护装置异常信号出现（signal_error），考"直流接地+保护异常"关联研判与升级。
+# 判据出处：R41/R42（直流绝缘告警）、R43（GB/T 14285-2023 保护装置异常监视）、R99（蓄电池核容）
+# 拓扑基底 = dsl/examples/park-arena-01.yaml 的 PARK-202 园区（SR-A+SR-B+母联 CP-01 常开）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-211.yaml
+api: parkdsl/1
+source: "arena/faults/dc_ground_fault.yaml（R41/R42/R99）+ protection_maloperation.yaml（R43/R41）；docs/theory/references.md 编号真实存在"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（练习场配置）
+  description: |-
+    与 park-arena-01 同拓扑的练习场配置：本场景聚焦直流/二次侧运维——夜间直流屏
+    一点接地告警→拉路查找消缺，午后保护装置异常信号叠加，考两点接地风险预控。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# faults：直流系统接地（挂在 B 房 10kV 母线，演示简化）+ 保护装置异常
+# ============================================================================
+faults:
+  - id: F-DCGND-B1                                # 直流系统一点接地（B 房直流屏挂接 10kV 母线）
+    kind: dc_ground_fault
+    target: BUS-B1
+    severity: alarm
+    criteria_ref: R41                             # DL/T 1392-2014 直流电源系统绝缘监测装置
+    detection: {metric: dc_insulation_kohm, threshold: 25, comparator: "<", duration_sec: 60}
+    note: 绝缘电阻 <25kΩ（220V 系统工程惯例，110V 约 15kΩ；GB/T 19826-2014 另有 220V<50kΩ
+      口径，R42 两说并存）→ 一点接地告警，当值必须拉路查找，防发展成两点接地致保护误动/拒动（R41）
+  - id: F-PROT-TXB01                              # B 变保护装置异常信号（直流接地查找期间出现）
+    kind: protection_maloperation
+    target: TX-B01
+    severity: alarm
+    criteria_ref: R43                             # GB/T 14285-2023 继电保护和安全自动装置技术规程
+    detection: {metric: relay_error, threshold: signal_error, comparator: "==", duration_sec: 60}
+    note: 装置异常告警（signal_error）口径；直流系统绝缘下降是保护误动/拒动四类典型成因之一
+      （R41 机理、R43 装置可靠性/异常监视顶层规程）——处置红线：严禁自改定值，先预控再消缺
+
+# ============================================================================
+# calendar：三班制 + 巡检 + 报告 + 直流专项（蓄电池核容 R99）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+    - {id: CAL-UPS, type: preventive_test, every_days: 90, params: {item: ups_battery_capacity}}
+    - {id: CAL-DCBAT, type: preventive_test, every_days: 180, params: {item: dc_battery_check_discharge}}
+    - {id: CAL-DIESEL, type: preventive_test, every_days: 30, params: {item: diesel_start}}
+
+# ============================================================================
+# scenario：seed=1211；2 仿真日；注入 04:00 直流接地 → 13:00 保护装置异常（间隔 32400s）
+# ============================================================================
+scenario:
+  seed: 1211
+  duration_sim_s: 172800                          # 2 仿真日
+  clock_speed: 1800                               # 每墙钟秒 = 1800 仿真秒
+  description: >-
+    夜间（D1 04:00）B 房直流屏对地绝缘骤降至 12kΩ，绝缘监测一点接地告警——agent 应复核直流屏
+    遥测、按"先次要负荷后控制保护回路"拉路查找接地支路并报修消缺，预控两点接地误动/拒动风险
+    （R41/R42）；午后（D1 13:00）B 变保护装置异常信号（signal_error）出现——考直流接地与保护
+    异常的关联研判、升级值守与消缺工单闭环（R43）。夜间告警跨早班交接班（08:00）处置。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-DCGND-B1, at_sim_s: 14400, params: {insulation_kohm: 12}}      # D1 04:00 夜班时段
+    - {fault: F-PROT-TXB01, at_sim_s: 46800, params: {mode: signal_error}}     # D1 13:00，与前者间隔 32400s

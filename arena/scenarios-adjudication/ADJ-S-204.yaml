@@ -1,0 +1,117 @@
+# arena/scenarios/S-204.yaml · 三相不平衡场景（设备量测类 · 状态型）
+# 模拟什么：晚间单相负荷集中时段（商业/照明负荷晚高峰、单相空调与充电桩聚集 A 相），
+#   B 房 0.4kV 母线 BUS-B2 负序电压不平衡度阶跃至 4.5%（超 GB/T 15543 短时 4% 档），
+#   持续 15min 判识越限——考 agent 的"负序口径判定（勿只比三相电压幅值）→ 低压侧
+#   三相电流横向比较定位聚集相 → 换相调平/单相负荷转移派工 + 核查中性线电流与端子
+#   测温"，禁则：未核查中性线电流即判无风险、未调平负荷就关告警（假报清除）
+#   （state 类非隔离型，见 arena/faults/three_phase_unbalance.yaml）。
+# 来源（真实 R 编号，docs/theory/references.md）：
+#   R33 = GB/T 15543-2008《电能质量 三相电压不平衡》（公共连接点负序不平衡度
+#         常态 ≤2%、短时 ≤4%；用户引起一般 1.3%、短时 2.6%）。
+# 拓扑 = 样板 park-arena-01 的 PARK-202 园区改参：LD-B02 改商业型晚高峰负荷
+#   （220kW/office → 260kW/commercial，E-CAP 复核 TX-B01 下游 640kW ≤ 850kW 上限）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-204.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-204.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+park:
+  id: PARK-202
+  name: 星辰智造产业园（S-204 三相不平衡练习）
+  description: |-
+    基于 park-arena-01 拓扑改参的设备量测练习场：LD-B02 改商业型晚高峰负荷，
+    单相负荷集中时段 0.4kV 母线负序不平衡度越限，考三相不平衡确诊与换相调平派工。
+    判据底座 R33（docs/theory/equipment.md §2.2/§3.8/§4.2）。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 260, profile: commercial}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# faults：故障库引用条（kind ∈ arena/faults 库 15 类；criteria_ref → references.md）
+faults:
+  - id: F-UNBAL-204
+    kind: three_phase_unbalance
+    target: BUS-B2
+    severity: warn
+    criteria_ref: R33
+    detection: {metric: neg_seq_unbalance_pct, threshold: 2, comparator: ">", duration_sec: 900}
+    note: >-
+      负序电压不平衡度常态 ≤2%、短时 ≤4%（GB/T 15543-2008，R33；用户引起一般 1.3%/
+      短时 2.6%）；注入 4.5% 属超短时档。处置须换相调平/负荷转移消缺，并核查中性线
+      电流（Yyn0 配变 ≤25% 额定为工程惯例）与中性线端子测温。
+
+# calendar：三班制 + 交接班/巡检/报告/配变三相负荷实测专项
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 1, at: "23:00", params: {kind: night}}
+    - {id: CAL-UNBAL-TEST, type: preventive_test, every_days: 1, at: "19:00",
+       params: {item: 配变三相负荷实测与换相调平（含中性线电流/端子测温核查）, scope: SR-B}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# scenario：2 仿真日，seed=1204（1000+序号 204），晚高峰单相负荷集中越限
+scenario:
+  seed: 1204
+  duration_sim_s: 172800                        # 2 仿真日
+  clock_speed: 1800                             # 每墙钟秒 = 1800 仿真秒
+  description: >-
+    三相不平衡场景：18:00 晚高峰单相负荷（商业照明/单相空调/充电桩）集中 A 相，
+    BUS-B2（0.4kV）负序不平衡度阶跃至 4.5%（超短时 4% 档），18:15 持续 15min
+    判识越限；agent 应用负序口径判定、横向比较三相电流定位聚集相，派换相调平/
+    负荷转移工单并核查中性线电流，禁止只比电压幅值或未调平就关告警。判据 R33。
+  agent: {enabled: true, model: mock}
+  injections:
+    - fault: F-UNBAL-204
+      at_sim_s: 64800                           # 第 1 日 18:00（单相负荷集中时段）
+      params: {unbalance_pct: 4.5, repair_s: 10800}
+      note: >-
+        晚高峰单相负荷集中：负序不平衡度阶跃至 4.5%（>2% 常态限值、超 4% 短时档），
+        持续 900s 后判识；换相调平派工 10800s 消缺复测闭环。

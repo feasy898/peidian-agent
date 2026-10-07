@@ -1,0 +1,127 @@
+# arena/scenarios/S-213.yaml · 缺相故障（场景编撰段 S-2XX · 三相回路断相）
+# 模拟什么：D1 上午 LD-A01（动力负荷）一相熔断器熔断转入缺相运行——相电流偏差 25%（
+#   一相趋零形态），考 agent 鉴别"缺相（一相电流趋零）vs 三相不平衡（三相都有值且不对称）"，
+#   立即隔离缺相回路防止电机堵转过流烧毁（GB 50055-2011 §2.3.10 断相保护配置依据——该标准
+#   不在 docs/theory/references.md R 编号表内，出处载于 arena/faults/phase_loss.yaml
+#   detection.source，不悬空挂 R 编号；判据主判 R33 负序/不平衡框架）。D2 午间 10kV 联络
+#   电缆 LN-02 电缆头断相，考 10kV 侧缺相形态与 Yyn0 配变中性线电流激增风险研判，先选段
+#   隔离再报修接续导线。3 仿真日时长覆盖两级缺相的 ack+repair 消缺闭环（默认 repair 4h）。
+# 判据出处：R33（GB/T 15543-2008 三相不平衡/负序框架，缺相鉴别锚点）、R102（红外端子温升
+#           隐患通道）；库绑定口径同 arena/faults/phase_loss.yaml（threshold 15 / 60s）
+# 拓扑基底 = dsl/examples/park-arena-01.yaml 的 PARK-202 园区（SR-A+SR-B+母联 CP-01 常开）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-213.yaml
+api: parkdsl/1
+source: "arena/faults/phase_loss.yaml（sources R33/R35/R102；GB 50055-2011 断相保护依据载于该文件 detection.source，无 R 编号）；docs/theory/references.md R33 真实存在"
+park:
+  id: PARK-202
+  name: 星辰智造产业园（练习场配置）
+  description: |-
+    与 park-arena-01 同拓扑的练习场配置：本场景聚焦缺相故障——低压动力负荷断相与
+    10kV 电缆断相两级演化，考缺相/不平衡鉴别与"先隔离后修复再复电"的隔离型处置。
+  tier: medium
+  contract_capacity_kw: 2000
+  incoming_voltage: 10kV
+  seed: 202
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 200}
+
+substations:
+  - id: SR-A
+    name: A 配电房（动力中心）
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1600, hv: 10kV, lv: 0.4kV, cooling: ONAF}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: factory}
+      - {id: LD-A02, type: Load, peak_kw: 260, profile: office}
+      - {id: EVC-01, type: EVCharger, total_power_kw: 240, num_ports: 8}
+  - id: SR-B
+    name: B 配电房（源网荷储示范）
+    devices:
+      - {id: BUS-B1, type: Bus, voltage_level: 10kV}
+      - {id: SG-B00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-B01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV}
+      - {id: SG-B01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: feeder}
+      - {id: BUS-B2, type: Bus, voltage_level: 0.4kV}
+      - {id: PV-01, type: PV, capacity_kwp: 400, tilt: 10, azimuth: 180}
+      - {id: BESS-01, type: BESS, capacity_kwh: 500, power_kw: 250, soc: 62}
+      - {id: LD-B01, type: Load, peak_kw: 380, profile: factory}
+      - {id: LD-B02, type: Load, peak_kw: 220, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 3.2, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: BUS-B1, kind: line, id: LN-02, length_km: 1.6, ampacity_a: 300}
+  - {from: BUS-B1, to: SG-B00, kind: direct}
+  - {from: SG-B00, to: TX-B01, kind: direct}
+  - {from: TX-B01, to: SG-B01, kind: direct}
+  - {from: SG-B01, to: BUS-B2, kind: direct}
+  - {from: BUS-A2, to: BUS-B2, kind: coupler, id: CP-01, state: OPEN}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A2, to: EVC-01, kind: direct}
+  - {from: BUS-B2, to: LD-B01, kind: direct}
+  - {from: BUS-B2, to: LD-B02, kind: direct}
+  - {from: BUS-B2, to: PV-01, kind: direct}
+  - {from: BUS-B2, to: BESS-01, kind: direct}
+
+# ============================================================================
+# faults：缺相（负荷侧熔断器熔断 / 10kV 电缆断相，compat 均为 load+line）
+# ============================================================================
+faults:
+  - id: F-PHLOSS-LDA01                            # 低压动力负荷缺相（一相熔断器熔断）
+    kind: phase_loss
+    target: LD-A01
+    severity: alarm
+    criteria_ref: R33                             # GB/T 15543-2008 负序/不平衡框架（缺相鉴别锚点）
+    detection: {metric: phase_current_dev_pct, threshold: 15, comparator: ">", duration_sec: 60}
+    note: 相电流差>15% 告警为工程惯例（惯例区间 15%~20% 取下限从严）；缺相=一相电流趋零，
+      与三相不平衡（三相都有值且不对称）形态相区分（R33）；熔断器保护的连续运行电动机应装
+      断相保护（GB 50055-2011 §2.3.10，非 R 编号文献，出处见 arena/faults/phase_loss.yaml）；
+      处置=立即停运/隔离缺相回路防电机堵转烧毁，换熔断器后复电
+  - id: F-PHLOSS-LN02                             # 10kV 联络电缆缺相（电缆头断相）
+    kind: phase_loss
+    target: LN-02
+    severity: alarm
+    criteria_ref: R33
+    detection: {metric: phase_current_dev_pct, threshold: 15, comparator: ">", duration_sec: 60}
+    note: 10kV 侧一相断线，Yyn0 配变缺相运行时低压侧单相用户电压骤降/失压、中性线电流激增
+      过热（equipment.md §2.1 架构口径）；隔离型故障——选段隔离+巡线接续导线后复电
+
+# ============================================================================
+# calendar：三班制 + 巡检 + 红外 + 报告 + 电机绝缘预试专项
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 7, at: "14:00", params: {basis: "DL/T 664-2016"}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+    - {id: CAL-MOTOR, type: preventive_test, every_days: 180, params: {item: motor_insulation_test}}
+    - {id: CAL-DIESEL, type: preventive_test, every_days: 30, params: {item: diesel_start}}
+
+# ============================================================================
+# scenario：seed=1213；3 仿真日；注入 D1 09:00 负荷缺相 → D2 12:00 电缆缺相（间隔 97200s）
+# ============================================================================
+scenario:
+  seed: 1213
+  duration_sim_s: 259200                          # 3 仿真日
+  clock_speed: 3600                               # 每墙钟秒 = 3600 仿真秒
+  description: >-
+    D1 09:00（与日巡检同时段）LD-A01 缺相运行，phase_current_dev_pct=25%——考缺相 vs 三相
+    不平衡鉴别（R33 负序口径）、立即隔离缺相回路防电机堵转烧毁（GB 50055-2011 断相保护口径，
+    见 arena/faults/phase_loss.yaml）、报修更换熔断器后复电；D2 12:00 联络电缆 LN-02 电缆头
+    断相——考第二处缺相的定位与隔离，未修复断相点不得复电或关闭告警（must_not：假报清除）。
+    3 仿真日覆盖两级缺相的派工消缺闭环（ack→repair 4h→复测）。
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-PHLOSS-LDA01, at_sim_s: 32400, params: {current_dev_pct: 25}}    # D1 09:00
+    - {fault: F-PHLOSS-LN02, at_sim_s: 129600, params: {current_dev_pct: 25}}    # D2 12:00，间隔 97200s

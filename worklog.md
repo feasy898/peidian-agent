@@ -545,3 +545,11 @@ D-7 报告，均需 owner 批复（thresholds 现为草案）；③A-4/B-4 owner
 - 澄清：OpenBao `company/gpu/models/higress-consumer` 的 consumer 名**就是 glue-core**（.allowedConsumers 白名单本就放行），此前 403/连接失败系 auto-router 上游断连+模型名不在路由谓词（glm-4-flash/fast），并非 consumer 未放行——无需 OPC 侧任何变更。
 - 真调：`HIGRESS_BASE_URL=http://100.64.0.6:8080 HIGRESS_API_KEY=<bao注入> HigressClient(model="glm-plan")`（llm-plan 路由→zcode-plan→GLM-5.3-Flash，实测 200），`nl_to_fault("2号主变 TX-02 过载…")` → `TX_OVERLOAD@TX-02` 正确解析注入。桥的 LLM 路径至此真调验证（此前仅规则回退）。
 - 使用口径：模型名必须是路由谓词内的（glm-plan/glm-5.3/kimi-for-coding/…），qoder-default 走 llm-main→stepfun-main（按量，另行核费后再用）。
+
+## 2026-10-07 03:30 收敛判定全预算重跑收口
+
+- 背景：原 29946 run 批 partial 从未入库，"补跑 54 凑整"不可行（物理缺失）。按同冻结判据/种子段整体重跑。
+- 命令：`python3 arena/converge.py judge --frozen-only --runs 30000 --seed-base 10000 --scenarios-dir arena/scenarios-adjudication --workers 12 --keep-every 20`（20:04→03:27，JUDGE_EXIT=0）。
+- 终态：runs=30000 errors=0 converged=true；redline 0 违规（上界 9.985e-05≤3e-4）、benefit 0.919553≥0.6735、drift 两 10000 窗稳定——三判据全过，预算 100% 对齐。
+- 同批落地：llm_agent._build_prompt 遥测全量序列化修复（旧版 target 不匹配时 0/19 元件即"未提供遥测"根因；glm-4-flash 三重真调 19/19+引擎级 source=llm 验证，证据 evidence/llm-realcall-telemetry-2026-10-06.md）+ arena/tests I 组 4 测。
+- convergence-report.md 顶部已加整批重跑收口注记（旧 29946 数字保留作历史对照）。

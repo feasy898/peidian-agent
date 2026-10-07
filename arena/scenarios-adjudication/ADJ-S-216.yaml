@@ -1,0 +1,134 @@
+# arena/scenarios/S-216.yaml · 练习场场景 S-216（园区变体 · 简单档）
+# 场景叙事：云溪软件园二期——纯办公负荷双变辐射网（无 DER，simple 档 der_max=0）。
+# 凌晨批处理时段 1# 变出线柜触头温升缓慢爬升（红外/无线测温预警档），IT 机房整流型
+# 负荷致 0.4kV 母线谐波越限，午后空调负荷叠加把 1# 变推进重过载。
+# 考点：simple 档无母联、无转供通道——网络型故障（过载）只能隔离待抢修并如实升级；
+# 状态型故障（温升/谐波）按"确认→横向/纵向判读→派工消缺→复测"闭环，不得拉闸扩大停电面。
+# 判据出处：R32/R33/R35/R45/R91 = docs/theory/references.md（GB/T 14549、GB/T 15543、
+# GB/T 11022-2020、中性点非有效接地系统特征、DL/T 1102-2021 配变运行规程）。
+# 拓扑底：dsl/examples/park-simple-01.yaml（变体：双变两段低压、负荷加重至 1140kW）。
+# 校验：python dsl/validate.py validate arena/scenarios/S-216.yaml
+# 干跑：python arena/run_scenario.py --config arena/scenarios/S-216.yaml --runs-root runtime/scen-dryrun
+api: parkdsl/1
+park:
+  id: PARK-102
+  name: 云溪软件园二期（练习场变体）
+  description: |-
+    与 park-simple-01 同源的简单档变体：单一 10kV 进线、一座配电房、两台干式变压器
+    分带办公与配套商业两段低压母线，全部负荷为办公楼宇与机房，无分布式电源
+    （simple 档 der_max=0），辐射状供电、无母联——转供不可达，处置以隔离+消缺为主。
+  tier: simple
+  contract_capacity_kw: 1200
+  incoming_voltage: 10kV
+  seed: 102
+
+grid_inlets:
+  - {id: GRID-01, source_voltage: 10kV, short_capacity_mva: 150}
+
+substations:
+  - id: SR-A
+    name: 云溪二期 1# 配电房
+    devices:
+      - {id: SG-A00, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: BUS-A1, type: Bus, voltage_level: 10kV}
+      - {id: SG-A01, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A01, type: Transformer, capacity_kva: 1000, hv: 10kV, lv: 0.4kV, cooling: ONAN}
+      - {id: BUS-A2, type: Bus, voltage_level: 0.4kV}
+      - {id: SG-A02, type: Switchgear, rated_current_a: 630, state: CLOSED, role: incomer}
+      - {id: TX-A02, type: Transformer, capacity_kva: 630, hv: 10kV, lv: 0.4kV, cooling: ONAN}
+      - {id: BUS-A3, type: Bus, voltage_level: 0.4kV}
+      - {id: LD-A01, type: Load, peak_kw: 420, profile: office, power_factor: 0.88}
+      - {id: LD-A02, type: Load, peak_kw: 300, profile: office}
+      - {id: LD-A03, type: Load, peak_kw: 240, profile: commercial}
+      - {id: LD-A04, type: Load, peak_kw: 180, profile: office}
+
+links:
+  - {from: GRID-01, to: SG-A00, kind: line, id: LN-01, length_km: 2.4, ampacity_a: 400}
+  - {from: SG-A00, to: BUS-A1, kind: direct}
+  - {from: BUS-A1, to: SG-A01, kind: direct}
+  - {from: SG-A01, to: TX-A01, kind: direct}
+  - {from: TX-A01, to: BUS-A2, kind: direct}
+  - {from: BUS-A1, to: SG-A02, kind: direct}
+  - {from: SG-A02, to: TX-A02, kind: direct}
+  - {from: TX-A02, to: BUS-A3, kind: direct}
+  - {from: BUS-A2, to: LD-A01, kind: direct}
+  - {from: BUS-A2, to: LD-A02, kind: direct}
+  - {from: BUS-A3, to: LD-A03, kind: direct}
+  - {from: BUS-A3, to: LD-A04, kind: direct}
+
+# ============================================================================
+# v1.1 · faults：故障库引用条（kind ∈ arena/faults 库；criteria_ref → docs/theory/references.md）
+# ============================================================================
+faults:
+  - id: F-TEMP-01                                 # 触头温升过热（开关柜带电监测）
+    kind: temperature_rise
+    target: SG-A01
+    severity: warn
+    criteria_ref: R35                             # GB/T 11022-2020（环温 40℃ 基准、温升限值表）
+    detection: {metric: contact_temp_c, threshold: 70, comparator: ">", duration_sec: 600}
+    note: 无线测温工程三级：预警 70~80 / 告警 90~100 / 跳闸 110~120℃；阈值取预警档，
+      温升（K）判读基准为 GB/T 11022-2020 表 3（逐值待核）
+  - id: F-HARM-01                                 # 谐波畸变（IT 机房整流负荷）
+    kind: harmonic
+    target: BUS-A2
+    severity: warn
+    criteria_ref: R32                             # GB/T 14549-1993（0.38kV THDu ≤5%）
+    detection: {metric: thdu_pct, threshold: 5, comparator: ">", duration_sec: 900}
+    note: 0.4kV 母线按 5% 口径；UPS/服务器整流前端特征谐波 5/7/11/13 次
+  - id: F-UNBAL-01                                # 三相不平衡（单相负荷分配不均）
+    kind: three_phase_unbalance
+    target: BUS-A3
+    severity: warn
+    criteria_ref: R33                             # GB/T 15543-2008（负序不平衡 ≤2% / 短时 4%）
+    detection: {metric: neg_seq_unbalance_pct, threshold: 2, comparator: ">", duration_sec: 600}
+    note: 配套商业单相负荷挪相不均；留意中性线电流
+  - id: F-OVL-01                                  # 1# 变重过载（引擎原生 TX_OVERLOAD）
+    kind: overload
+    target: TX-A01
+    severity: warn
+    criteria_ref: R91                             # DL/T 1102-2021《配电变压器运行规程》
+    detection: {metric: load_rate, threshold: 1.0, comparator: ">", duration_sec: 600}
+    note: 负载率 >1.0 重过载 P0（REG-TECH PHYS-TX-LOAD）；配变运行依据 DL/T 1102-2021
+  - id: F-SPGND-01                                # 小电流接地系统单相接地（监视配置，未注入）
+    kind: single_phase_ground
+    target: BUS-A1
+    severity: alarm
+    criteria_ref: R45                             # 中性点非有效接地系统特征（非故障相升 √3）
+    detection: {metric: phase_voltage_pu, threshold: 1.7, comparator: ">", duration_sec: 120}
+    note: 线电压仍对称、允许带故障运行一般 ≤2h；发展成相间短路必须退出
+  - id: F-PHLOSS-01                               # 缺相（监视配置，未注入）
+    kind: phase_loss
+    target: LD-A01
+    severity: alarm
+    criteria_ref: R33
+    detection: {metric: phase_current_dev_pct, threshold: 15, comparator: ">", duration_sec: 60}
+    note: 相电流差 >15% 告警为工程惯例；电机缺相堵转过流
+
+# ============================================================================
+# v1.1 · calendar：业务日历（正常营业与管理变化的事件源）
+# ============================================================================
+calendar:
+  shifts: ["00:00-08:00", "08:00-16:00", "16:00-24:00"]
+  events:
+    - {id: CAL-SHIFT, type: shift_handover, params: {times: ["08:00", "16:00", "00:00"]}}
+    - {id: CAL-PATROL-D, type: patrol, every_days: 1, at: "09:00", scope: all}
+    - {id: CAL-PATROL-N, type: patrol, every_days: 7, at: "23:00", params: {kind: night}}
+    - {id: CAL-IR, type: infrared_scan, every_days: 7, at: "14:00"}
+    - {id: CAL-UPS, type: preventive_test, every_days: 90, params: {item: ups_battery_capacity}}
+    - {id: CAL-95598, type: work_order_95598, params: {response_min: 45}}
+    - {id: CAL-REPORT, type: report, every_days: 1, at: "08:30", params: {kind: daily_inspection}}
+
+# ============================================================================
+# v1.1 · scenario：倍速场景 + 注入计划
+# ============================================================================
+scenario:
+  seed: 1216
+  duration_sim_s: 86400                           # 1 仿真日（干跑快）
+  clock_speed: 1800                               # 每墙钟秒 = 1800 仿真秒
+  description: 简单档办公园区一日运行：夜批时段出线柜触头温升爬升→IT 机房谐波越限→
+    午后空调负荷把 1# 变推进重过载（无转供通道，隔离即失电，考如实升级与消缺闭环）
+  agent: {enabled: true, model: mock}
+  injections:
+    - {fault: F-TEMP-01, at_sim_s: 3600}          # 01:00 夜批时段触头温升开始爬升（趋势型，约 +3.5h 越预警档）
+    - {fault: F-HARM-01, at_sim_s: 14400}         # 05:00 IT 机房批处理负荷致谐波越限（阶跃型）
+    - {fault: F-OVL-01, at_sim_s: 43200}          # 13:00 午后空调负荷叠加，1# 变重过载（网络型）
